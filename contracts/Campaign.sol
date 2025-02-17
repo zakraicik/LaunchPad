@@ -22,15 +22,15 @@ contract Campaign is Ownable {
     //Errors 
 
     //Events
-
+    
     constructor(
         address _owner,
-        uint32 _campaignGoalAmount,
+        uint256 _campaignGoalAmount,
         uint16 _campaignDuration,
         string memory _campaignName,
         string memory _campaignDescription,
         address _campaignTargetToken,
-        uint32 _campaignMinimumDonation,
+        uint256 _campaignMinimumDonation,
         address _campaignContractFactory
     ) Ownable(_owner) {
         campaignTargetToken = _campaignTargetToken;
@@ -42,6 +42,49 @@ contract Campaign is Ownable {
         campaignContractFactory = _campaignContractFactory;
         campaignStartTime = block.timestamp;
         campaignEndTime = block.timestamp + (campaignDuration * 1 days);
+    }
+
+    //Helper Functions
+    function _isCampaignActive() internal returns(bool){
+
+    }
+
+    function _isCampaignGoalReached() internal returns(bool){
+
+    }
+
+    //State Changing Functions
+    function contribute() payable external returns(bool) {
+
+    }
+
+    function claimFunds() external onlyOwner {
+
+    }
+
+    function requestRefund() external returns(bool){
+
+    }
+
+    //Read functions 
+    function getAddressContribution() external view returns(uint256){
+
+    }
+
+    function getCampaignDetails() external view returns(
+        string memory name,            // Campaign name
+        string memory description,     // Campaign description
+        uint256 goalAmount,           // Target amount
+        uint16 duration,              // Duration in days
+        uint256 timeRemaining,        // Time left in seconds
+        uint256 remainingToGoal,      // Amount needed to reach goal
+        uint256 totalRaised,          // Current amount raised
+        address targetToken,          // Token being raised
+        uint256 minDonation,         // Minimum donation amount
+        bool isActive,                // Is campaign still active
+        bool claimed                  // Have funds been claimed
+    ){
+
     }
 
 }
