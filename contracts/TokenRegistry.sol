@@ -1,6 +1,8 @@
 //SPDX-License-Identifier: MIT
 pragma solidity ^0.8.28;
 import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 
 contract TokenRegistry is Ownable {
 
@@ -23,6 +25,8 @@ contract TokenRegistry is Ownable {
     error TokenNotInRegistry(address _token);
     error TokenSupportAlreadyEnabled(address _token);
     error TokenSupportAlreadyDisabled(address _token);
+    error NotAContract(address providedAddress);
+    error NotERC20Compliant(address providedAddress);
 
     event TokenAdded(address indexed token, uint256 minimumContributionAmount);
     event TokenRemovedFromRegistry(address indexed token);
@@ -55,6 +59,18 @@ contract TokenRegistry is Ownable {
 
         if(_tokenExists(_token)){
             revert TokenAlreadyInRegistry(_token);
+        }
+
+        uint256 codeSize;
+        assembly { codeSize := extcodesize(_token) }
+        if (codeSize == 0) {
+            revert NotAContract(_token);
+        }
+
+        try IERC20(_token).totalSupply() returns (uint256) {
+            
+        } catch {
+            revert NotERC20Compliant(_token);
         }
 
         tokenConfigs[_token] = TokenConfig({
@@ -147,6 +163,20 @@ contract TokenRegistry is Ownable {
         if(_wethAddress == address(0)){
             revert InvalidToken(address(0));
         }
+        
+        uint256 codeSize;
+        assembly { codeSize := extcodesize(_wethAddress) }
+        if (codeSize == 0) {
+            revert NotAContract(_wethAddress);
+        }
+
+        try IERC20(_wethAddress).totalSupply() returns (uint256) {
+            
+        } catch {
+            revert NotERC20Compliant(_wethAddress);
+        }
+
+
         wETHAddress = _wethAddress;
         emit WETHAddressUpdated(_wethAddress);
     }
