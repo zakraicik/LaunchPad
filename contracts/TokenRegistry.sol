@@ -29,7 +29,7 @@ contract TokenRegistry is Ownable {
     event TokenSupportDisabled(address indexed token);
     event TokenSupportEnabled(address indexed token);
     event TokenConfigUpdated(address indexed token, uint256 minimumContributionAmount);
-    event TokenMinimumContributionUpdated(address indexed token);
+    event TokenMinimumContributionUpdated(address indexed token, uint256 minimumContributionAmount);
     event WETHAddressUpdated(address wETHUpdatd);
 
     function _tokenExists(address token) internal view returns (bool) {
@@ -37,6 +37,14 @@ contract TokenRegistry is Ownable {
     }
 
     function _tokenSupported(address token) internal view returns (bool) {
+        return tokenConfigs[token].isSupported;
+    }
+
+    function isTokenSupported(address token) external view returns (bool) {
+        if(!_tokenExists(token)){
+            revert TokenNotInRegistry(token);
+        }
+        
         return tokenConfigs[token].isSupported;
     }
 
@@ -70,11 +78,13 @@ contract TokenRegistry is Ownable {
         delete tokenConfigs[_token];
         delete tokenExists[_token];
 
-        for (uint256 i = 0; i < supportedTokens.length; i++) {
-            if (supportedTokens[i] == _token) {
-                supportedTokens[i] = supportedTokens[supportedTokens.length - 1];
-                supportedTokens.pop();
-                break;
+        if (supportedTokens.length > 0){ 
+            for (uint256 i = 0; i < supportedTokens.length; i++) {
+                if (supportedTokens[i] == _token) {
+                    supportedTokens[i] = supportedTokens[supportedTokens.length - 1];
+                    supportedTokens.pop();
+                    break;
+                }
             }
         }
 
@@ -92,11 +102,13 @@ contract TokenRegistry is Ownable {
 
         tokenConfigs[_token].isSupported = false;
 
-        for (uint256 i = 0; i < supportedTokens.length; i++) {
-            if (supportedTokens[i] == _token) {
-                supportedTokens[i] = supportedTokens[supportedTokens.length - 1];
-                supportedTokens.pop();
-                break;
+        if (supportedTokens.length > 0){ 
+            for (uint256 i = 0; i < supportedTokens.length; i++) {
+                if (supportedTokens[i] == _token) {
+                    supportedTokens[i] = supportedTokens[supportedTokens.length - 1];
+                    supportedTokens.pop();
+                    break;
+                }
             }
         }
 
@@ -128,12 +140,14 @@ contract TokenRegistry is Ownable {
 
         tokenConfigs[_token].minimumContributionAmount = _minimumContributionAmount;
 
-        emit TokenMinimumContributionUpdated(_token);
+        emit TokenMinimumContributionUpdated(_token, _minimumContributionAmount);
     }
 
     function setWETHAddress(address _wethAddress) external onlyOwner {
+        if(_wethAddress == address(0)){
+            revert InvalidToken(address(0));
+        }
         wETHAddress = _wethAddress;
-
         emit WETHAddressUpdated(_wethAddress);
     }
 
