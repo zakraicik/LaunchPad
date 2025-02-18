@@ -1,8 +1,9 @@
 //SPDX-License-Identifier: MIT
 pragma solidity ^0.8.28;
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
+import {ReentrancyGuard} from "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 
-contract Campaign is Ownable {
+contract Campaign is Ownable, ReentrancyGuard {
 
     constructor(
         address _owner,
@@ -60,7 +61,7 @@ contract Campaign is Ownable {
     }
     
     //State Changing Functions
-    function contribute() payable external returns(bool) {
+    function contribute() payable external nonReentrant returns(bool) {
         if (!_isCampaignActive()){
             revert CampaignNotActive();
         }
@@ -82,7 +83,7 @@ contract Campaign is Ownable {
 
     }
 
-    function claimFunds() external onlyOwner returns(bool){
+    function claimFunds() external onlyOwner nonReentrant returns(bool){
         if (_isCampaignActive()){
             revert CampaignStillActive();
         }
@@ -109,7 +110,7 @@ contract Campaign is Ownable {
         return true;
     }
 
-    function requestRefund() external returns(bool){
+    function requestRefund() external nonReentrant returns(bool){
         if (_isCampaignActive()){
             revert CampaignStillActive();
         }
