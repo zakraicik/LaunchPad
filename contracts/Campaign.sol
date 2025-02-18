@@ -5,21 +5,6 @@ import {ReentrancyGuard} from "@openzeppelin/contracts/security/ReentrancyGuard.
 
 contract Campaign is Ownable, ReentrancyGuard {
 
-    constructor(
-        address _owner,
-        uint256 _campaignGoalAmount,
-        uint16 _campaignDuration,
-        string memory _campaignName,
-        string memory _campaignDescription
-    ) Ownable(_owner) {
-        campaignGoalAmount = _campaignGoalAmount;
-        campaignDuration = _campaignDuration;
-        campaignName = _campaignName;
-        campaignDescription = _campaignDescription;
-        campaignStartTime = block.timestamp;
-        campaignEndTime = block.timestamp + (campaignDuration * 1 days);
-    }
-
     //State Variables 
     uint16 public campaignDuration;         
     bool public isClaimed;                  
@@ -50,6 +35,21 @@ contract Campaign is Ownable, ReentrancyGuard {
     event refundIssued(address _sender, uint256 amount);
     event CampaignExtended(uint256 _sender, uint256 amount);
     event CampaignPauseStatusChanged(bool _status);
+
+    constructor(
+        address _owner,
+        uint256 _campaignGoalAmount,
+        uint16 _campaignDuration,
+        string memory _campaignName,
+        string memory _campaignDescription
+    ) Ownable(_owner) {
+        campaignGoalAmount = _campaignGoalAmount;
+        campaignDuration = _campaignDuration;
+        campaignName = _campaignName;
+        campaignDescription = _campaignDescription;
+        campaignStartTime = block.timestamp;
+        campaignEndTime = block.timestamp + (campaignDuration * 1 days);
+    }
 
     //Helper Functions
     function _isCampaignActive() internal view returns(bool){
