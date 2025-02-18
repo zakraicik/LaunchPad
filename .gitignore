@@ -1,7 +1,10 @@
 # Dependency directories
 node_modules/
 lib/
+
+# Remix temp files
 .deps
+.states
 
 # Environment variables
 .env
