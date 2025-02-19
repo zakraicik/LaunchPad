@@ -13,7 +13,7 @@ interface IAavePool{
         address asset,
         uint256 amount, 
         address to
-    ) external;
+    ) external returns(uint256);
 
     function getReserveData(address asset) external view returns(
         uint256 liquidityRate,

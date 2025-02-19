@@ -33,7 +33,9 @@ contract DefiIntegrationManager is Ownable, ReentrancyGuard  {
     error TokenNotSupported(address token);
     error SlippageExceeded(uint256 expected, uint256 received);
     error YieldDepositFailed(string reason);
+    error YieldWithdrawlFailed(string reason);
     error InvalidAddress();
+    error WithdrawalAmountMismatch(uint256 requestedAmount, uint256 withdrawAmount);
 
     event YieldDeposited(address indexed campaign, address indexed token, uint256 amount);
     event YieldWithdrawn(address indexed campaign, address indexed token, uint256 amount);
@@ -156,6 +158,35 @@ contract DefiIntegrationManager is Ownable, ReentrancyGuard  {
             revert YieldDepositFailed(reason);
         } catch {
             revert YieldDepositFailed("Aave deposit failed");
+        }
+    }
+
+    function withdrawfromYieldProtocol(address _token, uint256 _amount) external onlyCampaign nonReentrant returns (uint256) {
+        if (_amount <= 0) {
+            revert ZeroAmount(_amount);
+        }
+
+        uint256 deposited = aaveDeposits[msg.sender][_token];
+        if(_amount > deposited){
+            revert InsufficientDeposit(_token, _amount, deposited);
+        }
+
+        try aavePool.withdraw(_token, _amount, address(this)) returns(uint256 withdrawn) {
+            if (withdrawn < _amount) {
+                revert WithdrawalAmountMismatch(_amount, withdrawn);
+            }
+            
+            aaveDeposits[msg.sender][_token] -= _amount;
+
+            IERC20(_token).safeTransfer(msg.sender, withdrawn);
+
+            emit YieldWithdrawn(msg.sender, _token, withdrawn);
+
+            return withdrawn;
+        } catch Error(string memory reason){
+            revert YieldWithdrawlFailed(reason);
+        } catch {
+            revert YieldWithdrawlFailed("Aave withdrawl failed.");
         }
     }
 
