@@ -1,6 +1,5 @@
 //SPDX-License-Identifier: MIT
 pragma solidity ^0.8.28;
-
 import {DataTypes} from "@aave/core-v3/contracts/protocol/libraries/types/DataTypes.sol";
 
 interface IAavePool{
@@ -17,11 +16,6 @@ interface IAavePool{
         address to
     ) external returns(uint256);
 
-    function getReserveData(address asset) external view returns(
-        uint256 liquidityRate,
-        uint256 liquidityindex
-    );
-
-    function getReserveAToken(address asset) external view returns (DataTypes.ReserveData memory);
+    function getReserveData(address asset) external view returns (DataTypes.ReserveData memory);
 
 }

@@ -4,6 +4,7 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import {DataTypes} from "@aave/core-v3/contracts/protocol/libraries/types/DataTypes.sol";
 import "./TokenRegistry.sol";
 import "./interfaces/IAavePool.sol";
 import "./interfaces/ISwapRouter.sol";
@@ -33,9 +34,11 @@ contract DefiIntegrationManager is Ownable, ReentrancyGuard  {
     error TokenNotSupported(address token);
     error SlippageExceeded(uint256 expected, uint256 received);
     error YieldDepositFailed(string reason);
-    error YieldWithdrawlFailed(string reason);
+    error YieldwithdrawalFailed(string reason);
     error InvalidAddress();
+    error NoYield(address token);
     error WithdrawalAmountMismatch(uint256 requestedAmount, uint256 withdrawAmount);
+    error FailedToGetATokenAddress();
 
     event YieldDeposited(address indexed campaign, address indexed token, uint256 amount);
     event YieldWithdrawn(address indexed campaign, address indexed token, uint256 amount);
@@ -184,9 +187,9 @@ contract DefiIntegrationManager is Ownable, ReentrancyGuard  {
 
             return withdrawn;
         } catch Error(string memory reason){
-            revert YieldWithdrawlFailed(reason);
+            revert YieldwithdrawalFailed(reason);
         } catch {
-            revert YieldWithdrawlFailed("Aave withdrawl failed.");
+            revert YieldwithdrawalFailed("Aave withdrawl failed.");
         }
     }
 
@@ -210,9 +213,51 @@ contract DefiIntegrationManager is Ownable, ReentrancyGuard  {
 
             return withdrawn;
         } catch Error(string memory reason){
-            revert YieldWithdrawlFailed(reason);
+            revert YieldwithdrawalFailed(reason);
         } catch {
-            revert YieldWithdrawlFailed("Aave withdrawl failed.");
+            revert YieldwithdrawalFailed("Aave withdrawl failed.");
+        }        
+    }
+
+    function harvestYield(address _token) external onlyCampaign nonReentrant returns (uint256 yieldAmount){
+        uint256 deposited = aaveDeposits[msg.sender][_token];
+        if(deposited <= 0){
+            revert NoYield(_token);
+        }
+
+        address aToken;
+        try aavePool.getReserveData(_token) returns (
+            DataTypes.ReserveData memory data
+        ){
+            aToken = data.aTokenAddress;
+        } catch {
+            revert FailedToGetATokenAddress();
+        }
+
+        if (aToken == address(0)){
+            revert InvalidAddress();
+        }
+
+        uint256 aTokenBalance = IERC20(aToken).balanceOf(address(this));
+        if (aTokenBalance <= deposited){
+            revert NoYield(_token);
+        }
+
+        uint256 yield = aTokenBalance - deposited;
+
+        try aavePool.withdraw(_token, yield, address(this)) returns(uint256 withdrawn){
+            if(withdrawn != yield){
+                revert WithdrawalAmountMismatch(yield, withdrawn);
+            }
+            
+            IERC20(_token).safeTransfer(msg.sender, withdrawn);
+
+            emit YieldHarvested(msg.sender, _token, withdrawn);
+            return withdrawn;
+        } catch Error(string memory reason){
+            revert YieldwithdrawalFailed(reason);
+        } catch {
+            revert YieldwithdrawalFailed("Yield withdrawl failed.");
         }        
     }
 
