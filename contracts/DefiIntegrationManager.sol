@@ -161,7 +161,7 @@ contract DefiIntegrationManager is Ownable, ReentrancyGuard  {
         }
     }
 
-    function withdrawfromYieldProtocol(address _token, uint256 _amount) external onlyCampaign nonReentrant returns (uint256) {
+    function withdrawFromYieldProtocol(address _token, uint256 _amount) external onlyCampaign nonReentrant returns (uint256) {
         if (_amount <= 0) {
             revert ZeroAmount(_amount);
         }
@@ -172,10 +172,10 @@ contract DefiIntegrationManager is Ownable, ReentrancyGuard  {
         }
 
         try aavePool.withdraw(_token, _amount, address(this)) returns(uint256 withdrawn) {
-            if (withdrawn < _amount) {
+            if (withdrawn != _amount) {
                 revert WithdrawalAmountMismatch(_amount, withdrawn);
             }
-            
+
             aaveDeposits[msg.sender][_token] -= _amount;
 
             IERC20(_token).safeTransfer(msg.sender, withdrawn);
@@ -188,6 +188,32 @@ contract DefiIntegrationManager is Ownable, ReentrancyGuard  {
         } catch {
             revert YieldWithdrawlFailed("Aave withdrawl failed.");
         }
+    }
+
+    function withdrawAllFromYieldProtocol(address _token) external onlyCampaign nonReentrant returns(uint256){
+        uint256 amount = aaveDeposits[msg.sender][_token];
+
+        if (amount <= 0){
+            revert ZeroAmount(amount);
+        }
+
+        try aavePool.withdraw(_token, amount, address(this)) returns(uint256 withdrawn){
+            if(withdrawn != amount){
+                revert WithdrawalAmountMismatch(amount, withdrawn);
+            }
+
+            aaveDeposits[msg.sender][_token] = 0;
+
+            IERC20(_token).safeTransfer(msg.sender, withdrawn);
+
+            emit YieldWithdrawn(msg.sender, _token, withdrawn);
+
+            return withdrawn;
+        } catch Error(string memory reason){
+            revert YieldWithdrawlFailed(reason);
+        } catch {
+            revert YieldWithdrawlFailed("Aave withdrawl failed.");
+        }        
     }
 
 }
