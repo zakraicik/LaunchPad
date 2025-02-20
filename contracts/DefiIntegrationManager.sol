@@ -5,8 +5,8 @@ import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {DataTypes} from "@aave/core-v3/contracts/protocol/libraries/types/DataTypes.sol";
-import "./TokenRegistry.sol";
-import "./YieldDistributor.sol";
+import "./interfaces/ITokenRegistry.sol";
+import "./interfaces/IYieldDistributor.sol";
 import "./interfaces/IAavePool.sol";
 import "./interfaces/ISwapRouter.sol";
 import "./interfaces/IQuoter.sol";
@@ -18,8 +18,8 @@ contract DefiIntegrationManager is Ownable, ReentrancyGuard  {
     IAavePool public aavePool;
     ISwapRouter public uniswapRouter;
     IQuoter public uniswapQuoter;
-    TokenRegistry public tokenRegistry;
-    YieldDistributor public yieldDistributor;
+    ITokenRegistry public tokenRegistry;
+    IYieldDistributor public yieldDistributor;
 
     address public campaignFactory;
     mapping(address => bool) public authorizedCampaigns;
@@ -59,9 +59,10 @@ contract DefiIntegrationManager is Ownable, ReentrancyGuard  {
     event TokenSwapped(address indexed fromToken, address indexed toToken, uint256 amountIn, uint256 amountOut);
     event CampaignAuthorized(address indexed campaign);
     event CampaignUnauthorized(address indexed campaign);
-    event ContractFactoryUpdated(address oldAddress, address newAddress);
-    event YieldDistributorUpdated(address oldAddress, address newAddress);
+    event CampaignFactoryUpdated(address oldAddress, address newAddress);
     event AavePoolUpdated(address oldAddress, address newAddress);
+    event TokenRegistryUpdated(address oldAddress, address newAddress);
+    event YieldDistributorUpdated(address oldAddress, address newAddress);
     event UniswapRouterUpdated(address oldAddress, address newAddress);
     event UniswapQuoterUpdated(address oldAddress, address newAddress);    
     event WETHWrapped(address indexed campaign, uint256 amount);  // New event for wrapping
@@ -88,9 +89,9 @@ contract DefiIntegrationManager is Ownable, ReentrancyGuard  {
         aavePool = IAavePool(_aavePool);
         uniswapRouter = ISwapRouter(_uniswapRouter);
         uniswapQuoter = IQuoter(_uniswapQuoter);
-        tokenRegistry = TokenRegistry(_tokenRegistry);
+        tokenRegistry = ITokenRegistry(_tokenRegistry);
         campaignFactory = _campaignFactory;
-        yieldDistributor = YieldDistributor(_yieldDistributor);
+        yieldDistributor = IYieldDistributor(_yieldDistributor);
     }
 
     modifier onlyCampaignFactory() {
@@ -115,7 +116,7 @@ contract DefiIntegrationManager is Ownable, ReentrancyGuard  {
         address oldFactory = campaignFactory;
         campaignFactory = _campaignFactory;
 
-        emit ContractFactoryUpdated(oldFactory, _campaignFactory);
+        emit CampaignFactoryUpdated(oldFactory, _campaignFactory);
     }
 
     function setTokenRegistry(address _tokenRegistry) external onlyOwner {
@@ -124,9 +125,9 @@ contract DefiIntegrationManager is Ownable, ReentrancyGuard  {
         }
 
         address oldRegistry = address(tokenRegistry);
-        tokenRegistry = TokenRegistry(_tokenRegistry);
+        tokenRegistry = ITokenRegistry(_tokenRegistry);
 
-        emit ContractFactoryUpdated(oldRegistry, _tokenRegistry);
+        emit TokenRegistryUpdated(oldRegistry, _tokenRegistry);
     }
 
     function setYieldDistributor(address _yieldDistributor) external onlyOwner{
@@ -135,7 +136,7 @@ contract DefiIntegrationManager is Ownable, ReentrancyGuard  {
         }
 
         address oldDistributor = address(yieldDistributor);
-        yieldDistributor = YieldDistributor(_yieldDistributor);
+        yieldDistributor = IYieldDistributor(_yieldDistributor);
 
         emit YieldDistributorUpdated(oldDistributor,_yieldDistributor);
 
