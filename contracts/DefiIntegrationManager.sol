@@ -417,13 +417,10 @@ contract DefiIntegrationManager is Ownable, ReentrancyGuard  {
             revert InvalidAddress();
         }
         
-        // Transfer WETH from campaign to this contract
         IERC20(weth).safeTransferFrom(msg.sender, address(this), _amount);
         
-        // Unwrap WETH to ETH
         IWETH(weth).withdraw(_amount);
         
-        // Transfer ETH to recipient
         (bool sent,) = payable(_recipient).call{value: _amount}("");
         if (!sent) {
             revert ETHTransferFailed();
@@ -432,5 +429,35 @@ contract DefiIntegrationManager is Ownable, ReentrancyGuard  {
         emit WETHUnwrapped(msg.sender, _recipient, _amount);
         return true;
     }
+
+    function getCurrentYieldRate(address token) 
+        external 
+        view 
+        returns (uint256 yieldRate) 
+    {
+        try aavePool.getReserveData(token) returns (DataTypes.ReserveData memory data) {
+            return data.currentLiquidityRate * 10000 / 1e27;
+        } catch {
+            return 0;
+        }
+    }
+
+    function getDepositedAmount(address campaign, address token)
+        external
+        view
+        returns (uint256 amount)
+    {
+        return aaveDeposits[campaign][token];
+    }
+
+    function isCampaignAuthorized(address campaign)
+        external
+        view
+        returns (bool isAuthorized)
+    {
+        return authorizedCampaigns[campaign];
+    }
+
+    receive() external payable {}
 
 }
