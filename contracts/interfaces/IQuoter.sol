@@ -8,5 +8,5 @@ interface IQuoter{
         uint24 fee,
         uint256 amountIn,
         uint160 sqrtPriceLimitX96
-    ) external returns (uint256 amountOut);
+    ) external view returns (uint256 amountOut);
 }

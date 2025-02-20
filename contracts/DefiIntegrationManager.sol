@@ -39,6 +39,9 @@ contract DefiIntegrationManager is Ownable, ReentrancyGuard  {
     error NoYield(address token);
     error WithdrawalAmountMismatch(uint256 requestedAmount, uint256 withdrawAmount);
     error FailedToGetATokenAddress();
+    error TokensAreTheSame(address fromToken, address outToken);
+    error SwapQuoteInvalid();
+    error SwapFailed(string reason);
 
     event YieldDeposited(address indexed campaign, address indexed token, uint256 amount);
     event YieldWithdrawn(address indexed campaign, address indexed token, uint256 amount);
@@ -259,6 +262,79 @@ contract DefiIntegrationManager is Ownable, ReentrancyGuard  {
         } catch {
             revert YieldwithdrawalFailed("Yield withdrawl failed.");
         }        
+    }
+
+    function getTargetTokenEquivalent(address _fromToken, uint256 _amount, address _toToken) public view returns (uint256){
+        if (_fromToken == _toToken){
+            revert TokensAreTheSame(_fromToken, _toToken);
+        }
+
+        try uniswapQuoter.quoteExactInputSingle(
+            _fromToken, 
+            _toToken,
+            UNISWAP_FEE_TIER,
+            _amount,
+            0
+        ) returns (uint256 quote){
+            return quote;
+        } catch {
+            return 0;
+        }
+    }
+
+    function swapTokenForTarget(address _fromToken, uint256 _amount, address _toToken) external onlyCampaign nonReentrant returns(uint256){
+        if (_amount <= 0){
+            revert ZeroAmount(_amount);
+        }
+
+        if (!tokenRegistry.isTokenSupported(_fromToken)){
+            revert TokenNotSupported(_fromToken);
+        }
+
+        if (!tokenRegistry.isTokenSupported(_toToken)){
+            revert TokenNotSupported(_toToken);
+        }
+
+        if (_fromToken ==_toToken){
+            revert TokensAreTheSame(_fromToken, _toToken);
+        }
+
+        uint256 expectedOut = getTargetTokenEquivalent(_fromToken, _amount, _toToken);
+        if (expectedOut == 0){
+            revert SwapQuoteInvalid();
+        }
+
+        uint256 minAmountOut = expectedOut * (10000-SLIPPAGE_TOLERANCE)/10000;
+
+        IERC20(_fromToken).safeIncreaseAllowance(address(uniswapRouter),_amount);
+        ISwapRouter.ExactInputSingleParams memory params =  ISwapRouter.ExactInputSingleParams({
+            tokenIn: _fromToken,
+            tokenOut: _toToken,
+            fee: UNISWAP_FEE_TIER,
+            recipient: address(this),
+            deadline: block.timestamp + 15 minutes,
+            amountIn: _amount,
+            amountOutMinimum: minAmountOut,
+            sqrtPriceLimitX96: 0
+        });
+
+        try uniswapRouter.exactInputSingle(params) returns (uint256 recieved){
+            if (recieved < minAmountOut){
+                revert SlippageExceeded(minAmountOut, recieved);
+            }
+
+            IERC20(_toToken).safeTransfer(msg.sender, recieved);
+
+            emit TokenSwapped(_fromToken, _toToken, _amount, recieved);
+
+            return recieved;
+        } catch Error(string memory reason){
+            revert SwapFailed(reason);
+        } catch {
+            revert SwapFailed("Uniswap swap failed.");
+        }
+
+        
     }
 
 }
