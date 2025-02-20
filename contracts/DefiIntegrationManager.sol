@@ -42,6 +42,9 @@ contract DefiIntegrationManager is Ownable, ReentrancyGuard  {
     error TokensAreTheSame(address fromToken, address outToken);
     error SwapQuoteInvalid();
     error SwapFailed(string reason);
+    error WrappingETHFailed();
+    error ETHTransferFailed();
+    
 
     event YieldDeposited(address indexed campaign, address indexed token, uint256 amount);
     event YieldWithdrawn(address indexed campaign, address indexed token, uint256 amount);
@@ -52,7 +55,9 @@ contract DefiIntegrationManager is Ownable, ReentrancyGuard  {
     event ContractFactoryUpdated(address oldAddress, address newAddress);
     event AavePoolUpdated(address oldAddress, address newAddress);
     event UniswapRouterUpdated(address oldAddress, address newAddress);
-    event UniswapQuoterUpdated(address oldAddress, address newAddress);
+    event UniswapQuoterUpdated(address oldAddress, address newAddress);    
+    event WETHWrapped(address indexed campaign, uint256 amount);  // New event for wrapping
+    event WETHUnwrapped(address indexed campaign, address indexed recipient, uint256 amount);
 
     constructor(
         address _aavePool, 
@@ -334,7 +339,98 @@ contract DefiIntegrationManager is Ownable, ReentrancyGuard  {
             revert SwapFailed("Uniswap swap failed.");
         }
 
+    }
+
+
+    function wrapETHAndSwapForTarget(address _targetToken) 
+        external 
+        payable 
+        onlyCampaign 
+        nonReentrant 
+        returns (uint256 amountOut)
+    {
+        if (msg.value == 0) {
+            revert ZeroAmount(msg.value);
+        }
+
+        address weth = tokenRegistry.getWETH();
+        if (weth == address(0)) {
+            revert InvalidAddress();
+        }
+
+        IWETH(weth).deposit{value: msg.value}();
+        emit WETHWrapped(msg.sender, msg.value);
         
+        if (_targetToken == weth) {
+            IERC20(weth).safeTransfer(msg.sender, msg.value);
+            return msg.value;
+        }
+        
+        if (!tokenRegistry.isTokenSupported(_targetToken)) {
+            revert TokenNotSupported(_targetToken);
+        }
+        
+        IERC20(weth).safeIncreaseAllowance(address(uniswapRouter), msg.value);
+        
+
+        uint256 expectedOut = getTargetTokenEquivalent(weth, msg.value, _targetToken);
+        uint256 minAmountOut = expectedOut * (10000 - SLIPPAGE_TOLERANCE) / 10000;
+        
+        ISwapRouter.ExactInputSingleParams memory params = ISwapRouter.ExactInputSingleParams({
+            tokenIn: weth,
+            tokenOut: _targetToken,
+            fee: UNISWAP_FEE_TIER,
+            recipient: address(this),
+            deadline: block.timestamp + 15 minutes,
+            amountIn: msg.value,
+            amountOutMinimum: minAmountOut,
+            sqrtPriceLimitX96: 0
+        });
+        
+        try uniswapRouter.exactInputSingle(params) returns (uint256 received) {
+            IERC20(_targetToken).safeTransfer(msg.sender, received);
+            emit TokenSwapped(weth, _targetToken, msg.value, received);
+            return received;
+        } catch Error(string memory reason){
+            revert SwapFailed(reason);
+        } catch {
+            revert SwapFailed("Uniswap swap failed.");
+        }
+    }
+
+    function unwrapWETHAndTransfer(address _recipient, uint256 _amount) 
+        external 
+        onlyCampaign 
+        nonReentrant 
+        returns (bool success)
+    {
+        if (_amount == 0) {
+            revert ZeroAmount(_amount);
+        }
+        
+        if (_recipient == address(0)) {
+            revert InvalidAddress();
+        }
+        
+        address weth = tokenRegistry.getWETH();
+        if (weth == address(0)) {
+            revert InvalidAddress();
+        }
+        
+        // Transfer WETH from campaign to this contract
+        IERC20(weth).safeTransferFrom(msg.sender, address(this), _amount);
+        
+        // Unwrap WETH to ETH
+        IWETH(weth).withdraw(_amount);
+        
+        // Transfer ETH to recipient
+        (bool sent,) = payable(_recipient).call{value: _amount}("");
+        if (!sent) {
+            revert ETHTransferFailed();
+        }
+        
+        emit WETHUnwrapped(msg.sender, _recipient, _amount);
+        return true;
     }
 
 }
