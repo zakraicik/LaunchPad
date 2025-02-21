@@ -34,7 +34,8 @@ contract CampaignFactory {
             _campaignGoalAmount, 
             _campaignDuration, 
             _campaignName, 
-            _campaignDescription
+            _campaignDescription,
+            address(defiManager)  // Pass the DefiIntegrationManager address
         );
         
         address campaignAddress = address(newCampaign);
@@ -47,7 +48,7 @@ contract CampaignFactory {
         
         return campaignAddress;
     }
-    
+        
 
     function getAllCampaigns() external view returns(address[] memory) {
         return deployedCampaigns;

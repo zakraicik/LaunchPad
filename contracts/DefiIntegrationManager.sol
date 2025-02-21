@@ -504,6 +504,10 @@ contract DefiIntegrationManager is Ownable, ReentrancyGuard  {
         return authorizedCampaigns[campaign];
     }
 
+    function getTokenRegistry() external view returns (ITokenRegistry) {
+        return tokenRegistry;
+    }
+
     receive() external payable {}
 
 }
