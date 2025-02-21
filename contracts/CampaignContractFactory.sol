@@ -1,14 +1,27 @@
 //SPDX-License-Identifier: MIT
 pragma solidity ^0.8.28;
 import "./Campaign.sol";
+import "./interfaces/IDefiIntegrationManager.sol";
+
 
 contract CampaignFactory {
-    // State variables to track campaigns
+    // State variables
     address[] public deployedCampaigns;
     mapping(address => address[]) public creatorToCampaigns;
+    IDefiIntegrationManager public defiManager;
     
     // Events
     event CampaignCreated(address indexed campaignAddress, address indexed creator);
+    
+    // Errors
+    error InvalidAddress();
+
+    constructor(address _defiManager) {
+        if(_defiManager == address(0)) {
+            revert InvalidAddress();
+        }
+        defiManager = IDefiIntegrationManager(_defiManager);
+    }
     
     function deploy(
         uint256 _campaignGoalAmount,
@@ -21,18 +34,22 @@ contract CampaignFactory {
             _campaignGoalAmount, 
             _campaignDuration, 
             _campaignName, 
-            _campaignDescription
+            _campaignDescription,
+            address(defiManager)  // Pass the DefiIntegrationManager address
         );
         
         address campaignAddress = address(newCampaign);
         deployedCampaigns.push(campaignAddress);
         creatorToCampaigns[msg.sender].push(campaignAddress);
         
+        defiManager.authorizeCampaign(campaignAddress);
+        
         emit CampaignCreated(campaignAddress, msg.sender);
         
         return campaignAddress;
     }
-    
+        
+
     function getAllCampaigns() external view returns(address[] memory) {
         return deployedCampaigns;
     }

@@ -1,0 +1,18 @@
+//SPDX-License-Identifier: MIT
+pragma solidity ^0.8.28;
+
+import "./ITokenRegistry.sol";
+
+interface IDefiIntegrationManager {
+    function authorizeCampaign(address _campaign) external;
+    function depositToYieldProtocol(address _token, uint256 _amount) external;
+    function withdrawFromYieldProtocol(address _token, uint256 _amount) external returns (uint256);
+    function withdrawAllFromYieldProtocol(address _token) external returns (uint256);
+    function harvestYield(address _token) external returns (uint256 creatorYield, uint256 platformYield);
+    function swapTokenForTarget(address _fromToken, uint256 _amount, address _toToken) external returns (uint256);
+    function wrapETHAndSwapForTarget(address _targetToken) external payable returns (uint256 amountOut);
+    function unwrapWETHAndTransfer(address _recipient, uint256 _amount) external returns (bool success);
+    function getCurrentYieldRate(address token) external view returns (uint256 yieldRate);
+    function getDepositedAmount(address campaign, address token) external view returns (uint256 amount);
+    function tokenRegistry() external view returns (ITokenRegistry);
+}

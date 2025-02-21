@@ -1,26 +1,12 @@
 //SPDX-License-Identifier: MIT
 pragma solidity ^0.8.28;
+import "./interfaces/IDefiIntegrationManager.sol";
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 
 contract Campaign is Ownable, ReentrancyGuard {
 
-    constructor(
-        address _owner,
-        uint256 _campaignGoalAmount,
-        uint16 _campaignDuration,
-        string memory _campaignName,
-        string memory _campaignDescription
-    ) Ownable(_owner) {
-        campaignGoalAmount = _campaignGoalAmount;
-        campaignDuration = _campaignDuration;
-        campaignName = _campaignName;
-        campaignDescription = _campaignDescription;
-        campaignStartTime = block.timestamp;
-        campaignEndTime = block.timestamp + (campaignDuration * 1 days);
-    }
-
-    //State Variables 
     uint16 public campaignDuration;         
     bool public isClaimed;                  
     uint256 public campaignGoalAmount;      
@@ -31,8 +17,10 @@ contract Campaign is Ownable, ReentrancyGuard {
     string public campaignDescription;      
     mapping(address => uint256) public contributions;
     mapping(address => bool) private hasBeenRefunded;
+    IDefiIntegrationManager public defiManager;
+    bool public defiEnabled;
 
-    //Errors 
+    error InvalidAddress();
     error CampaignStillActive();
     error CampaignNotActive();
     error CampaignGoalReached();
@@ -43,15 +31,47 @@ contract Campaign is Ownable, ReentrancyGuard {
     error NothingToRefund(address _sender);
     error AlreadyRefunded();
     error RefundFailed();
+    error DefiNotEnabled();
+    error DefiAlreadyEnabled();
+    error TokenTransferFailed();
+    error DefiActionFailed();
 
-    //Events
     event contribution(address _sender, uint256 _amount);
     event fundsClaimed(address _owner, uint256 _amount);
     event refundIssued(address _sender, uint256 amount);
     event CampaignExtended(uint256 _sender, uint256 amount);
     event CampaignPauseStatusChanged(bool _status);
+    event DefiManagerSet(address defiManager);
+    event FundsDeposited(address token, uint256 amount);
+    event FundsWithdrawn(address token, uint256 amount);
+    event YieldHarvested(address token, uint256 amount);
 
-    //Helper Functions
+    constructor(
+        address _owner,
+        uint256 _campaignGoalAmount,
+        uint16 _campaignDuration,
+        string memory _campaignName,
+        string memory _campaignDescription,
+         address _defiManager
+    ) Ownable(_owner) {
+        campaignGoalAmount = _campaignGoalAmount;
+        campaignDuration = _campaignDuration;
+        campaignName = _campaignName;
+        campaignDescription = _campaignDescription;
+        campaignStartTime = block.timestamp;
+        campaignEndTime = block.timestamp + (campaignDuration * 1 days);
+
+        if (_defiManager == address(0)) {
+            revert InvalidAddress();
+        }
+
+
+        defiManager = IDefiIntegrationManager(_defiManager);
+        defiEnabled = true;
+        emit DefiManagerSet(_defiManager);
+        
+    }
+
     function _isCampaignActive() internal view returns(bool){
         return block.timestamp >= campaignStartTime && block.timestamp <= campaignEndTime;
     }
@@ -60,7 +80,6 @@ contract Campaign is Ownable, ReentrancyGuard {
         return totalAmountRaised >= campaignGoalAmount;
     }
     
-    //State Changing Functions
     function contribute() payable external nonReentrant returns(bool) {
         if (!_isCampaignActive()){
             revert CampaignNotActive();
@@ -81,6 +100,124 @@ contract Campaign is Ownable, ReentrancyGuard {
 
         return true;
 
+    }
+
+    function depositToYieldProtocol(address token, uint256 amount) external onlyOwner nonReentrant {
+        if (!defiEnabled) {
+            revert DefiNotEnabled();
+        }
+        
+        IERC20(token).approve(address(defiManager), amount);
+        
+        try defiManager.depositToYieldProtocol(token, amount) {
+            emit FundsDeposited(token, amount);
+        } catch {
+            revert DefiActionFailed();
+        }
+    }
+
+    function withdrawFromYieldProtocol(address token, uint256 amount) external onlyOwner nonReentrant {
+        if (!defiEnabled) {
+            revert DefiNotEnabled();
+        }
+        
+        try defiManager.withdrawFromYieldProtocol(token, amount) returns (uint256 withdrawn) {
+            emit FundsWithdrawn(token, withdrawn);
+        } catch {
+            revert DefiActionFailed();
+        }
+    }
+    
+    function enableDefi(address _defiManager) external onlyOwner {
+        if (defiEnabled) {
+            revert DefiAlreadyEnabled();
+        }
+        if (_defiManager == address(0)) {
+            revert InvalidAddress();
+        }
+        defiManager = IDefiIntegrationManager(_defiManager);
+        defiEnabled = true;
+        emit DefiManagerSet(_defiManager);
+    }
+
+    function withdrawAllFromYieldProtocol(address token) external onlyOwner nonReentrant {
+        if (!defiEnabled) {
+            revert DefiNotEnabled();
+        }
+        
+        try defiManager.withdrawAllFromYieldProtocol(token) returns (uint256 withdrawn) {
+            emit FundsWithdrawn(token, withdrawn);
+        } catch {
+            revert DefiActionFailed();
+        }
+    }
+
+    function harvestYield(address token) external onlyOwner nonReentrant returns (uint256 creatorYield) {
+        if (!defiEnabled) {
+            revert DefiNotEnabled();
+        }
+        
+        try defiManager.harvestYield(token) returns (uint256 _creatorYield, uint256) {
+            emit YieldHarvested(token, _creatorYield);
+            return _creatorYield;
+        } catch {
+            revert DefiActionFailed();
+        }
+    }
+
+    function swapTokens(address fromToken, uint256 amount, address toToken) external onlyOwner nonReentrant returns (uint256) {
+        if (!defiEnabled) {
+            revert DefiNotEnabled();
+        }
+        
+        IERC20(fromToken).approve(address(defiManager), amount);
+        
+        try defiManager.swapTokenForTarget(fromToken, amount, toToken) returns (uint256 received) {
+            return received;
+        } catch {
+            revert DefiActionFailed();
+        }
+    }
+
+    function wrapETHAndSwap(address targetToken) external payable onlyOwner nonReentrant returns (uint256) {
+        if (!defiEnabled) {
+            revert DefiNotEnabled();
+        }
+        
+        try defiManager.wrapETHAndSwapForTarget{value: msg.value}(targetToken) returns (uint256 received) {
+            return received;
+        } catch {
+            revert DefiActionFailed();
+        }
+    }
+
+    function getCurrentYieldRate(address token) external view returns (uint256) {
+        if (!defiEnabled) {
+            return 0;
+        }
+        return defiManager.getCurrentYieldRate(token);
+    }
+
+    function getDepositedAmount(address token) external view returns (uint256) {
+        if (!defiEnabled) {
+            return 0;
+        }
+        return defiManager.getDepositedAmount(address(this), token);
+    }
+
+    function unwrapWETH(address recipient, uint256 amount) external onlyOwner nonReentrant returns (bool) {
+        if (!defiEnabled) {
+            revert DefiNotEnabled();
+        }
+        
+        address weth = defiManager.tokenRegistry().getWETH();
+        IERC20(weth).approve(address(defiManager), amount);
+        
+        try defiManager.unwrapWETHAndTransfer(recipient, amount) returns (bool success) {
+            return success;
+        } catch {
+            revert DefiActionFailed();
+        }
     }
 
     function claimFunds() external onlyOwner nonReentrant returns(bool){
@@ -180,5 +317,7 @@ contract Campaign is Ownable, ReentrancyGuard {
             isClaimed
         );
     }
+
+    receive() external payable {}
 
 }
