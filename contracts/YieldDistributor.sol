@@ -6,6 +6,7 @@ contract YieldDistributor is Ownable {
 
     address public platformTreasury;
     uint public platformYieldShare = 2000;
+    uint public maximumYieldShare = 5000;
 
     error InvalidAddress();
     error InvalidShare(uint256 share);
@@ -41,7 +42,7 @@ contract YieldDistributor is Ownable {
     }
 
     function updatePlatformYieldShare(uint256 _platformYieldShare) external onlyOwner {
-        if(_platformYieldShare > 5000){
+        if(_platformYieldShare > maximumYieldShare){
             revert ShareExceedsMaximum(_platformYieldShare);
         }
 

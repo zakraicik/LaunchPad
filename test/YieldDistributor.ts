@@ -139,5 +139,61 @@ describe('YieldDistributor', function () {
     })
   })
 
-  describe('Updating platform yield share', async function () {})
+  describe('Updating platform yield share', function () {
+    it('Should allow owner to update platform yield share', async function () {
+      const { yieldDistributor } = await loadFixture(
+        deployYieldDistributorFixture
+      )
+
+      const currentYieldShare = await yieldDistributor.getPlatformYieldShare()
+      const newYieldShare = 3000
+
+      await expect(yieldDistributor.updatePlatformYieldShare(newYieldShare))
+        .to.emit(yieldDistributor, 'PlatformYieldShareUpdated')
+        .withArgs(currentYieldShare, newYieldShare)
+
+      expect(await yieldDistributor.getPlatformYieldShare()).to.equal(
+        newYieldShare
+      )
+    })
+
+    it('Should revert if new yield share is greater than the maximum', async function () {
+      const { yieldDistributor } = await loadFixture(
+        deployYieldDistributorFixture
+      )
+
+      const currentYieldShare = await yieldDistributor.getPlatformYieldShare()
+      const newYieldShare = 7000
+
+      await expect(yieldDistributor.updatePlatformYieldShare(newYieldShare))
+        .to.be.revertedWithCustomError(yieldDistributor, 'ShareExceedsMaximum')
+        .withArgs(newYieldShare)
+
+      expect(await yieldDistributor.getPlatformYieldShare()).to.equal(
+        currentYieldShare
+      )
+    })
+
+    it('Should revert when non-owner tries to update platform yield share', async function () {
+      const { yieldDistributor, user1 } = await loadFixture(
+        deployYieldDistributorFixture
+      )
+
+      const currentYieldShare = await yieldDistributor.getPlatformYieldShare()
+      const newYieldShare = 3000
+
+      await expect(
+        yieldDistributor.connect(user1).updatePlatformYieldShare(newYieldShare)
+      )
+        .to.be.revertedWithCustomError(
+          yieldDistributor,
+          'OwnableUnauthorizedAccount'
+        )
+        .withArgs(user1.address)
+
+      expect(await yieldDistributor.getPlatformYieldShare()).to.equal(
+        currentYieldShare
+      )
+    })
+  })
 })
