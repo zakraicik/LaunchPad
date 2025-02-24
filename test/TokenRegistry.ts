@@ -467,4 +467,89 @@ describe('TokenRegistry', function () {
       expect(await tokenRegistry.getAllSupportedTokens()).to.have.lengthOf(1)
     })
   })
+
+  describe('Updating minimum contribution amount', function () {
+    it('Should allow owner to update minimum contribution amount', async function () {
+      const { tokenRegistry, mockToken1, mockToken2, mockWETH } =
+        await loadFixture(deployTokenRegistryFixture)
+
+      const mockToken1Address = await mockToken1.getAddress()
+
+      await tokenRegistry.addToken(mockToken1Address, 0)
+
+      const initialConfig = await tokenRegistry.tokenConfigs(mockToken1Address)
+      expect(initialConfig.minimumContributionAmount).to.equal(0)
+
+      const newMinContribution = 5
+      const expectedSmallestUnit = ethers.parseUnits('5', 18)
+
+      await expect(
+        tokenRegistry.updateTokenMinimumContribution(
+          mockToken1Address,
+          newMinContribution
+        )
+      )
+        .to.emit(tokenRegistry, 'TokenMinimumContributionUpdated')
+        .withArgs(mockToken1Address, expectedSmallestUnit)
+
+      const updatedConfig = await tokenRegistry.tokenConfigs(mockToken1Address)
+      expect(updatedConfig.minimumContributionAmount).to.equal(
+        expectedSmallestUnit
+      )
+
+      expect(updatedConfig.isSupported).to.equal(true)
+      expect(updatedConfig.decimals).to.equal(18)
+    })
+
+    it('Should revert when trying to update minimum contribution amount for a nonexistant token', async function () {
+      const { tokenRegistry, mockToken1, mockToken2, mockWETH } =
+        await loadFixture(deployTokenRegistryFixture)
+
+      const mockToken1Address = await mockToken1.getAddress()
+
+      const newMinContribution = 5
+      const expectedSmallestUnit = ethers.parseUnits('5', 18)
+
+      await expect(
+        tokenRegistry.updateTokenMinimumContribution(
+          mockToken1Address,
+          newMinContribution
+        )
+      )
+        .to.be.revertedWithCustomError(tokenRegistry, 'TokenNotInRegistry')
+        .withArgs(mockToken1Address)
+    })
+
+    it('Should revert when non-owner tries to update minimum contribution amount', async function () {
+      const { tokenRegistry, user1, mockToken1, mockToken2, mockWETH } =
+        await loadFixture(deployTokenRegistryFixture)
+
+      const mockToken1Address = await mockToken1.getAddress()
+
+      await tokenRegistry.addToken(mockToken1Address, 0)
+
+      const initialConfig = await tokenRegistry.tokenConfigs(mockToken1Address)
+      expect(initialConfig.minimumContributionAmount).to.equal(0)
+
+      const newMinContribution = 5
+      const expectedSmallestUnit = ethers.parseUnits('5', 18)
+
+      await expect(
+        tokenRegistry
+          .connect(user1)
+          .updateTokenMinimumContribution(mockToken1Address, newMinContribution)
+      )
+        .to.be.revertedWithCustomError(
+          tokenRegistry,
+          'OwnableUnauthorizedAccount'
+        )
+        .withArgs(user1)
+
+      const updatedConfig = await tokenRegistry.tokenConfigs(mockToken1Address)
+      expect(updatedConfig.minimumContributionAmount).to.equal(0)
+
+      expect(updatedConfig.isSupported).to.equal(true)
+      expect(updatedConfig.decimals).to.equal(18)
+    })
+  })
 })
