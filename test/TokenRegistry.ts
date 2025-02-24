@@ -26,7 +26,9 @@ describe('TokenRegistry', function () {
       ethers.parseUnits('100')
     ])
 
-    const tokenRegistry = await ethers.deployContract('TokenRegistry', [owner])
+    const tokenRegistry = await ethers.deployContract('TokenRegistry', [
+      owner.address
+    ])
 
     await mockToken1.waitForDeployment()
     await mockToken2.waitForDeployment()
@@ -60,7 +62,7 @@ describe('TokenRegistry', function () {
         deployTokenRegistryFixture
       )
 
-      expect(await tokenRegistry.owner()).to.equal(owner)
+      expect(await tokenRegistry.owner()).to.equal(owner.address)
       expect(await tokenRegistry.getAllSupportedTokens()).to.have.lengthOf(0)
     })
   })
