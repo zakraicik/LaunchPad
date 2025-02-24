@@ -297,6 +297,43 @@ describe('TokenRegistry', function () {
         )
         .withArgs(user1.address)
     })
+
+    it('Should handle removing a token when supportedTokens array manipulations are skipped', async function () {
+      const { tokenRegistry, mockToken1 } = await loadFixture(
+        deployTokenRegistryFixture
+      )
+      const mockToken1Address = await mockToken1.getAddress()
+
+      await tokenRegistry.addToken(mockToken1Address, 0)
+
+      await tokenRegistry.removeToken(mockToken1Address)
+      expect(await tokenRegistry.getAllSupportedTokens()).to.have.lengthOf(0)
+
+      await tokenRegistry.addToken(mockToken1Address, 0)
+      expect(await tokenRegistry.getAllSupportedTokens()).to.have.lengthOf(1)
+    })
+
+    it('Should correctly remove a token that is not at the first position', async function () {
+      const { tokenRegistry, mockToken1, mockToken2, mockWETH } =
+        await loadFixture(deployTokenRegistryFixture)
+      const mockToken1Address = await mockToken1.getAddress()
+      const mockToken2Address = await mockToken2.getAddress()
+      const mockWETHAddress = await mockWETH.getAddress()
+
+      await tokenRegistry.addToken(mockToken1Address, 0)
+      await tokenRegistry.addToken(mockToken2Address, 0)
+      await tokenRegistry.addToken(mockWETHAddress, 0)
+
+      expect(await tokenRegistry.getAllSupportedTokens()).to.have.lengthOf(3)
+
+      await tokenRegistry.removeToken(mockToken2Address)
+
+      const remainingTokens = await tokenRegistry.getAllSupportedTokens()
+      expect(remainingTokens).to.have.lengthOf(2)
+      expect(remainingTokens).to.include(mockToken1Address)
+      expect(remainingTokens).to.include(mockWETHAddress)
+      expect(remainingTokens).to.not.include(mockToken2Address)
+    })
   })
 
   describe('Enabling token support', function () {
@@ -562,7 +599,7 @@ describe('TokenRegistry', function () {
 
       await expect(tokenRegistry.setWETHAddress(mockWETHAddress))
         .to.emit(tokenRegistry, 'WETHAddressUpdated')
-        .withArgs(mockWETH)
+        .withArgs(mockWETHAddress)
 
       expect(await tokenRegistry.isTokenSupported(mockWETHAddress)).to.be.true
 
@@ -624,74 +661,132 @@ describe('TokenRegistry', function () {
     })
   })
 
-  describe('Setting WETH Address', function () {
-    it('Should allow owner to set WETH address', async function () {
-      const { tokenRegistry, mockToken1, mockToken2, mockWETH } =
-        await loadFixture(deployTokenRegistryFixture)
-
-      const mockWETHAddress = await mockWETH.getAddress()
-
-      await expect(tokenRegistry.setWETHAddress(mockWETHAddress))
-        .to.emit(tokenRegistry, 'WETHAddressUpdated')
-        .withArgs(mockWETH)
-
-      expect(await tokenRegistry.isTokenSupported(mockWETHAddress)).to.be.true
-
-      const config = await tokenRegistry.tokenConfigs(mockWETHAddress)
-      expect(config.isSupported).to.be.true
-      expect(config.minimumContributionAmount).to.equal(0)
-      expect(config.decimals).to.equal(18)
-    })
-
-    it('Should revert when trying to update to a zero address', async function () {
-      const { tokenRegistry, user1 } = await loadFixture(
+  describe('Getter functions', function () {
+    it('getMinContributionAmount() returns correct amount and decimals', async function () {
+      const { tokenRegistry, mockToken1 } = await loadFixture(
         deployTokenRegistryFixture
       )
+      const mockToken1Address = await mockToken1.getAddress()
 
-      await expect(tokenRegistry.setWETHAddress(ethers.ZeroAddress))
-        .to.be.revertedWithCustomError(tokenRegistry, 'InvalidToken')
+      const wholeTokenAmount = 5
+      await tokenRegistry.addToken(mockToken1Address, wholeTokenAmount)
+
+      const [minAmount, decimals] =
+        await tokenRegistry.getMinContributionAmount(mockToken1Address)
+      expect(minAmount).to.equal(ethers.parseUnits('5', 18))
+      expect(decimals).to.equal(18)
+
+      await expect(tokenRegistry.getMinContributionAmount(ethers.ZeroAddress))
+        .to.be.revertedWithCustomError(tokenRegistry, 'TokenNotInRegistry')
         .withArgs(ethers.ZeroAddress)
     })
 
-    it('Should revert when trying to update to a non-ERC20 compliant contract', async function () {
-      const { tokenRegistry, user1 } = await loadFixture(
+    it('getAllSupportedTokens() returns correct array', async function () {
+      const { tokenRegistry, mockToken1, mockToken2 } = await loadFixture(
         deployTokenRegistryFixture
       )
+      const mockToken1Address = await mockToken1.getAddress()
+      const mockToken2Address = await mockToken2.getAddress()
 
-      const NonCompliantToken = await ethers.getContractFactory(
-        'NonCompliantToken'
-      )
-      const nonCompliantToken = await NonCompliantToken.deploy()
-      await nonCompliantToken.waitForDeployment()
+      expect(await tokenRegistry.getAllSupportedTokens()).to.deep.equal([])
 
-      const nonCompliantAddress = await nonCompliantToken.getAddress()
+      await tokenRegistry.addToken(mockToken1Address, 0)
+      expect(await tokenRegistry.getAllSupportedTokens()).to.deep.equal([
+        mockToken1Address
+      ])
 
-      await expect(tokenRegistry.setWETHAddress(nonCompliantAddress))
-        .to.be.revertedWithCustomError(tokenRegistry, 'NotERC20Compliant')
-        .withArgs(nonCompliantAddress)
+      await tokenRegistry.addToken(mockToken2Address, 0)
+      const tokensAfterAddingTwo = await tokenRegistry.getAllSupportedTokens()
+      expect(tokensAfterAddingTwo.length).to.equal(2)
+      expect(tokensAfterAddingTwo).to.include(mockToken1Address)
+      expect(tokensAfterAddingTwo).to.include(mockToken2Address)
+
+      await tokenRegistry.removeToken(mockToken1Address)
+      const tokensAfterRemovingFirst =
+        await tokenRegistry.getAllSupportedTokens()
+      expect(tokensAfterRemovingFirst.length).to.equal(1)
+      expect(tokensAfterRemovingFirst).to.include(mockToken2Address)
     })
 
-    it('Should revert when trying to update to a non-contract address', async function () {
-      const { tokenRegistry, user1 } = await loadFixture(
+    it('getWETH() returns correct address', async function () {
+      const { tokenRegistry, mockWETH } = await loadFixture(
         deployTokenRegistryFixture
       )
+      const mockWETHAddress = await mockWETH.getAddress()
+      expect(await tokenRegistry.getWETH()).to.equal(ethers.ZeroAddress)
 
-      await expect(tokenRegistry.setWETHAddress(user1.address))
-        .to.be.revertedWithCustomError(tokenRegistry, 'NotAContract')
-        .withArgs(user1.address)
+      await tokenRegistry.setWETHAddress(mockWETHAddress)
+      expect(await tokenRegistry.getWETH()).to.equal(mockWETHAddress)
+
+      const { mockToken1 } = await loadFixture(deployTokenRegistryFixture)
+      const mockToken1Address = await mockToken1.getAddress()
+      await tokenRegistry.setWETHAddress(mockToken1Address)
+      expect(await tokenRegistry.getWETH()).to.equal(mockToken1Address)
     })
 
-    it('Should revert when non-owner attempts to set WETH address', async function () {
-      const { tokenRegistry, user1, mockWETH } = await loadFixture(
+    it('isTokenSupported() returns correct status', async function () {
+      const { tokenRegistry, mockToken1 } = await loadFixture(
         deployTokenRegistryFixture
       )
+      const mockToken1Address = await mockToken1.getAddress()
 
-      await expect(tokenRegistry.connect(user1).setWETHAddress(mockWETH))
-        .to.be.revertedWithCustomError(
-          tokenRegistry,
-          'OwnableUnauthorizedAccount'
-        )
-        .withArgs(user1)
+      await expect(tokenRegistry.isTokenSupported(mockToken1Address))
+        .to.be.revertedWithCustomError(tokenRegistry, 'TokenNotInRegistry')
+        .withArgs(mockToken1Address)
+
+      await tokenRegistry.addToken(mockToken1Address, 0)
+      expect(await tokenRegistry.isTokenSupported(mockToken1Address)).to.be.true
+
+      await tokenRegistry.disableTokenSupport(mockToken1Address)
+      expect(await tokenRegistry.isTokenSupported(mockToken1Address)).to.be
+        .false
+
+      await tokenRegistry.enableTokenSupport(mockToken1Address)
+      expect(await tokenRegistry.isTokenSupported(mockToken1Address)).to.be.true
+
+      await tokenRegistry.removeToken(mockToken1Address)
+      await expect(tokenRegistry.isTokenSupported(mockToken1Address))
+        .to.be.revertedWithCustomError(tokenRegistry, 'TokenNotInRegistry')
+        .withArgs(mockToken1Address)
+    })
+
+    it('_convertFromSmallestUnit() correctly converts from smallest unit to whole tokens', async function () {
+      const { tokenRegistry } = await loadFixture(deployTokenRegistryFixture)
+
+      const smallestAmount = ethers.parseUnits('5', 18)
+      const wholeTokens = await tokenRegistry.testConvertFromSmallestUnit(
+        smallestAmount,
+        18
+      )
+      expect(wholeTokens).to.equal(5)
+
+      const smallAmount6Dec = ethers.parseUnits('10', 6)
+      const wholeTokens6Dec = await tokenRegistry.testConvertFromSmallestUnit(
+        smallAmount6Dec,
+        6
+      )
+      expect(wholeTokens6Dec).to.equal(10)
+    })
+
+    it('Should convert small values without overflow in _convertToSmallestUnit', async function () {
+      const { tokenRegistry, mockToken1 } = await loadFixture(
+        deployTokenRegistryFixture
+      )
+      const mockToken1Address = await mockToken1.getAddress()
+
+      const smallAmount = 1
+      await tokenRegistry.addToken(mockToken1Address, smallAmount)
+
+      const config = await tokenRegistry.tokenConfigs(mockToken1Address)
+      expect(config.minimumContributionAmount).to.equal(
+        ethers.parseUnits('1', 18)
+      )
+
+      const smallTestAmount = await tokenRegistry.testConvertFromSmallestUnit(
+        ethers.parseUnits('1', 18),
+        18
+      )
+      expect(smallTestAmount).to.equal(1)
     })
   })
 })
