@@ -1,3 +1,5 @@
+import { token } from '../typechain-types/@openzeppelin/contracts'
+
 const { expect } = require('chai')
 const { ethers } = require('hardhat')
 const { loadFixture } = require('@nomicfoundation/hardhat-network-helpers')
@@ -223,6 +225,79 @@ describe('TokenRegistry', function () {
       await expect(
         tokenRegistry.addToken(mockToken1Address, tooLargeAmount)
       ).to.be.revertedWithCustomError(tokenRegistry, 'Overflow')
+    })
+  })
+
+  describe('Removing tokens', function () {
+    it('Should allow owner to remove a token from the registry', async function () {
+      const { tokenRegistry, mockToken1, mockToken2, mockWETH } =
+        await loadFixture(deployTokenRegistryFixture)
+
+      const mockToken1Address = await mockToken1.getAddress()
+
+      await tokenRegistry.addToken(mockToken1Address, 0)
+
+      expect(await tokenRegistry.getAllSupportedTokens()).to.have.lengthOf(1)
+
+      await expect(tokenRegistry.removeToken(mockToken1Address))
+        .to.emit(tokenRegistry, 'TokenRemovedFromRegistry')
+        .withArgs(mockToken1Address)
+
+      expect(await tokenRegistry.getAllSupportedTokens()).to.have.lengthOf(0)
+
+      await expect(tokenRegistry.isTokenSupported(mockToken1Address))
+        .to.be.revertedWithCustomError(tokenRegistry, 'TokenNotInRegistry')
+        .withArgs(mockToken1Address)
+    })
+
+    it('Should properly clean up all token data when removed', async function () {
+      const { tokenRegistry, mockToken1 } = await loadFixture(
+        deployTokenRegistryFixture
+      )
+      const mockToken1Address = await mockToken1.getAddress()
+
+      await tokenRegistry.addToken(mockToken1Address, 5)
+
+      await expect(tokenRegistry.removeToken(mockToken1Address))
+        .to.emit(tokenRegistry, 'TokenRemovedFromRegistry')
+        .withArgs(mockToken1Address)
+
+      const config = await tokenRegistry.tokenConfigs(mockToken1Address)
+      expect(config.isSupported).to.equal(false)
+      expect(config.minimumContributionAmount).to.equal(0)
+      expect(config.decimals).to.equal(0)
+
+      // isTokenSupported should revert, confirming tokenExists is cleared
+      await expect(
+        tokenRegistry.isTokenSupported(mockToken1Address)
+      ).to.be.revertedWithCustomError(tokenRegistry, 'TokenNotInRegistry')
+    })
+
+    it('Should revert when removing a token not in registry', async function () {
+      const { tokenRegistry, mockToken1, mockToken2, mockWETH } =
+        await loadFixture(deployTokenRegistryFixture)
+
+      const mockToken1Address = await mockToken1.getAddress()
+
+      await expect(tokenRegistry.removeToken(mockToken1Address))
+        .to.be.revertedWithCustomError(tokenRegistry, 'TokenNotInRegistry')
+        .withArgs(mockToken1Address)
+    })
+
+    it('Should revert when non-owner tries to remove tokens', async function () {
+      const { tokenRegistry, user1, mockToken1, mockToken2, mockWETH } =
+        await loadFixture(deployTokenRegistryFixture)
+
+      const mockToken1Address = await mockToken1.getAddress()
+
+      await tokenRegistry.addToken(mockToken1Address, 0)
+
+      await expect(tokenRegistry.connect(user1).removeToken(mockToken1Address))
+        .to.be.revertedWithCustomError(
+          tokenRegistry,
+          'OwnableUnauthorizedAccount'
+        )
+        .withArgs(user1.address)
     })
   })
 })
