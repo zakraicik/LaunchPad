@@ -62,6 +62,7 @@ contract TokenRegistry is Ownable {
         } catch {
             revert NotERC20Compliant(_token);
         }
+
     }
 
     function _tokenExists(address token) internal view returns (bool) {
@@ -178,6 +179,15 @@ contract TokenRegistry is Ownable {
 
     function setWETHAddress(address _wethAddress) external onlyOwner {
         uint8 decimals = _validateAndGetDecimals(_wethAddress);
+        
+        
+        tokenConfigs[_wethAddress] = TokenConfig({
+            isSupported: true,
+            minimumContributionAmount: 0, 
+            decimals: decimals
+        });
+        tokenExists[_wethAddress] = true;
+        
         wETHAddress = _wethAddress;
         emit WETHAddressUpdated(_wethAddress);
     }
