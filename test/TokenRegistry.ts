@@ -266,8 +266,6 @@ describe('TokenRegistry', function () {
       expect(config.isSupported).to.equal(false)
       expect(config.minimumContributionAmount).to.equal(0)
       expect(config.decimals).to.equal(0)
-
-      // isTokenSupported should revert, confirming tokenExists is cleared
       await expect(
         tokenRegistry.isTokenSupported(mockToken1Address)
       ).to.be.revertedWithCustomError(tokenRegistry, 'TokenNotInRegistry')
@@ -298,6 +296,175 @@ describe('TokenRegistry', function () {
           'OwnableUnauthorizedAccount'
         )
         .withArgs(user1.address)
+    })
+  })
+
+  describe('Enabling token support', function () {
+    it('Should allow owner to enable support for disabled tokens', async function () {
+      const { tokenRegistry, mockToken1, mockToken2, mockWETH } =
+        await loadFixture(deployTokenRegistryFixture)
+
+      const mockToken1Address = await mockToken1.getAddress()
+
+      await tokenRegistry.addToken(mockToken1Address, 0)
+
+      await tokenRegistry.disableTokenSupport(mockToken1Address)
+
+      expect(await tokenRegistry.isTokenSupported(mockToken1Address)).to.be
+        .false
+
+      expect(await tokenRegistry.getAllSupportedTokens()).to.have.lengthOf(0)
+
+      await expect(tokenRegistry.enableTokenSupport(mockToken1Address))
+        .to.emit(tokenRegistry, 'TokenSupportEnabled')
+        .withArgs(mockToken1Address)
+
+      expect(await tokenRegistry.isTokenSupported(mockToken1Address)).to.be.true
+
+      expect(await tokenRegistry.getAllSupportedTokens()).to.have.lengthOf(1)
+    })
+
+    it('Should revert when trying to enable support for already enabled token', async function () {
+      const { tokenRegistry, mockToken1, mockToken2, mockWETH } =
+        await loadFixture(deployTokenRegistryFixture)
+
+      const mockToken1Address = await mockToken1.getAddress()
+
+      await tokenRegistry.addToken(mockToken1Address, 0)
+
+      expect(await tokenRegistry.isTokenSupported(mockToken1Address)).to.be.true
+
+      expect(await tokenRegistry.getAllSupportedTokens()).to.have.lengthOf(1)
+
+      await expect(tokenRegistry.enableTokenSupport(mockToken1Address))
+        .to.be.revertedWithCustomError(
+          tokenRegistry,
+          'TokenSupportAlreadyEnabled'
+        )
+        .withArgs(mockToken1Address)
+
+      expect(await tokenRegistry.isTokenSupported(mockToken1Address)).to.be.true
+
+      expect(await tokenRegistry.getAllSupportedTokens()).to.have.lengthOf(1)
+    })
+
+    it('Should revert when trying to enable support for token not in registry', async function () {
+      const { tokenRegistry, mockToken1, mockToken2, mockWETH } =
+        await loadFixture(deployTokenRegistryFixture)
+
+      const mockToken1Address = await mockToken1.getAddress()
+
+      await expect(tokenRegistry.enableTokenSupport(mockToken1Address))
+        .to.be.revertedWithCustomError(tokenRegistry, 'TokenNotInRegistry')
+        .withArgs(mockToken1Address)
+    })
+
+    it('Should revert when non-owner tries to enable support for disabled token', async function () {
+      const { tokenRegistry, user1, mockToken1, mockToken2, mockWETH } =
+        await loadFixture(deployTokenRegistryFixture)
+
+      const mockToken1Address = await mockToken1.getAddress()
+
+      await tokenRegistry.addToken(mockToken1Address, 0)
+
+      await tokenRegistry.disableTokenSupport(mockToken1Address)
+
+      expect(await tokenRegistry.isTokenSupported(mockToken1Address)).to.be
+        .false
+
+      expect(await tokenRegistry.getAllSupportedTokens()).to.have.lengthOf(0)
+
+      await expect(
+        tokenRegistry.connect(user1).enableTokenSupport(mockToken1Address)
+      )
+        .to.be.revertedWithCustomError(
+          tokenRegistry,
+          'OwnableUnauthorizedAccount'
+        )
+        .withArgs(user1)
+      expect(await tokenRegistry.isTokenSupported(mockToken1Address)).to.be
+        .false
+
+      expect(await tokenRegistry.getAllSupportedTokens()).to.have.lengthOf(0)
+    })
+  })
+
+  describe('Disabling token support', function () {
+    it('Should allow owner to disable support for enabled tokens', async function () {
+      const { tokenRegistry, mockToken1, mockToken2, mockWETH } =
+        await loadFixture(deployTokenRegistryFixture)
+
+      const mockToken1Address = await mockToken1.getAddress()
+
+      await tokenRegistry.addToken(mockToken1Address, 0)
+
+      expect(await tokenRegistry.isTokenSupported(mockToken1Address)).to.be.true
+
+      expect(await tokenRegistry.getAllSupportedTokens()).to.have.lengthOf(1)
+
+      await expect(tokenRegistry.disableTokenSupport(mockToken1Address))
+        .to.emit(tokenRegistry, 'TokenSupportDisabled')
+        .withArgs(mockToken1Address)
+
+      expect(await tokenRegistry.isTokenSupported(mockToken1Address)).to.be
+        .false
+
+      expect(await tokenRegistry.getAllSupportedTokens()).to.have.lengthOf(0)
+    })
+
+    it('Should revert when trying to disable support for already disabled token', async function () {
+      const { tokenRegistry, mockToken1, mockToken2, mockWETH } =
+        await loadFixture(deployTokenRegistryFixture)
+
+      const mockToken1Address = await mockToken1.getAddress()
+
+      await tokenRegistry.addToken(mockToken1Address, 0)
+
+      await tokenRegistry.disableTokenSupport(mockToken1Address)
+
+      await expect(tokenRegistry.disableTokenSupport(mockToken1Address))
+        .to.be.revertedWithCustomError(
+          tokenRegistry,
+          'TokenSupportAlreadyDisabled'
+        )
+        .withArgs(mockToken1Address)
+    })
+
+    it('Should revert when trying to disable support for token not in registry', async function () {
+      const { tokenRegistry, mockToken1, mockToken2, mockWETH } =
+        await loadFixture(deployTokenRegistryFixture)
+
+      const mockToken1Address = await mockToken1.getAddress()
+
+      await expect(tokenRegistry.disableTokenSupport(mockToken1Address))
+        .to.be.revertedWithCustomError(tokenRegistry, 'TokenNotInRegistry')
+        .withArgs(mockToken1Address)
+    })
+
+    it('Should revert when non-owner tries to disable support for enabled token', async function () {
+      const { tokenRegistry, user1, mockToken1, mockToken2, mockWETH } =
+        await loadFixture(deployTokenRegistryFixture)
+
+      const mockToken1Address = await mockToken1.getAddress()
+
+      await tokenRegistry.addToken(mockToken1Address, 0)
+
+      expect(await tokenRegistry.isTokenSupported(mockToken1Address)).to.be.true
+
+      expect(await tokenRegistry.getAllSupportedTokens()).to.have.lengthOf(1)
+
+      await expect(
+        tokenRegistry.connect(user1).disableTokenSupport(mockToken1Address)
+      )
+        .to.be.revertedWithCustomError(
+          tokenRegistry,
+          'OwnableUnauthorizedAccount'
+        )
+        .withArgs(user1)
+
+      expect(await tokenRegistry.isTokenSupported(mockToken1Address)).to.be.true
+
+      expect(await tokenRegistry.getAllSupportedTokens()).to.have.lengthOf(1)
     })
   })
 })
