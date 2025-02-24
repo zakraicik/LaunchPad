@@ -5,14 +5,12 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 
 contract TokenRegistry is Ownable {
-
-    constructor(address _owner) Ownable(_owner){
-
-    }
+    constructor(address _owner) Ownable(_owner){}
 
     struct TokenConfig {
         bool isSupported;
-        uint256 minimumContributionAmount;
+        uint256 minimumContributionAmount; // Stored in token's smallest unit (considering decimals)
+        uint8 decimals;  // Store decimals to avoid repeated external calls
     }
 
     mapping(address => TokenConfig) public tokenConfigs;
@@ -27,14 +25,44 @@ contract TokenRegistry is Ownable {
     error TokenSupportAlreadyDisabled(address _token);
     error NotAContract(address providedAddress);
     error NotERC20Compliant(address providedAddress);
+    error InvalidMinimumContribution();
+    error Overflow();
 
-    event TokenAdded(address indexed token, uint256 minimumContributionAmount);
+    event TokenAdded(address indexed token, uint256 minimumContributionAmount, uint8 decimals);
     event TokenRemovedFromRegistry(address indexed token);
     event TokenSupportDisabled(address indexed token);
     event TokenSupportEnabled(address indexed token);
-    event TokenConfigUpdated(address indexed token, uint256 minimumContributionAmount);
     event TokenMinimumContributionUpdated(address indexed token, uint256 minimumContributionAmount);
     event WETHAddressUpdated(address wETHUpdatd);
+
+    function _convertToSmallestUnit(uint256 amount, uint8 decimals) internal pure returns (uint256) {
+        if (amount > type(uint256).max / (10 ** decimals)) {
+            revert Overflow();
+        }
+        return amount * (10 ** decimals);
+    }
+
+    function _convertFromSmallestUnit(uint256 amount, uint8 decimals) internal pure returns (uint256) {
+        return amount / (10 ** decimals);
+    }
+
+    function _validateAndGetDecimals(address _token) internal view returns (uint8) {
+        if(_token == address(0)){
+            revert InvalidToken(_token);
+        }
+
+        uint256 codeSize;
+        assembly { codeSize := extcodesize(_token) }
+        if (codeSize == 0) {
+            revert NotAContract(_token);
+        }
+
+        try IERC20Metadata(_token).decimals() returns (uint8 decimals) {
+            return decimals;
+        } catch {
+            revert NotERC20Compliant(_token);
+        }
+    }
 
     function _tokenExists(address token) internal view returns (bool) {
         return tokenExists[token];
@@ -52,38 +80,24 @@ contract TokenRegistry is Ownable {
         return tokenConfigs[token].isSupported;
     }
 
-    function addToken(address _token, uint256 _minimumContributionAmount) external onlyOwner{
-        if(_token == address(0)){
-            revert InvalidToken(_token);
-        }
-
+    function addToken(address _token, uint256 _minimumContributionInWholeTokens) external onlyOwner {
         if(_tokenExists(_token)){
             revert TokenAlreadyInRegistry(_token);
         }
 
-        uint256 codeSize;
-        assembly { codeSize := extcodesize(_token) }
-        if (codeSize == 0) {
-            revert NotAContract(_token);
-        }
-
-        try IERC20(_token).totalSupply() returns (uint256) {
-            
-        } catch {
-            revert NotERC20Compliant(_token);
-        }
+        uint8 decimals = _validateAndGetDecimals(_token);
+        uint256 minimumContributionInSmallestUnit = _convertToSmallestUnit(_minimumContributionInWholeTokens, decimals);
 
         tokenConfigs[_token] = TokenConfig({
             isSupported: true,
-            minimumContributionAmount:_minimumContributionAmount
+            minimumContributionAmount: minimumContributionInSmallestUnit,
+            decimals: decimals
         });
 
         tokenExists[_token] = true;
-
         supportedTokens.push(_token);
 
-        emit TokenAdded(_token, _minimumContributionAmount);
-
+        emit TokenAdded(_token, minimumContributionInSmallestUnit, decimals);
     }
 
     function removeToken(address _token) external onlyOwner {
@@ -149,40 +163,31 @@ contract TokenRegistry is Ownable {
 
     }
 
-    function updateTokenMinimumContribution(address _token, uint256 _minimumContributionAmount) external onlyOwner{
+    function updateTokenMinimumContribution(address _token, uint256 _minimumContributionInWholeTokens) external onlyOwner {
         if(!_tokenExists(_token)){
             revert TokenNotInRegistry(_token);
         }
 
-        tokenConfigs[_token].minimumContributionAmount = _minimumContributionAmount;
+        TokenConfig storage config = tokenConfigs[_token];
+        uint256 minimumContributionInSmallestUnit = _convertToSmallestUnit(_minimumContributionInWholeTokens, config.decimals);
+        
+        config.minimumContributionAmount = minimumContributionInSmallestUnit;
 
-        emit TokenMinimumContributionUpdated(_token, _minimumContributionAmount);
+        emit TokenMinimumContributionUpdated(_token, minimumContributionInSmallestUnit);
     }
 
     function setWETHAddress(address _wethAddress) external onlyOwner {
-        if(_wethAddress == address(0)){
-            revert InvalidToken(address(0));
-        }
-        
-        uint256 codeSize;
-        assembly { codeSize := extcodesize(_wethAddress) }
-        if (codeSize == 0) {
-            revert NotAContract(_wethAddress);
-        }
-
-        try IERC20(_wethAddress).totalSupply() returns (uint256) {
-            
-        } catch {
-            revert NotERC20Compliant(_wethAddress);
-        }
-
-
+        uint8 decimals = _validateAndGetDecimals(_wethAddress);
         wETHAddress = _wethAddress;
         emit WETHAddressUpdated(_wethAddress);
     }
 
-    function getMinContributionAmount(address token) external view returns (uint256) {
-        return tokenConfigs[token].minimumContributionAmount;
+    function getMinContributionAmount(address token) external view returns (uint256 minimumAmount, uint8 decimals) {
+        if (!_tokenExists(token)) {
+            revert TokenNotInRegistry(token);
+        }
+        TokenConfig memory config = tokenConfigs[token];
+        return (config.minimumContributionAmount, config.decimals);
     }
 
     function getAllSupportedTokens() external view returns(address[] memory){
@@ -192,7 +197,5 @@ contract TokenRegistry is Ownable {
     function getWETH() external view returns (address) {
         return wETHAddress;
     }
-
-
 
 }

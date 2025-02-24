@@ -43,14 +43,15 @@ describe('TokenRegistry', function () {
   }
 
   describe('Deployment', async function () {
-    it('Should deploy all contracts successfully', async function () {
-      const { tokenRegistry, mockToken1, mockToken2, mockWETH, owner } =
-        await loadFixture(deployTokenRegistryFixture)
+    const { tokenRegistry, mockToken1, mockToken2, mockWETH, owner } =
+      await loadFixture(deployTokenRegistryFixture)
 
+    it('Should deploy all contracts successfully.', async function () {
       expect(await tokenRegistry.getAddress()).to.be.properAddress
       expect(await mockToken1.getAddress()).to.be.properAddress
       expect(await mockToken2.getAddress()).to.be.properAddress
       expect(await mockWETH.getAddress()).to.be.properAddress
-    })
+    }),
+      it('Should correctly set owner and initial state.', async function () {})
   })
 })
