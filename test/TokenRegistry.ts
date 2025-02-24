@@ -552,4 +552,146 @@ describe('TokenRegistry', function () {
       expect(updatedConfig.decimals).to.equal(18)
     })
   })
+
+  describe('Setting WETH Address', function () {
+    it('Should allow owner to set WETH address', async function () {
+      const { tokenRegistry, mockToken1, mockToken2, mockWETH } =
+        await loadFixture(deployTokenRegistryFixture)
+
+      const mockWETHAddress = await mockWETH.getAddress()
+
+      await expect(tokenRegistry.setWETHAddress(mockWETHAddress))
+        .to.emit(tokenRegistry, 'WETHAddressUpdated')
+        .withArgs(mockWETH)
+
+      expect(await tokenRegistry.isTokenSupported(mockWETHAddress)).to.be.true
+
+      const config = await tokenRegistry.tokenConfigs(mockWETHAddress)
+      expect(config.isSupported).to.be.true
+      expect(config.minimumContributionAmount).to.equal(0)
+      expect(config.decimals).to.equal(18)
+    })
+
+    it('Should revert when trying to update to a zero address', async function () {
+      const { tokenRegistry, user1 } = await loadFixture(
+        deployTokenRegistryFixture
+      )
+
+      await expect(tokenRegistry.setWETHAddress(ethers.ZeroAddress))
+        .to.be.revertedWithCustomError(tokenRegistry, 'InvalidToken')
+        .withArgs(ethers.ZeroAddress)
+    })
+
+    it('Should revert when trying to update to a non-ERC20 compliant contract', async function () {
+      const { tokenRegistry, user1 } = await loadFixture(
+        deployTokenRegistryFixture
+      )
+
+      const NonCompliantToken = await ethers.getContractFactory(
+        'NonCompliantToken'
+      )
+      const nonCompliantToken = await NonCompliantToken.deploy()
+      await nonCompliantToken.waitForDeployment()
+
+      const nonCompliantAddress = await nonCompliantToken.getAddress()
+
+      await expect(tokenRegistry.setWETHAddress(nonCompliantAddress))
+        .to.be.revertedWithCustomError(tokenRegistry, 'NotERC20Compliant')
+        .withArgs(nonCompliantAddress)
+    })
+
+    it('Should revert when trying to update to a non-contract address', async function () {
+      const { tokenRegistry, user1 } = await loadFixture(
+        deployTokenRegistryFixture
+      )
+
+      await expect(tokenRegistry.setWETHAddress(user1.address))
+        .to.be.revertedWithCustomError(tokenRegistry, 'NotAContract')
+        .withArgs(user1.address)
+    })
+
+    it('Should revert when non-owner attempts to set WETH address', async function () {
+      const { tokenRegistry, user1, mockWETH } = await loadFixture(
+        deployTokenRegistryFixture
+      )
+
+      await expect(tokenRegistry.connect(user1).setWETHAddress(mockWETH))
+        .to.be.revertedWithCustomError(
+          tokenRegistry,
+          'OwnableUnauthorizedAccount'
+        )
+        .withArgs(user1)
+    })
+  })
+
+  describe('Setting WETH Address', function () {
+    it('Should allow owner to set WETH address', async function () {
+      const { tokenRegistry, mockToken1, mockToken2, mockWETH } =
+        await loadFixture(deployTokenRegistryFixture)
+
+      const mockWETHAddress = await mockWETH.getAddress()
+
+      await expect(tokenRegistry.setWETHAddress(mockWETHAddress))
+        .to.emit(tokenRegistry, 'WETHAddressUpdated')
+        .withArgs(mockWETH)
+
+      expect(await tokenRegistry.isTokenSupported(mockWETHAddress)).to.be.true
+
+      const config = await tokenRegistry.tokenConfigs(mockWETHAddress)
+      expect(config.isSupported).to.be.true
+      expect(config.minimumContributionAmount).to.equal(0)
+      expect(config.decimals).to.equal(18)
+    })
+
+    it('Should revert when trying to update to a zero address', async function () {
+      const { tokenRegistry, user1 } = await loadFixture(
+        deployTokenRegistryFixture
+      )
+
+      await expect(tokenRegistry.setWETHAddress(ethers.ZeroAddress))
+        .to.be.revertedWithCustomError(tokenRegistry, 'InvalidToken')
+        .withArgs(ethers.ZeroAddress)
+    })
+
+    it('Should revert when trying to update to a non-ERC20 compliant contract', async function () {
+      const { tokenRegistry, user1 } = await loadFixture(
+        deployTokenRegistryFixture
+      )
+
+      const NonCompliantToken = await ethers.getContractFactory(
+        'NonCompliantToken'
+      )
+      const nonCompliantToken = await NonCompliantToken.deploy()
+      await nonCompliantToken.waitForDeployment()
+
+      const nonCompliantAddress = await nonCompliantToken.getAddress()
+
+      await expect(tokenRegistry.setWETHAddress(nonCompliantAddress))
+        .to.be.revertedWithCustomError(tokenRegistry, 'NotERC20Compliant')
+        .withArgs(nonCompliantAddress)
+    })
+
+    it('Should revert when trying to update to a non-contract address', async function () {
+      const { tokenRegistry, user1 } = await loadFixture(
+        deployTokenRegistryFixture
+      )
+
+      await expect(tokenRegistry.setWETHAddress(user1.address))
+        .to.be.revertedWithCustomError(tokenRegistry, 'NotAContract')
+        .withArgs(user1.address)
+    })
+
+    it('Should revert when non-owner attempts to set WETH address', async function () {
+      const { tokenRegistry, user1, mockWETH } = await loadFixture(
+        deployTokenRegistryFixture
+      )
+
+      await expect(tokenRegistry.connect(user1).setWETHAddress(mockWETH))
+        .to.be.revertedWithCustomError(
+          tokenRegistry,
+          'OwnableUnauthorizedAccount'
+        )
+        .withArgs(user1)
+    })
+  })
 })
