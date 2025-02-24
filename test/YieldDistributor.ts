@@ -8,6 +8,7 @@ describe('YieldDistributor', function () {
   async function deployYieldDistributorFixture () {
     const [owner, user1, user2] = await ethers.getSigners()
     const randomWallet = ethers.Wallet.createRandom()
+    const randomWallet2 = ethers.Wallet.createRandom()
 
     const mockToken1 = await ethers.deployContract('MockERC20', [
       'Mock Token 1',
@@ -38,7 +39,8 @@ describe('YieldDistributor', function () {
       owner,
       user1,
       user2,
-      randomWallet
+      randomWallet,
+      randomWallet2
     }
   }
 
@@ -76,4 +78,66 @@ describe('YieldDistributor', function () {
       ).to.be.revertedWithCustomError(YieldDistributorFactory, 'InvalidAddress')
     })
   })
+
+  describe('Updating platform treasury', function () {
+    it('Should allow owner to update the platform treasury', async function () {
+      const { yieldDistributor, randomWallet, randomWallet2 } =
+        await loadFixture(deployYieldDistributorFixture)
+
+      expect(await yieldDistributor.getPlatformTreasury()).to.equal(
+        randomWallet.address
+      )
+
+      await expect(yieldDistributor.updatePlatformTreasury(randomWallet2))
+        .to.emit(yieldDistributor, 'PlatformTreasuryUpdated')
+        .withArgs(randomWallet.address, randomWallet2.address)
+
+      expect(await yieldDistributor.getPlatformTreasury()).to.equal(
+        randomWallet2.address
+      )
+    })
+
+    it('Should revert if non-owner attempts to update the platform treasury', async function () {
+      const { yieldDistributor, user1, randomWallet, randomWallet2 } =
+        await loadFixture(deployYieldDistributorFixture)
+
+      expect(await yieldDistributor.getPlatformTreasury()).to.equal(
+        randomWallet.address
+      )
+
+      await expect(
+        yieldDistributor
+          .connect(user1)
+          .updatePlatformTreasury(randomWallet2.address)
+      )
+        .to.be.revertedWithCustomError(
+          yieldDistributor,
+          'OwnableUnauthorizedAccount'
+        )
+        .withArgs(user1.address)
+
+      expect(await yieldDistributor.getPlatformTreasury()).to.equal(
+        randomWallet.address
+      )
+    })
+
+    it('Should revert if zero address is pass to updatePlatformTreasury()', async function () {
+      const { yieldDistributor, randomWallet } = await loadFixture(
+        deployYieldDistributorFixture
+      )
+      expect(await yieldDistributor.getPlatformTreasury()).to.equal(
+        randomWallet.address
+      )
+
+      await expect(
+        yieldDistributor.updatePlatformTreasury(ethers.ZeroAddress)
+      ).to.be.revertedWithCustomError(yieldDistributor, 'InvalidAddress')
+
+      expect(await yieldDistributor.getPlatformTreasury()).to.equal(
+        randomWallet.address
+      )
+    })
+  })
+
+  describe('Updating platform yield share', async function () {})
 })

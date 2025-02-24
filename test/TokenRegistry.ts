@@ -420,7 +420,7 @@ describe('TokenRegistry', function () {
           tokenRegistry,
           'OwnableUnauthorizedAccount'
         )
-        .withArgs(user1)
+        .withArgs(user1.address)
       expect(await tokenRegistry.isTokenSupported(mockToken1Address)).to.be
         .false
 
@@ -654,7 +654,9 @@ describe('TokenRegistry', function () {
         deployTokenRegistryFixture
       )
 
-      await expect(tokenRegistry.connect(user1).setWETHAddress(mockWETH))
+      const mockWETHAddress = mockWETH.getAddress()
+
+      await expect(tokenRegistry.connect(user1).setWETHAddress(mockWETHAddress))
         .to.be.revertedWithCustomError(
           tokenRegistry,
           'OwnableUnauthorizedAccount'
