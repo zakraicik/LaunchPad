@@ -180,7 +180,6 @@ contract TokenRegistry is Ownable {
     function setWETHAddress(address _wethAddress) external onlyOwner {
         uint8 decimals = _validateAndGetDecimals(_wethAddress);
         
-        
         tokenConfigs[_wethAddress] = TokenConfig({
             isSupported: true,
             minimumContributionAmount: 0, 
@@ -206,6 +205,10 @@ contract TokenRegistry is Ownable {
 
     function getWETH() external view returns (address) {
         return wETHAddress;
+    }
+
+    function testConvertFromSmallestUnit(uint256 amount, uint8 decimals) public pure returns (uint256) {
+        return _convertFromSmallestUnit(amount, decimals);
     }
 
 }
