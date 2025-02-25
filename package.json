@@ -16,6 +16,7 @@
     "@aave/core-v3": "^1.19.3",
     "@nomicfoundation/hardhat-toolbox": "^5.0.0",
     "@openzeppelin/contracts": "^5.2.0",
-    "hardhat": "^2.22.18"
+    "hardhat": "^2.22.18",
+    "hardhat-gas-reporter": "^2.2.2"
   }
 }
