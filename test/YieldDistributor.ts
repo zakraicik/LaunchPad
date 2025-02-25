@@ -567,5 +567,68 @@ describe('YieldDistributor', function () {
     })
   })
 
-  describe('Getter functions', function () {})
+  describe('Getter functions', function () {
+    it('Should correctly return platform treasury address', async function () {
+      const { yieldDistributor, randomWallet } = await loadFixture(
+        deployYieldDistributorFixture
+      )
+
+      expect(await yieldDistributor.getPlatformTreasury()).to.equal(
+        randomWallet.address
+      )
+    })
+
+    it('Should correctly return updated platform treasury address', async function () {
+      const { yieldDistributor, randomWallet, randomWallet2 } =
+        await loadFixture(deployYieldDistributorFixture)
+
+      await yieldDistributor.updatePlatformTreasury(randomWallet2.address)
+
+      expect(await yieldDistributor.getPlatformTreasury()).to.equal(
+        randomWallet2.address
+      )
+    })
+
+    it('Should correctly return platform yield share', async function () {
+      const { yieldDistributor } = await loadFixture(
+        deployYieldDistributorFixture
+      )
+
+      expect(await yieldDistributor.getPlatformYieldShare()).to.equal(2000)
+    })
+
+    it('Should correctly return updated platform yield share', async function () {
+      const { yieldDistributor } = await loadFixture(
+        deployYieldDistributorFixture
+      )
+
+      const newShare = 3000
+      await yieldDistributor.updatePlatformYieldShare(newShare)
+
+      expect(await yieldDistributor.getPlatformYieldShare()).to.equal(newShare)
+
+      await yieldDistributor.updatePlatformYieldShare(0)
+      expect(await yieldDistributor.getPlatformYieldShare()).to.equal(0)
+
+      await yieldDistributor.updatePlatformYieldShare(5000)
+      expect(await yieldDistributor.getPlatformYieldShare()).to.equal(5000)
+    })
+
+    it('Should maintain consistency between direct variable access and getter functions', async function () {
+      const { yieldDistributor, randomWallet2 } = await loadFixture(
+        deployYieldDistributorFixture
+      )
+
+      await yieldDistributor.updatePlatformTreasury(randomWallet2.address)
+      await yieldDistributor.updatePlatformYieldShare(1500)
+
+      const directTreasury = await yieldDistributor.platformTreasury()
+      const getTreasury = await yieldDistributor.getPlatformTreasury()
+      expect(directTreasury).to.equal(getTreasury)
+
+      const directShare = await yieldDistributor.platformYieldShare()
+      const getShare = await yieldDistributor.getPlatformYieldShare()
+      expect(directShare).to.equal(getShare)
+    })
+  })
 })
