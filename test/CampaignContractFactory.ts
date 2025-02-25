@@ -2,31 +2,59 @@ import { token } from '../typechain-types/@openzeppelin/contracts'
 
 const { expect } = require('chai')
 const { ethers } = require('hardhat')
-const { loadFixture } = require('@nomicfoundation/hardhat-network-helpers')
+import { Log } from 'ethers'
+import { loadFixture } from '@nomicfoundation/hardhat-network-helpers'
 
 describe('CampaignContractFactory', function () {
   async function deployCampaignContractFactoryFixture () {
-    const [owner, defiManager, user1] = await ethers.getSigners()
+    const [owner, user1] = await ethers.getSigners()
 
-    const defiManagerAddress = await defiManager.getAddress()
+    const mockDefiManager = await ethers.deployContract('MockDefiManager')
+    await mockDefiManager.waitForDeployment()
+
+    const mockDefiManagerAddress = await mockDefiManager.getAddress()
+
+    const mockTokenRegistry = await ethers.deployContract('MockTokenRegistry')
+    await mockTokenRegistry.waitForDeployment()
+
+    const mockERC20 = await ethers.deployContract('MockERC20', [
+      'Mock Token 1',
+      'MT1',
+      ethers.parseUnits('100')
+    ])
+
+    const mockERC20_2 = await ethers.deployContract('MockERC20', [
+      'Mock Token 2',
+      'MT2',
+      ethers.parseUnits('100')
+    ])
+
+    await mockERC20.waitForDeployment()
+    await mockERC20_2.waitForDeployment()
+
+    const mockERC20Address = await mockERC20.getAddress()
 
     const campaignContractFactory = await ethers.deployContract(
       'CampaignFactory',
-      [defiManagerAddress]
+      [mockDefiManagerAddress]
     )
-
     await campaignContractFactory.waitForDeployment()
+
+    await mockTokenRegistry.addSupportedToken(mockERC20Address, true)
 
     return {
       campaignContractFactory,
       owner,
-      defiManager,
-      user1
+      user1,
+      mockDefiManager,
+      mockTokenRegistry,
+      mockERC20,
+      mockERC20_2
     }
   }
 
   describe('Deployment', function () {
-    it('Should deploy all contracts succesfully', async function () {
+    it('Should correctly deploy campaignContractFactory', async function () {
       const { campaignContractFactory } = await loadFixture(
         deployCampaignContractFactoryFixture
       )
@@ -35,15 +63,716 @@ describe('CampaignContractFactory', function () {
     })
 
     it('Should correctly set the initial state', async function () {
-      const { campaignContractFactory, defiManager } = await loadFixture(
+      const { campaignContractFactory, mockDefiManager } = await loadFixture(
         deployCampaignContractFactoryFixture
       )
 
+      const mockDefiManagerAddress = await mockDefiManager.getAddress()
+
       expect(await campaignContractFactory.defiManager()).to.equal(
-        defiManager.address
+        mockDefiManagerAddress
+      )
+    })
+
+    it('Should revert if an invalid address is passed to the constructor', async function () {
+      await expect(
+        ethers.deployContract('CampaignFactory', [ethers.ZeroAddress])
+      ).to.be.revertedWithCustomError(
+        await ethers.getContractFactory('CampaignFactory'),
+        'InvalidAddress'
       )
     })
   })
 
-  describe('Deploying new campaigns', function () {})
+  describe('Deplyoing new campaigns', function () {
+    it('Should allow new campaigns to be deployed with ERC20 token', async function () {
+      const { campaignContractFactory, owner, mockERC20, mockTokenRegistry } =
+        await loadFixture(deployCampaignContractFactoryFixture)
+
+      const mockERC20Address = await mockERC20.getAddress()
+      const mockTokenRegistryAddress = await mockTokenRegistry.getAddress()
+      const campaignGoalAmount = 5
+      const campaignDuration = 10
+
+      const initialCampaignsCount =
+        await campaignContractFactory.getCampaignsCount()
+
+      expect(initialCampaignsCount).to.equal(0)
+
+      const initialCreatorCampaignsCount =
+        await campaignContractFactory.getCreatorCampaignsCount(owner.address)
+
+      expect(initialCreatorCampaignsCount).to.equal(0)
+
+      const initialCampaigns = await campaignContractFactory.getAllCampaigns()
+
+      expect(initialCampaigns).to.have.lengthOf(0)
+
+      const initialCreatorCampaigns =
+        await campaignContractFactory.getCampaignsByCreator(owner.address)
+
+      expect(initialCreatorCampaigns).to.have.lengthOf(0)
+
+      expect(await mockTokenRegistry.isTokenSupported(mockERC20Address)).to.be
+        .true
+
+      const tx = await campaignContractFactory.deploy(
+        mockERC20Address,
+        mockTokenRegistryAddress,
+        campaignGoalAmount,
+        campaignDuration
+      )
+
+      const receipt = await tx.wait()
+      if (!receipt) {
+        throw new Error('Transaction failed to return a receipt')
+      }
+
+      const event = receipt.logs.find((log: Log) => {
+        try {
+          const parsed = campaignContractFactory.interface.parseLog(log)
+          return parsed && parsed.name === 'CampaignCreated'
+        } catch {
+          return false
+        }
+      })
+
+      if (!event) {
+        throw new Error('Failed to find CampaignCreated event in logs')
+      }
+
+      const parsedEvent = campaignContractFactory.interface.parseLog(event)
+
+      if (!parsedEvent) {
+        throw new Error('Failed to parse event log')
+      }
+
+      await expect(tx)
+        .to.emit(campaignContractFactory, 'CampaignCreated')
+        .withArgs(parsedEvent.args[0], owner.address, parsedEvent.args[2])
+
+      const newCampaignsCount =
+        await campaignContractFactory.getCampaignsCount()
+      const newCreatorCampaignsCount =
+        await campaignContractFactory.getCreatorCampaignsCount(owner.address)
+
+      expect(newCampaignsCount).to.equal(initialCampaignsCount + 1n)
+      expect(newCreatorCampaignsCount).to.equal(
+        initialCreatorCampaignsCount + 1n
+      )
+
+      const lastDeployedCampaign =
+        await campaignContractFactory.deployedCampaigns(0)
+      expect(lastDeployedCampaign).to.equal(parsedEvent.args[0])
+
+      const creatorCampaign = await campaignContractFactory.creatorToCampaigns(
+        owner.address,
+        0
+      )
+      expect(creatorCampaign).to.equal(parsedEvent.args[0])
+
+      const Campaign = await ethers.getContractFactory('Campaign')
+      const deployedCampaign = Campaign.attach(parsedEvent.args[0])
+      expect(await (deployedCampaign as any).owner()).to.equal(owner.address)
+    })
+
+    it('Should correctly manage multiple campaigns from the same creator', async function () {
+      const { campaignContractFactory, owner, mockERC20, mockTokenRegistry } =
+        await loadFixture(deployCampaignContractFactoryFixture)
+
+      const mockERC20Address = await mockERC20.getAddress()
+      const mockTokenRegistryAddress = await mockTokenRegistry.getAddress()
+
+      const tx1 = await campaignContractFactory.deploy(
+        mockERC20Address,
+        mockTokenRegistryAddress,
+        5,
+        10
+      )
+      const receipt1 = await tx1.wait()
+      if (!receipt1) {
+        throw new Error('Transaction failed to return a receipt')
+      }
+
+      const tx2 = await campaignContractFactory.deploy(
+        mockERC20Address,
+        mockTokenRegistryAddress,
+        10,
+        15
+      )
+      const receipt2 = await tx2.wait()
+      if (!receipt2) {
+        throw new Error('Transaction failed to return a receipt')
+      }
+
+      expect(await campaignContractFactory.getCampaignsCount()).to.equal(2n)
+      expect(
+        await campaignContractFactory.getCreatorCampaignsCount(owner.address)
+      ).to.equal(2n)
+
+      const allCampaigns = await campaignContractFactory.getAllCampaigns()
+      const creatorCampaigns =
+        await campaignContractFactory.getCampaignsByCreator(owner.address)
+
+      expect(allCampaigns).to.have.lengthOf(2)
+      expect(creatorCampaigns).to.have.lengthOf(2)
+
+      expect(await campaignContractFactory.deployedCampaigns(0)).to.equal(
+        allCampaigns[0]
+      )
+      expect(await campaignContractFactory.deployedCampaigns(1)).to.equal(
+        allCampaigns[1]
+      )
+
+      expect(
+        await campaignContractFactory.creatorToCampaigns(owner.address, 0)
+      ).to.equal(creatorCampaigns[0])
+      expect(
+        await campaignContractFactory.creatorToCampaigns(owner.address, 1)
+      ).to.equal(creatorCampaigns[1])
+    })
+
+    it('Should allow new campaigns to be deployed with ether', async function () {
+      const { campaignContractFactory, owner, mockTokenRegistry } =
+        await loadFixture(deployCampaignContractFactoryFixture)
+
+      const ethAddress = ethers.ZeroAddress
+      const mockTokenRegistryAddress = await mockTokenRegistry.getAddress()
+      const campaignGoalAmount = 5
+      const campaignDuration = 10
+
+      const initialCampaignsCount =
+        await campaignContractFactory.getCampaignsCount()
+
+      expect(initialCampaignsCount).to.equal(0)
+
+      const initialCreatorCampaignsCount =
+        await campaignContractFactory.getCreatorCampaignsCount(owner.address)
+
+      expect(initialCreatorCampaignsCount).to.equal(0)
+
+      const initialCampaigns = await campaignContractFactory.getAllCampaigns()
+
+      expect(initialCampaigns).to.have.lengthOf(0)
+
+      const initialCreatorCampaigns =
+        await campaignContractFactory.getCampaignsByCreator(owner.address)
+
+      expect(initialCreatorCampaigns).to.have.lengthOf(0)
+
+      const tx = await campaignContractFactory.deploy(
+        ethAddress,
+        mockTokenRegistryAddress,
+        campaignGoalAmount,
+        campaignDuration
+      )
+
+      const receipt = await tx.wait()
+      if (!receipt) {
+        throw new Error('Transaction failed to return a receipt')
+      }
+
+      const event = receipt.logs.find((log: Log) => {
+        try {
+          const parsed = campaignContractFactory.interface.parseLog(log)
+          return parsed && parsed.name === 'CampaignCreated'
+        } catch {
+          return false
+        }
+      })
+
+      if (!event) {
+        throw new Error('Failed to find CampaignCreated event in logs')
+      }
+
+      const parsedEvent = campaignContractFactory.interface.parseLog(event)
+
+      if (!parsedEvent) {
+        throw new Error('Failed to parse event log')
+      }
+
+      await expect(tx)
+        .to.emit(campaignContractFactory, 'CampaignCreated')
+        .withArgs(parsedEvent.args[0], owner.address, parsedEvent.args[2])
+
+      const newCampaignsCount =
+        await campaignContractFactory.getCampaignsCount()
+      const newCreatorCampaignsCount =
+        await campaignContractFactory.getCreatorCampaignsCount(owner.address)
+
+      expect(newCampaignsCount).to.equal(initialCampaignsCount + 1n)
+      expect(newCreatorCampaignsCount).to.equal(
+        initialCreatorCampaignsCount + 1n
+      )
+
+      const lastDeployedCampaign =
+        await campaignContractFactory.deployedCampaigns(0)
+      expect(lastDeployedCampaign).to.equal(parsedEvent.args[0])
+
+      const creatorCampaign = await campaignContractFactory.creatorToCampaigns(
+        owner.address,
+        0
+      )
+      expect(creatorCampaign).to.equal(parsedEvent.args[0])
+
+      const Campaign = await ethers.getContractFactory('Campaign')
+      const deployedCampaign = Campaign.attach(parsedEvent.args[0])
+      expect(await (deployedCampaign as any).owner()).to.equal(owner.address)
+    })
+
+    it('Should call defiManager.authorizeCampaign with the correct campaign address', async function () {
+      const {
+        campaignContractFactory,
+        owner,
+        mockERC20,
+        mockTokenRegistry,
+        mockDefiManager
+      } = await loadFixture(deployCampaignContractFactoryFixture)
+
+      const mockERC20Address = await mockERC20.getAddress()
+      const mockTokenRegistryAddress = await mockTokenRegistry.getAddress()
+
+      const tx = await campaignContractFactory.deploy(
+        mockERC20Address,
+        mockTokenRegistryAddress,
+        5,
+        10
+      )
+
+      const receipt = await tx.wait()
+      if (!receipt) {
+        throw new Error('Transaction failed to return a receipt')
+      }
+
+      const event = receipt.logs.find((log: Log) => {
+        try {
+          const parsed = campaignContractFactory.interface.parseLog(log)
+          return parsed && parsed.name === 'CampaignCreated'
+        } catch {
+          return false
+        }
+      })
+
+      if (!event) {
+        throw new Error('Failed to find CampaignCreated event in logs')
+      }
+
+      const parsedEvent = campaignContractFactory.interface.parseLog(event)
+      const newCampaignAddress = parsedEvent.args[0]
+
+      expect(await mockDefiManager.authorizedCampaigns(newCampaignAddress)).to
+        .be.true
+    })
+
+    it('Should revert on invalid token registry address', async function () {
+      const { campaignContractFactory, owner, mockERC20, mockTokenRegistry } =
+        await loadFixture(deployCampaignContractFactoryFixture)
+
+      const mockERC20Address = await mockERC20.getAddress()
+      const campaignGoalAmount = 5
+      const campaignDuration = 10
+
+      await expect(
+        campaignContractFactory.deploy(
+          mockERC20Address,
+          ethers.ZeroAddress,
+          campaignGoalAmount,
+          campaignDuration
+        )
+      ).to.be.revertedWithCustomError(campaignContractFactory, 'InvalidAddress')
+    })
+
+    it('Should revert on unsupported contribution token', async function () {
+      const { campaignContractFactory, owner, mockERC20_2, mockTokenRegistry } =
+        await loadFixture(deployCampaignContractFactoryFixture)
+
+      const notSupportedTokenAddress = await mockERC20_2.getAddress()
+      const mockTokenRegistryAddress = await mockTokenRegistry.getAddress()
+      const campaignGoalAmount = 5
+      const campaignDuration = 10
+
+      await expect(
+        campaignContractFactory.deploy(
+          notSupportedTokenAddress,
+          mockTokenRegistryAddress,
+          campaignGoalAmount,
+          campaignDuration
+        )
+      )
+        .to.be.revertedWithCustomError(
+          campaignContractFactory,
+          'ContributionTokenNotSupported'
+        )
+        .withArgs(notSupportedTokenAddress)
+    })
+
+    it('Should revert on campaignGoalAmount <= 0', async function () {
+      const { campaignContractFactory, owner, mockERC20, mockTokenRegistry } =
+        await loadFixture(deployCampaignContractFactoryFixture)
+
+      const mockERC20Address = await mockERC20.getAddress()
+      const mockTokenRegistryAddress = await mockTokenRegistry.getAddress()
+      const campaignGoalAmount = 0
+      const campaignDuration = 10
+
+      await expect(
+        campaignContractFactory.deploy(
+          mockERC20Address,
+          mockTokenRegistryAddress,
+          campaignGoalAmount,
+          campaignDuration
+        )
+      )
+        .to.be.revertedWithCustomError(
+          campaignContractFactory,
+          'InvalidGoalAmount'
+        )
+        .withArgs(campaignGoalAmount)
+    })
+
+    it('Should revert on campaignDuration <= 0', async function () {
+      const { campaignContractFactory, owner, mockERC20, mockTokenRegistry } =
+        await loadFixture(deployCampaignContractFactoryFixture)
+
+      const mockERC20Address = await mockERC20.getAddress()
+      const mockTokenRegistryAddress = await mockTokenRegistry.getAddress()
+      const campaignGoalAmount = 10
+      const campaignDuration = 0
+
+      await expect(
+        campaignContractFactory.deploy(
+          mockERC20Address,
+          mockTokenRegistryAddress,
+          campaignGoalAmount,
+          campaignDuration
+        )
+      )
+        .to.be.revertedWithCustomError(
+          campaignContractFactory,
+          'InvalidCampaignDuration'
+        )
+        .withArgs(campaignDuration)
+    })
+
+    it('Should correctly manage campaigns from different creators', async function () {
+      const {
+        campaignContractFactory,
+        owner,
+        user1,
+        mockERC20,
+        mockTokenRegistry
+      } = await loadFixture(deployCampaignContractFactoryFixture)
+
+      const mockERC20Address = await mockERC20.getAddress()
+      const mockTokenRegistryAddress = await mockTokenRegistry.getAddress()
+
+      const tx1 = await campaignContractFactory.deploy(
+        mockERC20Address,
+        mockTokenRegistryAddress,
+        5,
+        10
+      )
+      const receipt1 = await tx1.wait()
+
+      const tx2 = await campaignContractFactory
+        .connect(user1)
+        .deploy(mockERC20Address, mockTokenRegistryAddress, 10, 15)
+      const receipt2 = await tx2.wait()
+
+      expect(await campaignContractFactory.getCampaignsCount()).to.equal(2n)
+
+      expect(
+        await campaignContractFactory.getCreatorCampaignsCount(owner.address)
+      ).to.equal(1n)
+      expect(
+        await campaignContractFactory.getCreatorCampaignsCount(user1.address)
+      ).to.equal(1n)
+
+      const ownerCampaigns =
+        await campaignContractFactory.getCampaignsByCreator(owner.address)
+      const user1Campaigns =
+        await campaignContractFactory.getCampaignsByCreator(user1.address)
+
+      expect(ownerCampaigns).to.have.lengthOf(1)
+      expect(user1Campaigns).to.have.lengthOf(1)
+
+      const Campaign = await ethers.getContractFactory('Campaign')
+      const ownerCampaign = Campaign.attach(ownerCampaigns[0])
+      const user1Campaign = Campaign.attach(user1Campaigns[0])
+
+      expect(await (ownerCampaign as any).owner()).to.equal(owner.address)
+      expect(await (user1Campaign as any).owner()).to.equal(user1.address)
+    })
+
+    it('Should correctly manage campaigns with different token types', async function () {
+      const { campaignContractFactory, owner, mockERC20, mockTokenRegistry } =
+        await loadFixture(deployCampaignContractFactoryFixture)
+
+      const mockERC20Address = await mockERC20.getAddress()
+      const ethAddress = ethers.ZeroAddress
+      const mockTokenRegistryAddress = await mockTokenRegistry.getAddress()
+
+      const ethTx = await campaignContractFactory.deploy(
+        ethAddress,
+        mockTokenRegistryAddress,
+        5,
+        10
+      )
+      const ethReceipt = await ethTx.wait()
+      if (!ethReceipt) {
+        throw new Error('Transaction failed to return a receipt')
+      }
+
+      const ethEvent = ethReceipt.logs.find((log: Log) => {
+        try {
+          const parsed = campaignContractFactory.interface.parseLog(log)
+          return parsed && parsed.name === 'CampaignCreated'
+        } catch {
+          return false
+        }
+      })
+      if (!ethEvent) {
+        throw new Error('Failed to find CampaignCreated event in logs')
+      }
+      const parsedEthEvent =
+        campaignContractFactory.interface.parseLog(ethEvent)
+      const ethCampaignAddress = parsedEthEvent.args[0]
+
+      const erc20Tx = await campaignContractFactory.deploy(
+        mockERC20Address,
+        mockTokenRegistryAddress,
+        10,
+        15
+      )
+      const erc20Receipt = await erc20Tx.wait()
+      if (!erc20Receipt) {
+        throw new Error('Transaction failed to return a receipt')
+      }
+
+      const erc20Event = erc20Receipt.logs.find((log: Log) => {
+        try {
+          const parsed = campaignContractFactory.interface.parseLog(log)
+          return parsed && parsed.name === 'CampaignCreated'
+        } catch {
+          return false
+        }
+      })
+      if (!erc20Event) {
+        throw new Error('Failed to find CampaignCreated event in logs')
+      }
+      const parsedErc20Event =
+        campaignContractFactory.interface.parseLog(erc20Event)
+      const erc20CampaignAddress = parsedErc20Event.args[0]
+
+      expect(await campaignContractFactory.getCampaignsCount()).to.equal(2n)
+      expect(
+        await campaignContractFactory.getCreatorCampaignsCount(owner.address)
+      ).to.equal(2n)
+
+      const allCampaigns = await campaignContractFactory.getAllCampaigns()
+      expect(allCampaigns).to.have.lengthOf(2)
+
+      const Campaign = await ethers.getContractFactory('Campaign')
+      const ethCampaign = Campaign.attach(ethCampaignAddress)
+      const erc20Campaign = Campaign.attach(erc20CampaignAddress)
+
+      expect(await (ethCampaign as any).campaignToken()).to.equal(ethAddress)
+      expect(await (erc20Campaign as any).campaignToken()).to.equal(
+        mockERC20Address
+      )
+
+      expect(await (ethCampaign as any).owner()).to.equal(owner.address)
+      expect(await (erc20Campaign as any).owner()).to.equal(owner.address)
+    })
+  })
+
+  describe('Getter functions', function () {
+    it('Should return correct values from getAllCampaigns', async function () {
+      const { campaignContractFactory, mockERC20, mockTokenRegistry } =
+        await loadFixture(deployCampaignContractFactoryFixture)
+
+      const mockERC20Address = await mockERC20.getAddress()
+      const mockTokenRegistryAddress = await mockTokenRegistry.getAddress()
+
+      const initialCampaigns = await campaignContractFactory.getAllCampaigns()
+      expect(initialCampaigns).to.be.an('array').that.is.empty
+
+      const tx = await campaignContractFactory.deploy(
+        mockERC20Address,
+        mockTokenRegistryAddress,
+        5,
+        10
+      )
+      const receipt = await tx.wait()
+      const event = receipt.logs.find((log: Log) => {
+        try {
+          const parsed = campaignContractFactory.interface.parseLog(log)
+          return parsed && parsed.name === 'CampaignCreated'
+        } catch {
+          return false
+        }
+      })
+      const parsedEvent = campaignContractFactory.interface.parseLog(event)
+      const campaignAddress = parsedEvent.args[0]
+
+      const campaigns = await campaignContractFactory.getAllCampaigns()
+      expect(campaigns).to.have.lengthOf(1)
+      expect(campaigns[0]).to.equal(campaignAddress)
+    })
+
+    it('Should return correct values from getCampaignsByCreator', async function () {
+      const {
+        campaignContractFactory,
+        owner,
+        user1,
+        mockERC20,
+        mockTokenRegistry
+      } = await loadFixture(deployCampaignContractFactoryFixture)
+
+      const mockERC20Address = await mockERC20.getAddress()
+      const mockTokenRegistryAddress = await mockTokenRegistry.getAddress()
+
+      expect(
+        await campaignContractFactory.getCampaignsByCreator(owner.address)
+      ).to.be.an('array').that.is.empty
+      expect(
+        await campaignContractFactory.getCampaignsByCreator(user1.address)
+      ).to.be.an('array').that.is.empty
+
+      const tx1 = await campaignContractFactory.deploy(
+        mockERC20Address,
+        mockTokenRegistryAddress,
+        5,
+        10
+      )
+      const receipt1 = await tx1.wait()
+      const event1 = receipt1.logs.find((log: Log) => {
+        try {
+          const parsed = campaignContractFactory.interface.parseLog(log)
+          return parsed && parsed.name === 'CampaignCreated'
+        } catch {
+          return false
+        }
+      })
+      const parsedEvent1 = campaignContractFactory.interface.parseLog(event1)
+      const ownerCampaignAddress = parsedEvent1.args[0]
+
+      const tx2 = await campaignContractFactory
+        .connect(user1)
+        .deploy(mockERC20Address, mockTokenRegistryAddress, 10, 15)
+      const receipt2 = await tx2.wait()
+      const event2 = receipt2.logs.find((log: Log) => {
+        try {
+          const parsed = campaignContractFactory.interface.parseLog(log)
+          return parsed && parsed.name === 'CampaignCreated'
+        } catch {
+          return false
+        }
+      })
+      const parsedEvent2 = campaignContractFactory.interface.parseLog(event2)
+      const user1CampaignAddress = parsedEvent2.args[0]
+
+      const ownerCampaigns =
+        await campaignContractFactory.getCampaignsByCreator(owner.address)
+      expect(ownerCampaigns).to.have.lengthOf(1)
+      expect(ownerCampaigns[0]).to.equal(ownerCampaignAddress)
+
+      const user1Campaigns =
+        await campaignContractFactory.getCampaignsByCreator(user1.address)
+      expect(user1Campaigns).to.have.lengthOf(1)
+      expect(user1Campaigns[0]).to.equal(user1CampaignAddress)
+
+      const randomAddress = ethers.Wallet.createRandom().address
+      const randomCampaigns =
+        await campaignContractFactory.getCampaignsByCreator(randomAddress)
+      expect(randomCampaigns).to.be.an('array').that.is.empty
+    })
+
+    it('Should return correct values from getCampaignsCount', async function () {
+      const { campaignContractFactory, mockERC20, mockTokenRegistry } =
+        await loadFixture(deployCampaignContractFactoryFixture)
+
+      const mockERC20Address = await mockERC20.getAddress()
+      const mockTokenRegistryAddress = await mockTokenRegistry.getAddress()
+
+      expect(await campaignContractFactory.getCampaignsCount()).to.equal(0)
+
+      await campaignContractFactory.deploy(
+        mockERC20Address,
+        mockTokenRegistryAddress,
+        5,
+        10
+      )
+      expect(await campaignContractFactory.getCampaignsCount()).to.equal(1)
+
+      await campaignContractFactory.deploy(
+        mockERC20Address,
+        mockTokenRegistryAddress,
+        10,
+        15
+      )
+      expect(await campaignContractFactory.getCampaignsCount()).to.equal(2)
+    })
+
+    it('Should return correct values from getCreatorCampaignsCount', async function () {
+      const {
+        campaignContractFactory,
+        owner,
+        user1,
+        mockERC20,
+        mockTokenRegistry
+      } = await loadFixture(deployCampaignContractFactoryFixture)
+
+      const mockERC20Address = await mockERC20.getAddress()
+      const mockTokenRegistryAddress = await mockTokenRegistry.getAddress()
+
+      expect(
+        await campaignContractFactory.getCreatorCampaignsCount(owner.address)
+      ).to.equal(0)
+      expect(
+        await campaignContractFactory.getCreatorCampaignsCount(user1.address)
+      ).to.equal(0)
+
+      await campaignContractFactory.deploy(
+        mockERC20Address,
+        mockTokenRegistryAddress,
+        5,
+        10
+      )
+      expect(
+        await campaignContractFactory.getCreatorCampaignsCount(owner.address)
+      ).to.equal(1)
+      expect(
+        await campaignContractFactory.getCreatorCampaignsCount(user1.address)
+      ).to.equal(0)
+
+      await campaignContractFactory
+        .connect(user1)
+        .deploy(mockERC20Address, mockTokenRegistryAddress, 10, 15)
+      expect(
+        await campaignContractFactory.getCreatorCampaignsCount(owner.address)
+      ).to.equal(1)
+      expect(
+        await campaignContractFactory.getCreatorCampaignsCount(user1.address)
+      ).to.equal(1)
+
+      await campaignContractFactory.deploy(
+        mockERC20Address,
+        mockTokenRegistryAddress,
+        15,
+        20
+      )
+      expect(
+        await campaignContractFactory.getCreatorCampaignsCount(owner.address)
+      ).to.equal(2)
+      expect(
+        await campaignContractFactory.getCreatorCampaignsCount(user1.address)
+      ).to.equal(1)
+
+      const randomAddress = ethers.Wallet.createRandom().address
+      expect(
+        await campaignContractFactory.getCreatorCampaignsCount(randomAddress)
+      ).to.equal(0)
+    })
+  })
 })

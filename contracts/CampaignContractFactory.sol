@@ -12,7 +12,9 @@ contract CampaignFactory {
     event CampaignCreated(address indexed campaignAddress, address indexed creator, bytes32 campaignId);
     
     error InvalidAddress();
-    error ContributionTokenNotSupported();
+    error InvalidGoalAmount(uint256);
+    error InvalidCampaignDuration(uint256);
+    error ContributionTokenNotSupported(address);
 
     constructor(address _defiManager) {
         if(_defiManager == address(0)) {
@@ -35,9 +37,17 @@ contract CampaignFactory {
         if (_campaignToken != address(0)) {
             ITokenRegistry tokenRegistry = ITokenRegistry(_tokenRegistry);
             if(!tokenRegistry.isTokenSupported(_campaignToken)){
-                revert ContributionTokenNotSupported();
+                revert ContributionTokenNotSupported(_campaignToken);
             }
             
+        }
+
+        if(_campaignGoalAmount<=0) {
+            revert InvalidGoalAmount(_campaignGoalAmount);
+        }
+
+        if(_campaignDuration<=0) {
+            revert InvalidCampaignDuration(_campaignDuration);
         }
 
         Campaign newCampaign = new Campaign(
