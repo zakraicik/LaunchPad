@@ -169,7 +169,7 @@ describe('TokenRegistry', function () {
         .withArgs(ethers.ZeroAddress)
     })
 
-    it('Should revert when trying to add a non-contract address', async function () {
+    it('Should revert when trying to add a non-contract addregit stss', async function () {
       const { tokenRegistry, user1 } = await loadFixture(
         deployTokenRegistryFixture
       )
@@ -185,7 +185,7 @@ describe('TokenRegistry', function () {
       )
 
       const NonCompliantToken = await ethers.getContractFactory(
-        'NonCompliantToken'
+        'MockNonCompliantToken'
       )
       const nonCompliantToken = await NonCompliantToken.deploy()
       await nonCompliantToken.waitForDeployment()
@@ -627,7 +627,7 @@ describe('TokenRegistry', function () {
       )
 
       const NonCompliantToken = await ethers.getContractFactory(
-        'NonCompliantToken'
+        'MockNonCompliantToken'
       )
       const nonCompliantToken = await NonCompliantToken.deploy()
       await nonCompliantToken.waitForDeployment()
