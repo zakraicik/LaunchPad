@@ -11,6 +11,7 @@ contract YieldDistributor is Ownable {
     error InvalidAddress();
     error InvalidShare(uint256 share);
     error ShareExceedsMaximum(uint256 share);
+    error Overflow();
 
     event PlatformTreasuryUpdated(address oldTreasury, address newTreasury);
     event PlatformYieldShareUpdated(uint256 oldShare, uint256 newShare);
@@ -55,11 +56,15 @@ contract YieldDistributor is Ownable {
     function calculateYieldShares(uint256 totalYield) 
         external 
         view 
-        returns (uint256 creatorShare, uint256 platformShare) {
+        returns (uint256 creatorShare, uint256 platformShare) 
+    {
+
+        if (totalYield > 0 && platformYieldShare > 0 && 
+            totalYield > type(uint256).max / platformYieldShare) {
+            revert Overflow();
+        }
         
         platformShare = (totalYield * platformYieldShare) / 10000;
-        
-        
         creatorShare = totalYield - platformShare;
         
         return (creatorShare, platformShare);
@@ -78,6 +83,12 @@ contract YieldDistributor is Ownable {
         view 
         returns (uint256 creatorAmount, uint256 platformAmount) 
     {
+       
+        if (yieldAmount > 0 && platformYieldShare > 0 && 
+            yieldAmount > type(uint256).max / platformYieldShare) {
+            revert Overflow();
+        }
+        
         platformAmount = (yieldAmount * platformYieldShare) / 10000;
         creatorAmount = yieldAmount - platformAmount;
         
