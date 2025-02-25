@@ -2,6 +2,7 @@
 pragma solidity ^0.8.28;
 
 
+
 contract MockTokenRegistry {
     mapping(address => bool) public supportedTokens;
     
@@ -18,6 +19,7 @@ contract MockTokenRegistry {
     }
     
     function getAllSupportedTokens() external view returns(address[] memory) {
+        // Simplified implementation for testing
         address[] memory tokens = new address[](1);
         return tokens;
     }

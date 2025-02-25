@@ -16,7 +16,6 @@ contract Campaign is Ownable, ReentrancyGuard {
     uint256 public totalAmountRaised;   
     bytes32 public campaignId; 
     address public campaignToken;  
-    address public tokenRegistry; 
     mapping(address => uint256) public contributions;
     mapping(address => bool) private hasBeenRefunded;
     IDefiIntegrationManager public defiManager;
@@ -51,13 +50,11 @@ contract Campaign is Ownable, ReentrancyGuard {
     constructor(
         address _owner,
         address _campaignToken,
-        address _tokenRegistry,
         uint256 _campaignGoalAmount,
         uint16 _campaignDuration,
         address _defiManager
     ) Ownable(_owner) {
         campaignToken = _campaignToken;
-        tokenRegistry = _tokenRegistry;
         campaignGoalAmount = _campaignGoalAmount;
         campaignDuration = _campaignDuration;
         campaignStartTime = block.timestamp;

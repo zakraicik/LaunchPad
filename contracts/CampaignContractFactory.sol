@@ -25,21 +25,17 @@ contract CampaignFactory {
     
     function deploy(
         address _campaignToken,
-        address _tokenRegistry,
         uint256 _campaignGoalAmount,
         uint16 _campaignDuration
     ) external returns(address) {
 
-        if(_tokenRegistry == address(0)){
-            revert InvalidAddress();
-        }
 
         if (_campaignToken != address(0)) {
-            ITokenRegistry tokenRegistry = ITokenRegistry(_tokenRegistry);
+            
+            ITokenRegistry tokenRegistry = defiManager.tokenRegistry();
             if(!tokenRegistry.isTokenSupported(_campaignToken)){
                 revert ContributionTokenNotSupported(_campaignToken);
             }
-            
         }
 
         if(_campaignGoalAmount<=0) {
@@ -53,7 +49,6 @@ contract CampaignFactory {
         Campaign newCampaign = new Campaign(
             msg.sender, 
             _campaignToken,
-            _tokenRegistry,
             _campaignGoalAmount, 
             _campaignDuration,
             address(defiManager)
