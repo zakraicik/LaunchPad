@@ -15,7 +15,9 @@ contract Campaign is Ownable, ReentrancyGuard {
     uint256 public campaignEndTime;         
     uint256 public totalAmountRaised;   
     string public campaignName;             
-    string public campaignDescription;      
+    string public campaignDescription;   
+    address public campaignToken;  
+    address public tokenRegistry; 
     mapping(address => uint256) public contributions;
     mapping(address => bool) private hasBeenRefunded;
     IDefiIntegrationManager public defiManager;
@@ -49,12 +51,16 @@ contract Campaign is Ownable, ReentrancyGuard {
 
     constructor(
         address _owner,
+        address _campaignToken,
+        address _tokenRegistry,
         uint256 _campaignGoalAmount,
         uint16 _campaignDuration,
         string memory _campaignName,
         string memory _campaignDescription,
-         address _defiManager
+        address _defiManager
     ) Ownable(_owner) {
+        campaignToken = _campaignToken;
+        tokenRegistry = _tokenRegistry;
         campaignGoalAmount = _campaignGoalAmount;
         campaignDuration = _campaignDuration;
         campaignName = _campaignName;
@@ -80,8 +86,8 @@ contract Campaign is Ownable, ReentrancyGuard {
     function _isCampaignGoalReached() internal view returns(bool){
         return totalAmountRaised >= campaignGoalAmount;
     }
-    
-    function contribute() payable external nonReentrant returns(bool) {
+
+    function contributeETH() external payable nonReentrant returns(bool) {
         if (!_isCampaignActive()){
             revert CampaignNotActive();
         }
@@ -90,18 +96,52 @@ contract Campaign is Ownable, ReentrancyGuard {
             revert CampaignGoalReached();
         }
 
-        if (msg.value <=0){
+        if (campaignToken != address(0)) {
+            revert("Campaign does not accept ETH");
+        }
+
+        if (msg.value <= 0){
             revert InvalidContributionAmount(msg.value);
         }
 
         contributions[msg.sender] += msg.value;
-        totalAmountRaised+= msg.value;
+        totalAmountRaised += msg.value;
 
-        emit contribution(msg.sender,msg.value);
+        emit contribution(msg.sender, msg.value);
 
         return true;
-
     }
+
+    function contributeERC20(uint256 amount) external nonReentrant returns(bool) {
+        if (!_isCampaignActive()){
+            revert CampaignNotActive();
+        }
+
+        if (_isCampaignGoalReached()){
+            revert CampaignGoalReached();
+        }
+
+        if (campaignToken == address(0)) {
+            revert("Campaign does not accept tokens");
+        }
+
+        if (amount <= 0){
+            revert InvalidContributionAmount(amount);
+        }
+
+        bool success = IERC20(campaignToken).transferFrom(msg.sender, address(this), amount);
+        if (!success) {
+            revert TokenTransferFailed();
+        }
+
+        contributions[msg.sender] += amount;
+        totalAmountRaised += amount;
+
+        emit contribution(msg.sender, amount);
+
+        return true;
+    }
+    
 
     function depositToYieldProtocol(address token, uint256 amount) external onlyOwner nonReentrant {
         if (!defiEnabled) {
@@ -221,39 +261,47 @@ contract Campaign is Ownable, ReentrancyGuard {
         }
     }
 
-    function claimFunds() external onlyOwner nonReentrant returns(bool){
-        if (_isCampaignActive()){
+    function claimFunds() external onlyOwner nonReentrant returns(bool) {
+        if (_isCampaignActive()) {
             revert CampaignStillActive();
         }
 
-        if (!_isCampaignGoalReached()){
+        if (!_isCampaignGoalReached()) {
             revert CampaignGoalNotReached();
         }
 
-        if (isClaimed){
+        if (isClaimed) {
             revert FundsAlreadyClaimed();
         }
 
         isClaimed = true;
 
-        uint256 contractBalance = address(this).balance;
-
-        (bool success, ) = payable(owner()).call{value:contractBalance}("");
-        if(!success){
-            revert ClaimTransferFailed();
+        if (campaignToken == address(0)) {
+            
+            uint256 ethBalance = address(this).balance;
+            (bool success, ) = payable(owner()).call{value: ethBalance}("");
+            if (!success) {
+                revert ClaimTransferFailed();
+            }
+            emit fundsClaimed(owner(), ethBalance);
+        } else {
+            uint256 tokenBalance = IERC20(campaignToken).balanceOf(address(this));
+            bool success = IERC20(campaignToken).transfer(owner(), tokenBalance);
+            if (!success) {
+                revert ClaimTransferFailed();
+            }
+            emit fundsClaimed(owner(), tokenBalance);
         }
-
-        emit fundsClaimed(owner(), contractBalance);
 
         return true;
     }
 
-    function requestRefund() external nonReentrant returns(bool){
-        if (_isCampaignActive()){
+    function requestRefund() external nonReentrant returns(bool) {
+        if (_isCampaignActive()) {
             revert CampaignStillActive();
         }
 
-        if (_isCampaignGoalReached()){
+        if (_isCampaignGoalReached()) {
             revert CampaignGoalReached();
         }
 
@@ -262,16 +310,23 @@ contract Campaign is Ownable, ReentrancyGuard {
         }
 
         uint256 contributionAmount = contributions[msg.sender];
-        if (contributionAmount <= 0){
+        if (contributionAmount <= 0) {
             revert NothingToRefund(msg.sender);
         }
 
         hasBeenRefunded[msg.sender] = true;
         contributions[msg.sender] = 0;
 
-        (bool success, ) = payable(msg.sender).call{value:contributionAmount}("");
-        if(!success){
-            revert RefundFailed();
+        if (campaignToken == address(0)) {
+            (bool success, ) = payable(msg.sender).call{value: contributionAmount}("");
+            if (!success) {
+                revert RefundFailed();
+            }
+        } else {
+            bool success = IERC20(campaignToken).transfer(msg.sender, contributionAmount);
+            if (!success) {
+                revert RefundFailed();
+            }
         }
 
         emit refundIssued(msg.sender, contributionAmount);
