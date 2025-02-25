@@ -15,6 +15,7 @@ contract CampaignFactory {
     
     // Errors
     error InvalidAddress();
+    error ContributionTokenNotSupported();
 
     constructor(address _defiManager) {
         if(_defiManager == address(0)) {
@@ -24,18 +25,35 @@ contract CampaignFactory {
     }
     
     function deploy(
+        address _campaignToken,
+        address _tokenRegistry,
         uint256 _campaignGoalAmount,
         uint16 _campaignDuration,
         string memory _campaignName,
         string memory _campaignDescription
     ) external returns(address) {
+
+        if(_tokenRegistry == address(0)){
+            revert InvalidAddress();
+        }
+
+        if (_campaignToken != address(0)) {
+            ITokenRegistry tokenRegistry = ITokenRegistry(_tokenRegistry);
+            if(!tokenRegistry.isTokenSupported(_campaignToken)){
+                revert ContributionTokenNotSupported();
+            }
+            
+        }
+
         Campaign newCampaign = new Campaign(
             msg.sender, 
+            _campaignToken,
+            _tokenRegistry,
             _campaignGoalAmount, 
             _campaignDuration, 
             _campaignName, 
             _campaignDescription,
-            address(defiManager)  // Pass the DefiIntegrationManager address
+            address(defiManager)
         );
         
         address campaignAddress = address(newCampaign);
