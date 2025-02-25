@@ -196,4 +196,121 @@ describe('YieldDistributor', function () {
       )
     })
   })
+
+  describe('Calculating yield share', function () {
+    it('Should calculate correct yield share with default value', async function () {
+      const { yieldDistributor } = await loadFixture(
+        deployYieldDistributorFixture
+      )
+
+      const totalYield = 5
+
+      expect(
+        await yieldDistributor.calculateYieldShares(totalYield)
+      ).to.deep.equal([4, 1])
+    })
+
+    it('Should calculate correct yield share after updating yield share', async function () {
+      const { yieldDistributor } = await loadFixture(
+        deployYieldDistributorFixture
+      )
+
+      const totalYield = 5
+
+      const newYieldShare = 4000
+
+      await yieldDistributor.updatePlatformYieldShare(newYieldShare)
+
+      expect(await yieldDistributor.getPlatformYieldShare()).to.equal(
+        newYieldShare
+      )
+
+      expect(
+        await yieldDistributor.calculateYieldShares(totalYield)
+      ).to.deep.equal([3, 2])
+    })
+
+    it('Should calculate correct yield share with 0 yield', async function () {
+      const { yieldDistributor } = await loadFixture(
+        deployYieldDistributorFixture
+      )
+
+      const totalYield = 0
+
+      expect(
+        await yieldDistributor.calculateYieldShares(totalYield)
+      ).to.deep.equal([0, 0])
+    })
+
+    it('Should calculate correct yield share with extremely large values', async function () {
+      const { yieldDistributor } = await loadFixture(
+        deployYieldDistributorFixture
+      )
+
+      const totalYield = 10n ** 60n
+
+      const expectedPlatformShare = (totalYield * 2000n) / 10000n
+      const expectedCreatorShare = totalYield - expectedPlatformShare
+
+      const [creatorShare, platformShare] =
+        await yieldDistributor.calculateYieldShares(totalYield)
+
+      expect(platformShare).to.equal(expectedPlatformShare)
+      expect(creatorShare).to.equal(expectedCreatorShare)
+      expect(
+        await yieldDistributor.calculateYieldShares(totalYield)
+      ).to.deep.equal([expectedCreatorShare, expectedPlatformShare])
+
+      expect(creatorShare + platformShare).to.equal(totalYield)
+    })
+
+    it('Should handle rounding correctly during yield share calculation', async function () {
+      const { yieldDistributor } = await loadFixture(
+        deployYieldDistributorFixture
+      )
+
+      await yieldDistributor.updatePlatformYieldShare(3333)
+
+      const totalYield = 10
+
+      const expectedPlatformShare = 3
+      const expectedCreatorShare = 7
+
+      const [creatorShare, platformShare] =
+        await yieldDistributor.calculateYieldShares(totalYield)
+
+      expect(platformShare).to.equal(expectedPlatformShare)
+      expect(creatorShare).to.equal(expectedCreatorShare)
+      expect(Number(creatorShare) + Number(platformShare)).to.equal(totalYield)
+
+      const primeTotalYield = 23
+
+      const [primeCreatorShare, primePlatformShare] =
+        await yieldDistributor.calculateYieldShares(primeTotalYield)
+
+      expect(primePlatformShare).to.equal(7)
+      expect(primeCreatorShare).to.equal(16)
+      expect(Number(primeCreatorShare) + Number(primePlatformShare)).to.equal(
+        primeTotalYield
+      )
+    })
+
+    it('Should revert on arithmetic overflow', async function () {
+      const { yieldDistributor } = await loadFixture(
+        deployYieldDistributorFixture
+      )
+
+      const maxUint256 = 2n ** 256n - 1n
+
+      await expect(
+        yieldDistributor.calculateYieldShares(maxUint256)
+      ).to.be.revertedWithCustomError(yieldDistributor, 'Overflow')
+
+      const overflowTrigger = maxUint256 / 2000n + 1n
+
+      await expect(
+        yieldDistributor.calculateYieldShares(overflowTrigger)
+      ).to.be.revertedWithCustomError(yieldDistributor, 'Overflow')
+    })
+  })
 })
