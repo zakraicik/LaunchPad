@@ -5,15 +5,12 @@ import "./interfaces/IDefiIntegrationManager.sol";
 
 
 contract CampaignFactory {
-    // State variables
     address[] public deployedCampaigns;
     mapping(address => address[]) public creatorToCampaigns;
     IDefiIntegrationManager public defiManager;
     
-    // Events
-    event CampaignCreated(address indexed campaignAddress, address indexed creator);
+    event CampaignCreated(address indexed campaignAddress, address indexed creator, bytes32 campaignId);
     
-    // Errors
     error InvalidAddress();
     error ContributionTokenNotSupported();
 
@@ -28,9 +25,7 @@ contract CampaignFactory {
         address _campaignToken,
         address _tokenRegistry,
         uint256 _campaignGoalAmount,
-        uint16 _campaignDuration,
-        string memory _campaignName,
-        string memory _campaignDescription
+        uint16 _campaignDuration
     ) external returns(address) {
 
         if(_tokenRegistry == address(0)){
@@ -50,9 +45,7 @@ contract CampaignFactory {
             _campaignToken,
             _tokenRegistry,
             _campaignGoalAmount, 
-            _campaignDuration, 
-            _campaignName, 
-            _campaignDescription,
+            _campaignDuration,
             address(defiManager)
         );
         
@@ -62,7 +55,9 @@ contract CampaignFactory {
         
         defiManager.authorizeCampaign(campaignAddress);
         
-        emit CampaignCreated(campaignAddress, msg.sender);
+        bytes32 campaignId = newCampaign.campaignId();
+        
+        emit CampaignCreated(campaignAddress, msg.sender, campaignId);
         
         return campaignAddress;
     }

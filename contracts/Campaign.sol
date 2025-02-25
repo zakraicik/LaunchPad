@@ -14,8 +14,7 @@ contract Campaign is Ownable, ReentrancyGuard {
     uint256 public campaignStartTime;       
     uint256 public campaignEndTime;         
     uint256 public totalAmountRaised;   
-    string public campaignName;             
-    string public campaignDescription;   
+    bytes32 public campaignId; 
     address public campaignToken;  
     address public tokenRegistry; 
     mapping(address => uint256) public contributions;
@@ -55,19 +54,15 @@ contract Campaign is Ownable, ReentrancyGuard {
         address _tokenRegistry,
         uint256 _campaignGoalAmount,
         uint16 _campaignDuration,
-        string memory _campaignName,
-        string memory _campaignDescription,
         address _defiManager
     ) Ownable(_owner) {
         campaignToken = _campaignToken;
         tokenRegistry = _tokenRegistry;
         campaignGoalAmount = _campaignGoalAmount;
         campaignDuration = _campaignDuration;
-        campaignName = _campaignName;
-        campaignDescription = _campaignDescription;
         campaignStartTime = block.timestamp;
         campaignEndTime = block.timestamp + (campaignDuration * 1 days);
-
+        campaignId = keccak256(abi.encodePacked(_owner, address(this), block.timestamp, block.prevrandao));
         if (_defiManager == address(0)) {
             revert InvalidAddress();
         }
@@ -341,8 +336,7 @@ contract Campaign is Ownable, ReentrancyGuard {
 
 
     function getCampaignDetails() external view returns(
-        string memory name,            
-        string memory description,     
+        bytes32 id,      
         uint256 goalAmount,           
         uint16 duration,              
         uint256 timeRemaining,        
@@ -362,8 +356,7 @@ contract Campaign is Ownable, ReentrancyGuard {
         }
 
         return (
-            campaignName,
-            campaignDescription,
+            campaignId,  
             campaignGoalAmount,
             campaignDuration,
             _timeRemaining,
