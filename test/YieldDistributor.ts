@@ -195,6 +195,54 @@ describe('YieldDistributor', function () {
         currentYieldShare
       )
     })
+
+    it('Should allow setting platform yield share to 0', async function () {
+      const { yieldDistributor } = await loadFixture(
+        deployYieldDistributorFixture
+      )
+
+      const currentYieldShare = await yieldDistributor.getPlatformYieldShare()
+      const newYieldShare = 0
+
+      await expect(yieldDistributor.updatePlatformYieldShare(newYieldShare))
+        .to.emit(yieldDistributor, 'PlatformYieldShareUpdated')
+        .withArgs(currentYieldShare, newYieldShare)
+
+      expect(await yieldDistributor.getPlatformYieldShare()).to.equal(
+        newYieldShare
+      )
+
+      const totalYield = 100
+      const [creatorShare, platformShare] =
+        await yieldDistributor.calculateYieldShares(totalYield)
+
+      expect(platformShare).to.equal(0)
+      expect(creatorShare).to.equal(totalYield)
+    })
+
+    it('Should allow setting platform yield share to maximum value (5000)', async function () {
+      const { yieldDistributor } = await loadFixture(
+        deployYieldDistributorFixture
+      )
+
+      const currentYieldShare = await yieldDistributor.getPlatformYieldShare()
+      const maxYieldShare = 5000 // 50%
+
+      await expect(yieldDistributor.updatePlatformYieldShare(maxYieldShare))
+        .to.emit(yieldDistributor, 'PlatformYieldShareUpdated')
+        .withArgs(currentYieldShare, maxYieldShare)
+
+      expect(await yieldDistributor.getPlatformYieldShare()).to.equal(
+        maxYieldShare
+      )
+
+      const totalYield = 100
+      const [creatorShare, platformShare] =
+        await yieldDistributor.calculateYieldShares(totalYield)
+
+      expect(platformShare).to.equal(50)
+      expect(creatorShare).to.equal(50)
+    })
   })
 
   describe('Calculating yield share', function () {
@@ -311,6 +359,53 @@ describe('YieldDistributor', function () {
       await expect(
         yieldDistributor.calculateYieldShares(overflowTrigger)
       ).to.be.revertedWithCustomError(yieldDistributor, 'Overflow')
+    })
+
+    it('Should calculate correct yield share with 0% platform share', async function () {
+      const { yieldDistributor } = await loadFixture(
+        deployYieldDistributorFixture
+      )
+
+      await yieldDistributor.updatePlatformYieldShare(0)
+      expect(await yieldDistributor.getPlatformYieldShare()).to.equal(0)
+
+      const totalYield = 100
+      const [creatorShare, platformShare] =
+        await yieldDistributor.calculateYieldShares(totalYield)
+
+      expect(platformShare).to.equal(0)
+      expect(creatorShare).to.equal(100)
+      expect(creatorShare + platformShare).to.equal(totalYield)
+    })
+
+    it('Should calculate correct yield share with maximum platform share (50%)', async function () {
+      const { yieldDistributor } = await loadFixture(
+        deployYieldDistributorFixture
+      )
+
+      const maxShare = 5000
+      await yieldDistributor.updatePlatformYieldShare(maxShare)
+      expect(await yieldDistributor.getPlatformYieldShare()).to.equal(maxShare)
+
+      const testAmounts = [10, 100, 99, 1]
+
+      for (const amount of testAmounts) {
+        const [creatorShare, platformShare] =
+          await yieldDistributor.calculateYieldShares(amount)
+
+        const expectedPlatformShare = Math.floor((amount * 5000) / 10000)
+        const expectedCreatorShare = amount - expectedPlatformShare
+
+        expect(platformShare).to.equal(expectedPlatformShare)
+        expect(creatorShare).to.equal(expectedCreatorShare)
+        expect(Number(creatorShare) + Number(platformShare)).to.equal(amount)
+      }
+
+      const [creatorShare100, platformShare100] =
+        await yieldDistributor.calculateYieldShares(100)
+
+      expect(platformShare100).to.equal(50)
+      expect(creatorShare100).to.equal(50)
     })
   })
 
@@ -471,4 +566,6 @@ describe('YieldDistributor', function () {
       await yieldDistributor.getYieldSplitPreview(boundaryValue)
     })
   })
+
+  describe('Getter functions', function () {})
 })
