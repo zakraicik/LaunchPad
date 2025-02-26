@@ -1,7 +1,6 @@
 //SPDX-License-Identifier: MIT
 pragma solidity ^0.8.28;
 
-
 contract MockTokenRegistry {
     mapping(address => bool) public supportedTokens;
     
@@ -18,12 +17,11 @@ contract MockTokenRegistry {
     }
     
     function getAllSupportedTokens() external view returns(address[] memory) {
-        // Simplified implementation for testing
         address[] memory tokens = new address[](1);
         return tokens;
     }
     
-    function getWETH() external pure returns (address) {
-        return address(1); // Mock WETH address
+    function getTokenDecimals(address token) external pure returns (uint8) {
+        return 18; 
     }
 }

@@ -28,21 +28,23 @@ contract CampaignFactory {
         uint256 _campaignGoalAmount,
         uint16 _campaignDuration
     ) external returns(address) {
+        
+        if (_campaignToken == address(0)) {
+            revert InvalidAddress();
+        }
+        
 
-
-        if (_campaignToken != address(0)) {
-            
-            ITokenRegistry tokenRegistry = defiManager.tokenRegistry();
-            if(!tokenRegistry.isTokenSupported(_campaignToken)){
-                revert ContributionTokenNotSupported(_campaignToken);
-            }
+        ITokenRegistry tokenRegistry = defiManager.tokenRegistry();
+        if(!tokenRegistry.isTokenSupported(_campaignToken)){
+            revert ContributionTokenNotSupported(_campaignToken);
         }
 
-        if(_campaignGoalAmount<=0) {
+
+        if(_campaignGoalAmount <= 0) {
             revert InvalidGoalAmount(_campaignGoalAmount);
         }
 
-        if(_campaignDuration<=0) {
+        if(_campaignDuration <= 0) {
             revert InvalidCampaignDuration(_campaignDuration);
         }
 
@@ -54,14 +56,16 @@ contract CampaignFactory {
             address(defiManager)
         );
         
+
         address campaignAddress = address(newCampaign);
         deployedCampaigns.push(campaignAddress);
         creatorToCampaigns[msg.sender].push(campaignAddress);
         
+
         defiManager.authorizeCampaign(campaignAddress);
         
+
         bytes32 campaignId = newCampaign.campaignId();
-        
         emit CampaignCreated(campaignAddress, msg.sender, campaignId);
         
         return campaignAddress;

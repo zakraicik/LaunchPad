@@ -28,7 +28,7 @@ contract MockDefiManager {
     }
 
     function depositToYieldProtocol(address token, uint256 amount) external returns (bool) {
-        return true;
+
     }
     
     function withdrawFromYieldProtocol(address token, uint256 amount) external returns (uint256) {
@@ -55,11 +55,4 @@ contract MockDefiManager {
         return amount * 2; // Mock exchange rate
     }
     
-    function wrapETHAndSwapForTarget(address targetToken) external payable returns (uint256) {
-        return msg.value * 2; // Mock exchange rate
-    }
-    
-    function unwrapWETHAndTransfer(address recipient, uint256 amount) external returns (bool) {
-        return true;
-    }
 }

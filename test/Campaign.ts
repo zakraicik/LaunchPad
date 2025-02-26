@@ -5,7 +5,7 @@ const { ethers } = require('hardhat')
 const { loadFixture } = require('@nomicfoundation/hardhat-network-helpers')
 
 describe('Campaign', function () {
-  async function deployYieldDistributorFixture () {
+  async function deployCampaignFixture () {
     const CAMPAIGN_GOAL_AMOUNT = 5
     const CAMPAIGN_DURATION = 30
 
@@ -43,12 +43,17 @@ describe('Campaign', function () {
 
     await campaign.waitForDeployment()
 
+    await mockToken1.transfer(user1.address, ethers.parseUnits('10'))
+    await mockToken1.transfer(user2.address, ethers.parseUnits('10'))
+
     return {
       owner,
       user1,
       user2,
       mockToken1,
       campaign,
+      mockTokenRegistry,
+      mockDefiManager,
       CAMPAIGN_GOAL_AMOUNT,
       CAMPAIGN_DURATION
     }
@@ -56,9 +61,7 @@ describe('Campaign', function () {
 
   describe('Deployment', function () {
     it('should deploy all contracts successfully', async function () {
-      const { campaign, mockToken1 } = await loadFixture(
-        deployYieldDistributorFixture
-      )
+      const { campaign, mockToken1 } = await loadFixture(deployCampaignFixture)
 
       expect(await campaign.getAddress()).to.be.properAddress
       expect(await mockToken1.getAddress()).to.be.properAddress
@@ -71,7 +74,7 @@ describe('Campaign', function () {
         mockToken1,
         CAMPAIGN_GOAL_AMOUNT,
         CAMPAIGN_DURATION
-      } = await loadFixture(deployYieldDistributorFixture)
+      } = await loadFixture(deployCampaignFixture)
 
       const startTime = await campaign.campaignStartTime()
       const endTime = await campaign.campaignEndTime()
@@ -112,10 +115,9 @@ describe('Campaign', function () {
 
       await mockToken1.waitForDeployment()
 
-      const mockERC20Address = mockToken1.getAddress()
+      const mockERC20Address = await mockToken1.getAddress()
 
       const CAMPAIGN_GOAL_AMOUNT = 5
-
       const CAMPAIGN_DURATION = 30
 
       const CampaignFactory = await ethers.getContractFactory('Campaign')
@@ -127,6 +129,35 @@ describe('Campaign', function () {
           CAMPAIGN_GOAL_AMOUNT,
           CAMPAIGN_DURATION,
           ethers.ZeroAddress
+        )
+      ).to.be.revertedWithCustomError(CampaignFactory, 'InvalidAddress')
+    })
+
+    it('Should revert if zero address is provided as token', async function () {
+      const [owner] = await ethers.getSigners()
+
+      const mockTokenRegistry = await ethers.deployContract('MockTokenRegistry')
+      await mockTokenRegistry.waitForDeployment()
+      const mockTokenRegistryAddress = await mockTokenRegistry.getAddress()
+
+      const mockDefiManager = await ethers.deployContract('MockDefiManager', [
+        mockTokenRegistryAddress
+      ])
+      await mockDefiManager.waitForDeployment()
+      const mockDefiManagerAddress = await mockDefiManager.getAddress()
+
+      const CAMPAIGN_GOAL_AMOUNT = 5
+      const CAMPAIGN_DURATION = 30
+
+      const CampaignFactory = await ethers.getContractFactory('Campaign')
+
+      await expect(
+        CampaignFactory.deploy(
+          owner.address,
+          ethers.ZeroAddress,
+          CAMPAIGN_GOAL_AMOUNT,
+          CAMPAIGN_DURATION,
+          mockDefiManagerAddress
         )
       ).to.be.revertedWithCustomError(CampaignFactory, 'InvalidAddress')
     })
@@ -153,7 +184,6 @@ describe('Campaign', function () {
       const nonCompliantAddress = await nonCompliantToken.getAddress()
 
       const CAMPAIGN_GOAL_AMOUNT = 5
-
       const CAMPAIGN_DURATION = 30
 
       const CampaignFactory = await ethers.getContractFactory('Campaign')
@@ -195,12 +225,11 @@ describe('Campaign', function () {
 
       await mockToken1.waitForDeployment()
 
-      const mockERC20Address = mockToken1.getAddress()
+      const mockERC20Address = await mockToken1.getAddress()
 
       await mockTokenRegistry.addSupportedToken(mockERC20Address, true)
 
       const CAMPAIGN_GOAL_AMOUNT = 0
-
       const CAMPAIGN_DURATION = 30
 
       const CampaignFactory = await ethers.getContractFactory('Campaign')
@@ -239,12 +268,11 @@ describe('Campaign', function () {
 
       await mockToken1.waitForDeployment()
 
-      const mockERC20Address = mockToken1.getAddress()
+      const mockERC20Address = await mockToken1.getAddress()
 
       await mockTokenRegistry.addSupportedToken(mockERC20Address, true)
 
       const CAMPAIGN_GOAL_AMOUNT = 5
-
       const CAMPAIGN_DURATION = 0
 
       const CampaignFactory = await ethers.getContractFactory('Campaign')
@@ -263,6 +291,93 @@ describe('Campaign', function () {
           'InvalidCampaignDuration'
         )
         .withArgs(CAMPAIGN_DURATION)
+    })
+  })
+
+  describe('Contribution Functions', function () {
+    it('Should allow user to contribute ERC20 tokens to campaign', async function () {
+      const { campaign, mockToken1, user1 } = await loadFixture(
+        deployCampaignFixture
+      )
+
+      const contributionAmount = 2
+
+      await mockToken1
+        .connect(user1)
+        .approve(await campaign.getAddress(), contributionAmount)
+
+      const initialBalance = await mockToken1.balanceOf(
+        await campaign.getAddress()
+      )
+      const initialContribution = await campaign.contributions(user1.address)
+      const initialTotalRaised = await campaign.totalAmountRaised()
+
+      await expect(campaign.connect(user1).contribute(contributionAmount))
+        .to.emit(campaign, 'Contribution')
+        .withArgs(user1.address, contributionAmount)
+
+      expect(await mockToken1.balanceOf(await campaign.getAddress())).to.equal(
+        initialBalance + BigInt(contributionAmount)
+      )
+      expect(await campaign.contributions(user1.address)).to.equal(
+        initialContribution + BigInt(contributionAmount)
+      )
+      expect(await campaign.totalAmountRaised()).to.equal(
+        initialTotalRaised + BigInt(contributionAmount)
+      )
+    })
+
+    it('Should revert when contribution amount is 0', async function () {
+      const { campaign, mockToken1, user1 } = await loadFixture(
+        deployCampaignFixture
+      )
+
+      await mockToken1.connect(user1).approve(await campaign.getAddress(), 100)
+
+      await expect(campaign.connect(user1).contribute(0))
+        .to.be.revertedWithCustomError(campaign, 'InvalidContributionAmount')
+        .withArgs(0)
+    })
+
+    it('Should revert when campaignGoalAmount is reached', async function () {
+      const { campaign, mockToken1, user1, CAMPAIGN_GOAL_AMOUNT } =
+        await loadFixture(deployCampaignFixture)
+
+      await mockToken1
+        .connect(user1)
+        .approve(await campaign.getAddress(), CAMPAIGN_GOAL_AMOUNT * 2)
+
+      await campaign.connect(user1).contribute(CAMPAIGN_GOAL_AMOUNT)
+
+      await expect(
+        campaign.connect(user1).contribute(1)
+      ).to.be.revertedWithCustomError(campaign, 'CampaignGoalReached')
+    })
+
+    it('Should revert when campaign is not active', async function () {
+      const { campaign, mockToken1, user1 } = await loadFixture(
+        deployCampaignFixture
+      )
+
+      await ethers.provider.send('evm_increaseTime', [31 * 24 * 60 * 60])
+      await ethers.provider.send('evm_mine')
+
+      await mockToken1.connect(user1).approve(await campaign.getAddress(), 10)
+
+      await expect(
+        campaign.connect(user1).contribute(1)
+      ).to.be.revertedWithCustomError(campaign, 'CampaignNotActive')
+    })
+
+    it('Should reject ETH sent directly to the contract', async function () {
+      const { campaign, user1 } = await loadFixture(deployCampaignFixture)
+
+      await expect(
+        user1.sendTransaction({
+          to: await campaign.getAddress(),
+          value: ethers.parseEther('1')
+        })
+      ).to.be.revertedWithCustomError(campaign, 'ETHNotAccepted')
     })
   })
 })
