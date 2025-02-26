@@ -22,6 +22,9 @@ contract Campaign is Ownable, ReentrancyGuard {
     bool public defiEnabled;
 
     error InvalidAddress();
+    error ContributionTokenNotSupported(address);
+    error InvalidGoalAmount(uint256);
+    error InvalidCampaignDuration(uint256);
     error CampaignStillActive();
     error CampaignNotActive();
     error CampaignGoalReached();
@@ -37,6 +40,7 @@ contract Campaign is Ownable, ReentrancyGuard {
     error TokenTransferFailed();
     error DefiActionFailed();
 
+    event campaignCreated(bytes32);
     event contribution(address _sender, uint256 _amount);
     event fundsClaimed(address _owner, uint256 _amount);
     event refundIssued(address _sender, uint256 amount);
@@ -54,20 +58,43 @@ contract Campaign is Ownable, ReentrancyGuard {
         uint16 _campaignDuration,
         address _defiManager
     ) Ownable(_owner) {
-        campaignToken = _campaignToken;
-        campaignGoalAmount = _campaignGoalAmount;
-        campaignDuration = _campaignDuration;
-        campaignStartTime = block.timestamp;
-        campaignEndTime = block.timestamp + (campaignDuration * 1 days);
-        campaignId = keccak256(abi.encodePacked(_owner, address(this), block.timestamp, block.prevrandao));
         if (_defiManager == address(0)) {
             revert InvalidAddress();
         }
 
+        emit DefiManagerSet(_defiManager);
 
         defiManager = IDefiIntegrationManager(_defiManager);
         defiEnabled = true;
-        emit DefiManagerSet(_defiManager);
+
+        if (_campaignToken != address(0)) {
+            
+            ITokenRegistry tokenRegistry = defiManager.tokenRegistry();
+            if(!tokenRegistry.isTokenSupported(_campaignToken)){
+                revert ContributionTokenNotSupported(_campaignToken);
+            }
+        }
+        campaignToken = _campaignToken;
+
+        if(_campaignGoalAmount<=0) {
+            revert InvalidGoalAmount(_campaignGoalAmount);
+        }
+
+        campaignGoalAmount = _campaignGoalAmount;
+
+        if(_campaignDuration<=0) {
+            revert InvalidCampaignDuration(_campaignDuration);
+        }
+
+        campaignDuration = _campaignDuration;
+
+        campaignStartTime = block.timestamp;
+        campaignEndTime = block.timestamp + (campaignDuration * 1 days);
+        campaignId = keccak256(abi.encodePacked(_owner, address(this), block.timestamp, block.prevrandao));
+
+
+        
+        emit campaignCreated(campaignId);
         
     }
 
