@@ -184,10 +184,10 @@ describe('TokenRegistry', function () {
         deployTokenRegistryFixture
       )
 
-      const NonCompliantToken = await ethers.getContractFactory(
+      const nonCompliantToken = await ethers.deployContract(
         'MockNonCompliantToken'
       )
-      const nonCompliantToken = await NonCompliantToken.deploy()
+
       await nonCompliantToken.waitForDeployment()
 
       const nonCompliantAddress = await nonCompliantToken.getAddress()
@@ -626,10 +626,10 @@ describe('TokenRegistry', function () {
         deployTokenRegistryFixture
       )
 
-      const NonCompliantToken = await ethers.getContractFactory(
+      const nonCompliantToken = await ethers.deployContract(
         'MockNonCompliantToken'
       )
-      const nonCompliantToken = await NonCompliantToken.deploy()
+
       await nonCompliantToken.waitForDeployment()
 
       const nonCompliantAddress = await nonCompliantToken.getAddress()
