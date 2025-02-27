@@ -32,6 +32,7 @@ contract Campaign is Ownable, ReentrancyGuard {
     event YieldHarvested(address indexed token, uint256 creatorYield);
     event WithdrawnFromYield(address indexed token, uint256 amount);
     event TokensSwapped(address indexed fromToken, address indexed toToken, uint256 amountIn, uint256 amountOut);
+    
 
     error InvalidAddress();
     error ContributionTokenNotSupported(address token);
@@ -49,6 +50,7 @@ contract Campaign is Ownable, ReentrancyGuard {
     error FundsAlreadyClaimed();
     error ClaimTransferFailed();
     error DefiActionFailed();
+    error InvalidSwapAmount(uint256);
 
     constructor(
         address _owner,
@@ -167,8 +169,9 @@ contract Campaign is Ownable, ReentrancyGuard {
 
     function swapTokens(address fromToken, uint256 amount, address toToken) external onlyOwner nonReentrant {
 
-        
-        IERC20(fromToken).approve(address(defiManager), amount);
+        if (amount == 0) revert InvalidSwapAmount(amount);
+
+        IERC20(fromToken).safeIncreaseAllowance(address(defiManager), amount);
         
         try defiManager.swapTokenForTarget(fromToken, amount, toToken) returns (uint256 received) {
             emit TokensSwapped(fromToken, toToken, amount, received);
@@ -177,6 +180,14 @@ contract Campaign is Ownable, ReentrancyGuard {
         }
     }
     
+    function withdrawAllFromYieldProtocol(address token) external onlyOwner nonReentrant {
+        try defiManager.withdrawAllFromYieldProtocol(token) returns (uint256 withdrawn) {
+            emit WithdrawnFromYield(token, withdrawn);
+        } catch {
+            revert DefiActionFailed();
+        }
+    }
+
     function withdrawFromYieldProtocol(address token, uint256 amount) external onlyOwner nonReentrant {
         try defiManager.withdrawFromYieldProtocol(token, amount) returns (uint256 withdrawn) {
             emit WithdrawnFromYield(token, withdrawn);
@@ -184,6 +195,7 @@ contract Campaign is Ownable, ReentrancyGuard {
             revert DefiActionFailed();
         }
     }
+    
     
     function isCampaignActive() public view returns (bool) {
         return (

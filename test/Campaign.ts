@@ -9,7 +9,7 @@ describe('Campaign', function () {
     const CAMPAIGN_GOAL_AMOUNT = 5
     const CAMPAIGN_DURATION = 30
 
-    const [owner, user1, user2] = await ethers.getSigners()
+    const [owner, user1, user2, platformTreasury] = await ethers.getSigners()
 
     const mockToken1 = await ethers.deployContract('MockERC20', [
       'Mock Token 1',
@@ -29,7 +29,7 @@ describe('Campaign', function () {
 
     const mockYieldDistributor = await ethers.deployContract(
       'MockYieldDistributor',
-      [owner.address]
+      [platformTreasury.address]
     )
     await mockYieldDistributor.waitForDeployment()
     const mockYieldDistributorAddress = await mockYieldDistributor.getAddress()
@@ -58,6 +58,7 @@ describe('Campaign', function () {
       owner,
       user1,
       user2,
+      platformTreasury,
       mockToken1,
       campaign,
       mockTokenRegistry,
@@ -147,7 +148,7 @@ describe('Campaign', function () {
     })
 
     it('Should revert if zero address is provided as token', async function () {
-      const [owner] = await ethers.getSigners()
+      const [owner, platformTreasury] = await ethers.getSigners()
 
       const mockTokenRegistry = await ethers.deployContract('MockTokenRegistry')
       await mockTokenRegistry.waitForDeployment()
@@ -155,7 +156,7 @@ describe('Campaign', function () {
 
       const mockYieldDistributor = await ethers.deployContract(
         'MockYieldDistributor',
-        [owner.address]
+        [platformTreasury.address]
       )
       await mockYieldDistributor.waitForDeployment()
       const mockYieldDistributorAddress =
@@ -187,7 +188,7 @@ describe('Campaign', function () {
     })
 
     it('Should revert if non-supported token address is provided to campaign constructor', async function () {
-      const [owner] = await ethers.getSigners()
+      const [owner, platformTreasury] = await ethers.getSigners()
 
       const mockTokenRegistry = await ethers.deployContract('MockTokenRegistry')
       await mockTokenRegistry.waitForDeployment()
@@ -195,7 +196,7 @@ describe('Campaign', function () {
 
       const mockYieldDistributor = await ethers.deployContract(
         'MockYieldDistributor',
-        [owner.address]
+        [platformTreasury.address]
       )
       await mockYieldDistributor.waitForDeployment()
       const mockYieldDistributorAddress =
@@ -240,7 +241,7 @@ describe('Campaign', function () {
     })
 
     it('Should revert if invalid goal amount is provided to campaign constructor', async function () {
-      const [owner] = await ethers.getSigners()
+      const [owner, platformTreasury] = await ethers.getSigners()
 
       const mockTokenRegistry = await ethers.deployContract('MockTokenRegistry')
       await mockTokenRegistry.waitForDeployment()
@@ -248,7 +249,7 @@ describe('Campaign', function () {
 
       const mockYieldDistributor = await ethers.deployContract(
         'MockYieldDistributor',
-        [owner.address]
+        [platformTreasury.address]
       )
       await mockYieldDistributor.waitForDeployment()
       const mockYieldDistributorAddress =
@@ -294,7 +295,7 @@ describe('Campaign', function () {
     })
 
     it('Should revert if invalid campaign duration is provided to campaign constructor', async function () {
-      const [owner] = await ethers.getSigners()
+      const [owner, platformTreasury] = await ethers.getSigners()
 
       const mockTokenRegistry = await ethers.deployContract('MockTokenRegistry')
       await mockTokenRegistry.waitForDeployment()
@@ -302,7 +303,7 @@ describe('Campaign', function () {
 
       const mockYieldDistributor = await ethers.deployContract(
         'MockYieldDistributor',
-        [owner.address]
+        [platformTreasury.address]
       )
       await mockYieldDistributor.waitForDeployment()
       const mockYieldDistributorAddress =
@@ -750,7 +751,7 @@ describe('Campaign', function () {
       })
 
       it('Should revert when token transfer fails during claim', async function () {
-        const [owner, user1] = await ethers.getSigners()
+        const [owner, user1, platformTreasury] = await ethers.getSigners()
 
         const CAMPAIGN_GOAL_AMOUNT = 5
         const CAMPAIGN_DURATION = 30
@@ -774,7 +775,7 @@ describe('Campaign', function () {
 
         const mockYieldDistributor = await ethers.deployContract(
           'MockYieldDistributor',
-          [owner.address]
+          [platformTreasury.address]
         )
         await mockYieldDistributor.waitForDeployment()
         const mockYieldDistributorAddress =
@@ -821,7 +822,7 @@ describe('Campaign', function () {
 
         await expect(
           campaign.connect(owner).claimFunds()
-        ).to.be.revertedWithCustomError(campaign, 'ClaimTransferFailed')
+        ).to.be.revertedWithCustomError(campaign, 'SafeERC20FailedOperation')
 
         expect(await campaign.isClaimed()).to.equal(false)
 
@@ -1046,7 +1047,7 @@ describe('Campaign', function () {
       })
 
       it('Should revert when token transfer fails during refund', async function () {
-        const [owner, user1] = await ethers.getSigners()
+        const [owner, user1, platformTreasury] = await ethers.getSigners()
 
         const CAMPAIGN_GOAL_AMOUNT = 5
         const CAMPAIGN_DURATION = 30
@@ -1071,7 +1072,7 @@ describe('Campaign', function () {
 
         const mockYieldDistributor = await ethers.deployContract(
           'MockYieldDistributor',
-          [owner.address]
+          [platformTreasury.address]
         )
         await mockYieldDistributor.waitForDeployment()
         const mockYieldDistributorAddress =
@@ -1112,7 +1113,7 @@ describe('Campaign', function () {
 
         await expect(
           campaign.connect(user1).requestRefund()
-        ).to.be.revertedWithCustomError(campaign, 'RefundFailed')
+        ).to.be.revertedWithCustomError(campaign, 'SafeERC20FailedOperation')
 
         expect(await campaign.contributions(user1.address)).to.equal(
           contributionAmount
@@ -1122,14 +1123,956 @@ describe('Campaign', function () {
   })
 
   describe('Defi Integration', function () {
-    describe('Depositing into yield protocols', function () {})
+    describe('Depositing into yield protocols', function () {
+      it('Should allow owner to deposit funds into yield protocol', async function () {
+        const { campaign, mockDefiManager, mockToken1, user1 } =
+          await loadFixture(deployCampaignFixture)
 
-    describe('Harvesting yield', function () {})
+        const contributionAmount = 2
 
-    describe('Withdrawing from yield protocols', function () {})
+        const contributionAmountBigInt = BigInt(contributionAmount)
 
-    describe('Token swaps', function () {})
+        await mockToken1
+          .connect(user1)
+          .approve(await campaign.getAddress(), contributionAmount)
+
+        await campaign.connect(user1).contribute(contributionAmount)
+
+        const mockDefiManagerAddress = await mockDefiManager.getAddress()
+        const campaignAddress = await campaign.getAddress()
+
+        const campaignBalanceBeforeYieldProtocolDeposit =
+          await mockToken1.balanceOf(campaignAddress)
+
+        const mockDefiManagerBalanceBeforeYieldProtocolDeposit =
+          await mockToken1.balanceOf(mockDefiManagerAddress)
+
+        await expect(
+          campaign.depositToYieldProtocol(mockToken1, contributionAmount)
+        )
+          .to.emit(campaign, 'FundsDeposited')
+          .withArgs(mockToken1, contributionAmount)
+
+        const campaignBalanceAfterYieldProtocolDeposit =
+          await mockToken1.balanceOf(campaignAddress)
+
+        const mockDefiManagerBalanceAfterYieldProtocolDeposit =
+          await mockToken1.balanceOf(mockDefiManagerAddress)
+
+        expect(campaignBalanceAfterYieldProtocolDeposit).to.equal(
+          campaignBalanceBeforeYieldProtocolDeposit - contributionAmountBigInt
+        )
+
+        //From the POV of the campaign, the transfer ends here
+        expect(mockDefiManagerBalanceAfterYieldProtocolDeposit).to.equal(
+          mockDefiManagerBalanceBeforeYieldProtocolDeposit +
+            contributionAmountBigInt
+        )
+      })
+
+      it('Should revert if non-owner tries to deposit to yield protocol', async function () {
+        const { campaign, mockDefiManager, mockToken1, user1 } =
+          await loadFixture(deployCampaignFixture)
+
+        const contributionAmount = 2
+
+        const contributionAmountBigInt = BigInt(contributionAmount)
+
+        await mockToken1
+          .connect(user1)
+          .approve(await campaign.getAddress(), contributionAmount)
+
+        await campaign.connect(user1).contribute(contributionAmount)
+
+        const mockDefiManagerAddress = await mockDefiManager.getAddress()
+        const campaignAddress = await campaign.getAddress()
+
+        const campaignBalanceBeforeYieldProtocolDeposit =
+          await mockToken1.balanceOf(campaignAddress)
+
+        const mockDefiManagerBalanceBeforeYieldProtocolDeposit =
+          await mockToken1.balanceOf(mockDefiManagerAddress)
+
+        await expect(
+          campaign
+            .connect(user1)
+            .depositToYieldProtocol(mockToken1, contributionAmount)
+        )
+          .to.revertedWithCustomError(campaign, 'OwnableUnauthorizedAccount')
+          .withArgs(user1.address)
+
+        const campaignBalanceAfterYieldProtocolDeposit =
+          await mockToken1.balanceOf(campaignAddress)
+
+        const mockDefiManagerBalanceAfterYieldProtocolDeposit =
+          await mockToken1.balanceOf(mockDefiManagerAddress)
+
+        expect(campaignBalanceAfterYieldProtocolDeposit).to.equal(
+          campaignBalanceBeforeYieldProtocolDeposit
+        )
+
+        //From the POV of the campaign, the transfer ends here
+        expect(mockDefiManagerBalanceAfterYieldProtocolDeposit).to.equal(0)
+      })
+
+      it('Should revert with DefiActionFailed if deposit to yield protocol fails', async function () {
+        const { campaign, mockDefiManager, mockToken1, user1, owner } =
+          await loadFixture(deployCampaignFixture)
+
+        const contributionAmount = 2
+
+        await mockToken1
+          .connect(user1)
+          .approve(await campaign.getAddress(), contributionAmount)
+
+        await campaign.connect(user1).contribute(contributionAmount)
+
+        await mockDefiManager.setDepositSuccess(false)
+
+        await expect(
+          campaign
+            .connect(owner)
+            .depositToYieldProtocol(
+              await mockToken1.getAddress(),
+              contributionAmount
+            )
+        ).to.be.revertedWithCustomError(campaign, 'DefiActionFailed')
+
+        const campaignBalance = await mockToken1.balanceOf(
+          await campaign.getAddress()
+        )
+        expect(campaignBalance).to.equal(BigInt(contributionAmount))
+
+        const defiManagerBalance = await mockToken1.balanceOf(
+          await mockDefiManager.getAddress()
+        )
+        expect(defiManagerBalance).to.equal(0)
+      })
+    })
+
+    describe('Harvesting yield', function () {
+      it('Should allow owner to harvest yield', async function () {
+        const {
+          campaign,
+          mockDefiManager,
+          mockToken1,
+          mockYieldDistributor,
+          user1,
+          platformTreasury
+        } = await loadFixture(deployCampaignFixture)
+
+        const depositAmount = 100
+        await mockToken1
+          .connect(user1)
+          .approve(await campaign.getAddress(), depositAmount)
+        await campaign.connect(user1).contribute(depositAmount)
+
+        await campaign.depositToYieldProtocol(
+          await mockToken1.getAddress(),
+          depositAmount
+        )
+
+        const yieldRate = await mockDefiManager.yieldRate()
+
+        const totalYield =
+          (BigInt(depositAmount) * BigInt(yieldRate)) / BigInt(10000)
+
+        const [expectedCreatorYield, expectedPlatformYield] =
+          await mockYieldDistributor.calculateYieldShares(totalYield)
+
+        await mockToken1.mint(await mockDefiManager.getAddress(), totalYield)
+
+        const campaignAddress = campaign.getAddress()
+        const platformTreasuryAddress = platformTreasury.address
+
+        const campaignBalanceBefore = await mockToken1.balanceOf(
+          campaignAddress
+        )
+
+        const platformTreasuryBalanceBefore = await mockToken1.balanceOf(
+          platformTreasuryAddress
+        )
+
+        await expect(campaign.harvestYield(await mockToken1.getAddress()))
+          .to.emit(campaign, 'YieldHarvested')
+          .withArgs(await mockToken1.getAddress(), expectedCreatorYield)
+
+        const campaignBalanceAfter = await mockToken1.balanceOf(campaignAddress)
+        const platformTreasuryBalanceAfter = await mockToken1.balanceOf(
+          platformTreasuryAddress
+        )
+
+        expect(campaignBalanceAfter - campaignBalanceBefore).to.equal(
+          expectedCreatorYield
+        )
+
+        expect(
+          platformTreasuryBalanceAfter - platformTreasuryBalanceBefore
+        ).to.equal(expectedPlatformYield)
+
+        const depositedAmount = await mockDefiManager.getDepositedAmount(
+          await campaign.getAddress(),
+          await mockToken1.getAddress()
+        )
+        expect(depositedAmount).to.equal(BigInt(depositAmount))
+      })
+
+      it('Should revert if non-owner tries to harvest yield', async function () {
+        const {
+          campaign,
+          mockDefiManager,
+          mockToken1,
+          user1,
+          platformTreasury
+        } = await loadFixture(deployCampaignFixture)
+
+        const depositAmount = 100
+        await mockToken1
+          .connect(user1)
+          .approve(await campaign.getAddress(), depositAmount)
+        await campaign.connect(user1).contribute(depositAmount)
+
+        await campaign.depositToYieldProtocol(
+          await mockToken1.getAddress(),
+          depositAmount
+        )
+
+        const yieldRate = await mockDefiManager.yieldRate()
+
+        const totalYield =
+          (BigInt(depositAmount) * BigInt(yieldRate)) / BigInt(10000)
+
+        await mockToken1.mint(await mockDefiManager.getAddress(), totalYield)
+
+        const campaignAddress = campaign.getAddress()
+        const platformTreasuryAddress = platformTreasury.address
+        const mockDefiManagerBalanceBeforeAddress =
+          await mockDefiManager.getAddress()
+
+        const campaignBalanceBefore = await mockToken1.balanceOf(
+          campaignAddress
+        )
+
+        const mockDefiManagerBalanceBefore = await mockToken1.balanceOf(
+          mockDefiManagerBalanceBeforeAddress
+        )
+
+        const platformTreasuryBalanceBefore = await mockToken1.balanceOf(
+          platformTreasuryAddress
+        )
+
+        await expect(
+          campaign.connect(user1).harvestYield(await mockToken1.getAddress())
+        )
+          .to.be.revertedWithCustomError(campaign, 'OwnableUnauthorizedAccount')
+          .withArgs(user1.address)
+
+        const campaignBalanceAfter = await mockToken1.balanceOf(campaignAddress)
+        const mockDefiManagerBalanceAfter = await mockToken1.balanceOf(
+          mockDefiManagerBalanceBeforeAddress
+        )
+
+        const platformTreasuryBalanceAfter = await mockToken1.balanceOf(
+          platformTreasuryAddress
+        )
+
+        expect(campaignBalanceAfter).to.equal(campaignBalanceBefore)
+        expect(mockDefiManagerBalanceAfter).to.equal(
+          mockDefiManagerBalanceBefore
+        )
+
+        expect(platformTreasuryBalanceAfter).to.equal(
+          platformTreasuryBalanceBefore
+        )
+
+        const depositedAmount = await mockDefiManager.getDepositedAmount(
+          await campaign.getAddress(),
+          await mockToken1.getAddress()
+        )
+        expect(depositedAmount).to.equal(BigInt(depositAmount))
+      })
+    })
+
+    describe('Withdrawing from yield protocols', function () {
+      describe('Withdrawing from yield protocols', function () {
+        it('Should allow owner to withdraw a specific amount from yield protocol', async function () {
+          const { campaign, mockDefiManager, mockToken1, user1, owner } =
+            await loadFixture(deployCampaignFixture)
+
+          const depositAmount = 100
+          await mockToken1
+            .connect(user1)
+            .approve(await campaign.getAddress(), depositAmount)
+          await campaign.connect(user1).contribute(depositAmount)
+
+          await campaign.depositToYieldProtocol(
+            await mockToken1.getAddress(),
+            depositAmount
+          )
+
+          const depositedAmount = await mockDefiManager.getDepositedAmount(
+            await campaign.getAddress(),
+            await mockToken1.getAddress()
+          )
+          expect(depositedAmount).to.equal(BigInt(depositAmount))
+
+          const withdrawAmount = depositAmount / 2
+          const campaignBalanceBefore = await mockToken1.balanceOf(
+            await campaign.getAddress()
+          )
+
+          await expect(
+            campaign.withdrawFromYieldProtocol(
+              await mockToken1.getAddress(),
+              withdrawAmount
+            )
+          )
+            .to.emit(campaign, 'WithdrawnFromYield')
+            .withArgs(await mockToken1.getAddress(), withdrawAmount)
+
+          const campaignBalanceAfter = await mockToken1.balanceOf(
+            await campaign.getAddress()
+          )
+          expect(campaignBalanceAfter - campaignBalanceBefore).to.equal(
+            BigInt(withdrawAmount)
+          )
+
+          const remainingDepositedAmount =
+            await mockDefiManager.getDepositedAmount(
+              await campaign.getAddress(),
+              await mockToken1.getAddress()
+            )
+          expect(remainingDepositedAmount).to.equal(
+            BigInt(depositAmount - withdrawAmount)
+          )
+        })
+
+        it('Should allow owner to withdraw all funds from yield protocol', async function () {
+          const { campaign, mockDefiManager, mockToken1, user1, owner } =
+            await loadFixture(deployCampaignFixture)
+
+          const depositAmount = 100
+          await mockToken1
+            .connect(user1)
+            .approve(await campaign.getAddress(), depositAmount)
+          await campaign.connect(user1).contribute(depositAmount)
+
+          await campaign.depositToYieldProtocol(
+            await mockToken1.getAddress(),
+            depositAmount
+          )
+
+          const depositedAmount = await mockDefiManager.getDepositedAmount(
+            await campaign.getAddress(),
+            await mockToken1.getAddress()
+          )
+          expect(depositedAmount).to.equal(BigInt(depositAmount))
+
+          const campaignBalanceBefore = await mockToken1.balanceOf(
+            await campaign.getAddress()
+          )
+
+          await expect(
+            campaign.withdrawAllFromYieldProtocol(await mockToken1.getAddress())
+          )
+            .to.emit(campaign, 'WithdrawnFromYield')
+            .withArgs(await mockToken1.getAddress(), depositAmount)
+
+          const campaignBalanceAfter = await mockToken1.balanceOf(
+            await campaign.getAddress()
+          )
+          expect(campaignBalanceAfter - campaignBalanceBefore).to.equal(
+            BigInt(depositAmount)
+          )
+
+          const remainingDepositedAmount =
+            await mockDefiManager.getDepositedAmount(
+              await campaign.getAddress(),
+              await mockToken1.getAddress()
+            )
+          expect(remainingDepositedAmount).to.equal(0)
+        })
+
+        it('Should revert when non-owner tries to withdraw from yield protocol', async function () {
+          const { campaign, mockDefiManager, mockToken1, user1, user2 } =
+            await loadFixture(deployCampaignFixture)
+
+          const depositAmount = 100
+          await mockToken1
+            .connect(user1)
+            .approve(await campaign.getAddress(), depositAmount)
+          await campaign.connect(user1).contribute(depositAmount)
+
+          await campaign.depositToYieldProtocol(
+            await mockToken1.getAddress(),
+            depositAmount
+          )
+
+          const depositedAmount = await mockDefiManager.getDepositedAmount(
+            await campaign.getAddress(),
+            await mockToken1.getAddress()
+          )
+          expect(depositedAmount).to.equal(BigInt(depositAmount))
+
+          await expect(
+            campaign
+              .connect(user2)
+              .withdrawFromYieldProtocol(await mockToken1.getAddress(), 50)
+          )
+            .to.be.revertedWithCustomError(
+              campaign,
+              'OwnableUnauthorizedAccount'
+            )
+            .withArgs(user2.address)
+
+          await expect(
+            campaign
+              .connect(user2)
+              .withdrawAllFromYieldProtocol(await mockToken1.getAddress())
+          )
+            .to.be.revertedWithCustomError(
+              campaign,
+              'OwnableUnauthorizedAccount'
+            )
+            .withArgs(user2.address)
+
+          const remainingDepositedAmount =
+            await mockDefiManager.getDepositedAmount(
+              await campaign.getAddress(),
+              await mockToken1.getAddress()
+            )
+          expect(remainingDepositedAmount).to.equal(BigInt(depositAmount))
+        })
+
+        it('Should revert when withdrawal from yield protocol fails', async function () {
+          const { campaign, mockDefiManager, mockToken1, user1, owner } =
+            await loadFixture(deployCampaignFixture)
+
+          const depositAmount = 100
+          await mockToken1
+            .connect(user1)
+            .approve(await campaign.getAddress(), depositAmount)
+          await campaign.connect(user1).contribute(depositAmount)
+
+          await campaign.depositToYieldProtocol(
+            await mockToken1.getAddress(),
+            depositAmount
+          )
+
+          await mockDefiManager.setWithdrawSuccess(false)
+
+          await expect(
+            campaign.withdrawFromYieldProtocol(
+              await mockToken1.getAddress(),
+              50
+            )
+          ).to.be.revertedWithCustomError(campaign, 'DefiActionFailed')
+
+          await expect(
+            campaign.withdrawAllFromYieldProtocol(await mockToken1.getAddress())
+          ).to.be.revertedWithCustomError(campaign, 'DefiActionFailed')
+
+          const remainingDepositedAmount =
+            await mockDefiManager.getDepositedAmount(
+              await campaign.getAddress(),
+              await mockToken1.getAddress()
+            )
+          expect(remainingDepositedAmount).to.equal(BigInt(depositAmount))
+        })
+
+        it('Should revert when attempting to withdraw more than deposited amount', async function () {
+          const { campaign, mockDefiManager, mockToken1, user1, owner } =
+            await loadFixture(deployCampaignFixture)
+
+          const depositAmount = 100
+          await mockToken1
+            .connect(user1)
+            .approve(await campaign.getAddress(), depositAmount)
+          await campaign.connect(user1).contribute(depositAmount)
+
+          await campaign.depositToYieldProtocol(
+            await mockToken1.getAddress(),
+            depositAmount
+          )
+
+          const initialDepositedAmount =
+            await mockDefiManager.getDepositedAmount(
+              await campaign.getAddress(),
+              await mockToken1.getAddress()
+            )
+          expect(initialDepositedAmount).to.equal(BigInt(depositAmount))
+
+          const excessiveAmount = depositAmount * 2
+
+          await expect(
+            campaign.withdrawFromYieldProtocol(
+              await mockToken1.getAddress(),
+              excessiveAmount
+            )
+          ).to.be.revertedWithCustomError(campaign, 'DefiActionFailed')
+
+          const afterDepositedAmount = await mockDefiManager.getDepositedAmount(
+            await campaign.getAddress(),
+            await mockToken1.getAddress()
+          )
+          expect(afterDepositedAmount).to.equal(initialDepositedAmount)
+
+          await expect(
+            campaign.withdrawFromYieldProtocol(
+              await mockToken1.getAddress(),
+              depositAmount
+            )
+          )
+            .to.emit(campaign, 'WithdrawnFromYield')
+            .withArgs(await mockToken1.getAddress(), depositAmount)
+        })
+
+        it('Should withdraw zero if nothing is deposited', async function () {
+          const { campaign, mockDefiManager, mockToken1, owner } =
+            await loadFixture(deployCampaignFixture)
+
+          const depositedAmount = await mockDefiManager.getDepositedAmount(
+            await campaign.getAddress(),
+            await mockToken1.getAddress()
+          )
+          expect(depositedAmount).to.equal(0)
+
+          await expect(
+            campaign.withdrawAllFromYieldProtocol(await mockToken1.getAddress())
+          ).to.revertedWithCustomError(campaign, 'DefiActionFailed')
+
+          await expect(
+            campaign.withdrawFromYieldProtocol(
+              await mockToken1.getAddress(),
+              50
+            )
+          ).to.revertedWithCustomError(campaign, 'DefiActionFailed')
+        })
+      })
+    })
+
+    describe('Token swaps', function () {
+      it('Should allow owner to swap tokens successfully', async function () {
+        const { campaign, mockDefiManager, mockToken1, owner, user1 } =
+          await loadFixture(deployCampaignFixture)
+
+        const mockToken2 = await ethers.deployContract('MockERC20', [
+          'Second Token',
+          'TKN2',
+          ethers.parseUnits('1000')
+        ])
+        await mockToken2.waitForDeployment()
+
+        const token1Address = await mockToken1.getAddress()
+        const token2Address = await mockToken2.getAddress()
+
+        const tokenRegistry = await ethers.getContractAt(
+          'MockTokenRegistry',
+          await mockDefiManager.mockTokenRegistryAddress()
+        )
+        await tokenRegistry.addSupportedToken(token2Address, true)
+
+        const swapAmount = 50
+        const expectedReturnAmount = swapAmount * 2
+        await mockToken2.transfer(
+          await mockDefiManager.getAddress(),
+          expectedReturnAmount
+        )
+
+        await mockToken1
+          .connect(user1)
+          .approve(await campaign.getAddress(), 100)
+        await campaign.connect(user1).contribute(100)
+
+        const initialToken1Balance = await mockToken1.balanceOf(
+          await campaign.getAddress()
+        )
+        const initialToken2Balance = await mockToken2.balanceOf(
+          await campaign.getAddress()
+        )
+
+        expect(initialToken1Balance).to.equal(100)
+        expect(initialToken2Balance).to.equal(0)
+
+        await expect(
+          campaign
+            .connect(owner)
+            .swapTokens(token1Address, swapAmount, token2Address)
+        )
+          .to.emit(campaign, 'TokensSwapped')
+          .withArgs(
+            token1Address,
+            token2Address,
+            swapAmount,
+            expectedReturnAmount
+          )
+
+        const finalToken1Balance = await mockToken1.balanceOf(
+          await campaign.getAddress()
+        )
+        const finalToken2Balance = await mockToken2.balanceOf(
+          await campaign.getAddress()
+        )
+
+        expect(finalToken1Balance).to.equal(
+          initialToken1Balance - BigInt(swapAmount)
+        )
+        expect(finalToken2Balance).to.equal(
+          initialToken2Balance + BigInt(expectedReturnAmount)
+        )
+      })
+
+      it('Should revert if someone other than owner tries to swap tokens', async function () {
+        const { campaign, mockDefiManager, mockToken1, owner, user1 } =
+          await loadFixture(deployCampaignFixture)
+
+        const mockToken2 = await ethers.deployContract('MockERC20', [
+          'Second Token',
+          'TKN2',
+          ethers.parseUnits('1000')
+        ])
+        await mockToken2.waitForDeployment()
+
+        const token1Address = await mockToken1.getAddress()
+        const token2Address = await mockToken2.getAddress()
+
+        const tokenRegistry = await ethers.getContractAt(
+          'MockTokenRegistry',
+          await mockDefiManager.mockTokenRegistryAddress()
+        )
+        await tokenRegistry.addSupportedToken(token2Address, true)
+
+        const swapAmount = 50
+        const expectedReturnAmount = swapAmount * 2
+        await mockToken2.transfer(
+          await mockDefiManager.getAddress(),
+          expectedReturnAmount
+        )
+
+        await mockToken1
+          .connect(user1)
+          .approve(await campaign.getAddress(), 100)
+        await campaign.connect(user1).contribute(100)
+
+        const initialToken1Balance = await mockToken1.balanceOf(
+          await campaign.getAddress()
+        )
+        const initialToken2Balance = await mockToken2.balanceOf(
+          await campaign.getAddress()
+        )
+
+        expect(initialToken1Balance).to.equal(100)
+        expect(initialToken2Balance).to.equal(0)
+
+        await expect(
+          campaign
+            .connect(user1)
+            .swapTokens(token1Address, swapAmount, token2Address)
+        )
+          .to.revertedWithCustomError(campaign, 'OwnableUnauthorizedAccount')
+          .withArgs(user1.address)
+
+        const finalToken1Balance = await mockToken1.balanceOf(
+          await campaign.getAddress()
+        )
+        const finalToken2Balance = await mockToken2.balanceOf(
+          await campaign.getAddress()
+        )
+
+        expect(finalToken1Balance).to.equal(initialToken1Balance)
+        expect(finalToken2Balance).to.equal(initialToken2Balance)
+      })
+
+      it('Should revert if swap amount is 0', async function () {
+        const { campaign, mockDefiManager, mockToken1, owner, user1 } =
+          await loadFixture(deployCampaignFixture)
+
+        const mockToken2 = await ethers.deployContract('MockERC20', [
+          'Second Token',
+          'TKN2',
+          ethers.parseUnits('1000')
+        ])
+        await mockToken2.waitForDeployment()
+
+        const token1Address = await mockToken1.getAddress()
+        const token2Address = await mockToken2.getAddress()
+
+        const tokenRegistry = await ethers.getContractAt(
+          'MockTokenRegistry',
+          await mockDefiManager.mockTokenRegistryAddress()
+        )
+        await tokenRegistry.addSupportedToken(token2Address, true)
+
+        const swapAmount = 0
+        const expectedReturnAmount = swapAmount * 2
+        await mockToken2.transfer(
+          await mockDefiManager.getAddress(),
+          expectedReturnAmount
+        )
+
+        await mockToken1
+          .connect(user1)
+          .approve(await campaign.getAddress(), 100)
+        await campaign.connect(user1).contribute(100)
+
+        const initialToken1Balance = await mockToken1.balanceOf(
+          await campaign.getAddress()
+        )
+        const initialToken2Balance = await mockToken2.balanceOf(
+          await campaign.getAddress()
+        )
+
+        expect(initialToken1Balance).to.equal(100)
+        expect(initialToken2Balance).to.equal(0)
+
+        await expect(
+          campaign.swapTokens(token1Address, swapAmount, token2Address)
+        )
+          .to.revertedWithCustomError(campaign, 'InvalidSwapAmount')
+          .withArgs(swapAmount)
+
+        const finalToken1Balance = await mockToken1.balanceOf(
+          await campaign.getAddress()
+        )
+        const finalToken2Balance = await mockToken2.balanceOf(
+          await campaign.getAddress()
+        )
+
+        expect(finalToken1Balance).to.equal(initialToken1Balance)
+        expect(finalToken2Balance).to.equal(initialToken2Balance)
+      })
+
+      it('Should revert if swap amount is larger than campaign balance', async function () {
+        const { campaign, mockDefiManager, mockToken1, owner, user1 } =
+          await loadFixture(deployCampaignFixture)
+
+        const mockToken2 = await ethers.deployContract('MockERC20', [
+          'Second Token',
+          'TKN2',
+          ethers.parseUnits('1000')
+        ])
+        await mockToken2.waitForDeployment()
+
+        const token1Address = await mockToken1.getAddress()
+        const token2Address = await mockToken2.getAddress()
+
+        const tokenRegistry = await ethers.getContractAt(
+          'MockTokenRegistry',
+          await mockDefiManager.mockTokenRegistryAddress()
+        )
+        await tokenRegistry.addSupportedToken(token2Address, true)
+
+        const swapAmount = 200
+        const expectedReturnAmount = swapAmount * 2
+        await mockToken2.transfer(
+          await mockDefiManager.getAddress(),
+          expectedReturnAmount
+        )
+
+        await mockToken1
+          .connect(user1)
+          .approve(await campaign.getAddress(), 100)
+        await campaign.connect(user1).contribute(100)
+
+        const initialToken1Balance = await mockToken1.balanceOf(
+          await campaign.getAddress()
+        )
+        const initialToken2Balance = await mockToken2.balanceOf(
+          await campaign.getAddress()
+        )
+
+        expect(initialToken1Balance).to.equal(100)
+        expect(initialToken2Balance).to.equal(0)
+
+        await expect(
+          campaign.swapTokens(token1Address, swapAmount, token2Address)
+        ).to.revertedWithCustomError(campaign, 'DefiActionFailed')
+
+        const finalToken1Balance = await mockToken1.balanceOf(
+          await campaign.getAddress()
+        )
+        const finalToken2Balance = await mockToken2.balanceOf(
+          await campaign.getAddress()
+        )
+
+        expect(finalToken1Balance).to.equal(initialToken1Balance)
+        expect(finalToken2Balance).to.equal(initialToken2Balance)
+      })
+
+      it('Should revert when swapping with a non-compliant token', async function () {
+        const { campaign, mockDefiManager, mockToken1, owner } =
+          await loadFixture(deployCampaignFixture)
+
+        // Deploy the non-compliant token
+        const nonCompliantToken = await ethers.deployContract(
+          'MockNonCompliantToken'
+        )
+        await nonCompliantToken.waitForDeployment()
+
+        const nonCompliantTokenAddress = await nonCompliantToken.getAddress()
+        const token1Address = await mockToken1.getAddress()
+
+        // Try to swap from the non-compliant token to a valid token
+        await expect(
+          campaign
+            .connect(owner)
+            .swapTokens(nonCompliantTokenAddress, 50, token1Address)
+        ).to.be.reverted // This should revert, but the exact error might depend on your implementation
+
+        // Also test swapping to the non-compliant token
+        await mockToken1.transfer(await campaign.getAddress(), 100)
+
+        await expect(
+          campaign
+            .connect(owner)
+            .swapTokens(token1Address, 50, nonCompliantTokenAddress)
+        ).to.be.revertedWithCustomError(campaign, 'DefiActionFailed')
+      })
+    })
   })
 
-  describe('Getter Functions', function () {})
+  describe('Getter Functions', function () {
+    describe('isCampaignActive', function () {
+      it('Should return true when campaign is within its timeframe', async function () {
+        const { campaign } = await loadFixture(deployCampaignFixture)
+
+        // Campaign should be active by default right after deployment
+        expect(await campaign.isCampaignActive()).to.be.true
+      })
+
+      it('Should return false when campaign timeframe has passed', async function () {
+        const { campaign, CAMPAIGN_DURATION } = await loadFixture(
+          deployCampaignFixture
+        )
+
+        // Increase time to after campaign end
+        await ethers.provider.send('evm_increaseTime', [
+          (CAMPAIGN_DURATION + 1) * 24 * 60 * 60
+        ])
+        await ethers.provider.send('evm_mine')
+
+        // Campaign should now be inactive
+        expect(await campaign.isCampaignActive()).to.be.false
+      })
+    })
+
+    describe('isCampaignSuccessful', function () {
+      it('Should return true when goal is reached', async function () {
+        const { campaign, mockToken1, user1, CAMPAIGN_GOAL_AMOUNT } =
+          await loadFixture(deployCampaignFixture)
+
+        // Campaign should not be successful initially
+        expect(await campaign.isCampaignSuccessful()).to.be.false
+
+        // Contribute enough to reach the goal
+        await mockToken1
+          .connect(user1)
+          .approve(await campaign.getAddress(), CAMPAIGN_GOAL_AMOUNT)
+        await campaign.connect(user1).contribute(CAMPAIGN_GOAL_AMOUNT)
+
+        // Campaign should now be successful
+        expect(await campaign.isCampaignSuccessful()).to.be.true
+      })
+
+      it('Should return false when goal is not reached', async function () {
+        const { campaign, mockToken1, user1, CAMPAIGN_GOAL_AMOUNT } =
+          await loadFixture(deployCampaignFixture)
+
+        // Contribute less than the goal
+        const partialAmount = CAMPAIGN_GOAL_AMOUNT - 1
+        await mockToken1
+          .connect(user1)
+          .approve(await campaign.getAddress(), partialAmount)
+        await campaign.connect(user1).contribute(partialAmount)
+
+        // Campaign should not be successful
+        expect(await campaign.isCampaignSuccessful()).to.be.false
+      })
+    })
+
+    describe('getDepositedAmount', function () {
+      it('Should return correct deposited amount after deposits and withdrawals', async function () {
+        const { campaign, mockDefiManager, mockToken1, user1 } =
+          await loadFixture(deployCampaignFixture)
+
+        // Initially no deposits
+        expect(
+          await campaign.getDepositedAmount(await mockToken1.getAddress())
+        ).to.equal(0)
+
+        // Contribute and deposit to yield protocol
+        const depositAmount = 100
+        await mockToken1
+          .connect(user1)
+          .approve(await campaign.getAddress(), depositAmount)
+        await campaign.connect(user1).contribute(depositAmount)
+
+        await campaign.depositToYieldProtocol(
+          await mockToken1.getAddress(),
+          depositAmount
+        )
+
+        // Check deposited amount
+        expect(
+          await campaign.getDepositedAmount(await mockToken1.getAddress())
+        ).to.equal(BigInt(depositAmount))
+
+        // Withdraw half the amount
+        const withdrawAmount = depositAmount / 2
+        await campaign.withdrawFromYieldProtocol(
+          await mockToken1.getAddress(),
+          withdrawAmount
+        )
+
+        // Check updated deposited amount
+        expect(
+          await campaign.getDepositedAmount(await mockToken1.getAddress())
+        ).to.equal(BigInt(depositAmount - withdrawAmount))
+
+        await campaign.withdrawFromYieldProtocol(
+          await mockToken1.getAddress(),
+          withdrawAmount
+        )
+
+        expect(
+          await campaign.getDepositedAmount(await mockToken1.getAddress())
+        ).to.equal(0)
+      })
+
+      it('Should return zero for any address with no deposits', async function () {
+        const { campaign, mockToken1 } = await loadFixture(
+          deployCampaignFixture
+        )
+        const initialDeposit = await campaign.getDepositedAmount(
+          await mockToken1.getAddress()
+        )
+        expect(initialDeposit).to.equal(0)
+
+        const randomAddress = await campaign.getAddress()
+        const randomDeposit = await campaign.getDepositedAmount(randomAddress)
+        expect(randomDeposit).to.equal(0)
+      })
+    })
+
+    describe('getCurrentYieldRate', function () {
+      it('Should return the yield rate from DefiManager', async function () {
+        const { campaign, mockDefiManager, mockToken1 } = await loadFixture(
+          deployCampaignFixture
+        )
+
+        // Get the yield rate directly from mockDefiManager for comparison
+        const expectedRate = await mockDefiManager.getCurrentYieldRate(
+          await mockToken1.getAddress()
+        )
+
+        // Get the yield rate through the campaign contract
+        const actualRate = await campaign.getCurrentYieldRate(
+          await mockToken1.getAddress()
+        )
+
+        // Verify the rates match
+        expect(actualRate).to.equal(expectedRate)
+      })
+    })
+  })
 })
