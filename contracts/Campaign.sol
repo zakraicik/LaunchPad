@@ -164,8 +164,19 @@ contract Campaign is Ownable, ReentrancyGuard {
             revert DefiActionFailed();
         }
     }
-    
 
+    function swapTokens(address fromToken, uint256 amount, address toToken) external onlyOwner nonReentrant {
+
+        
+        IERC20(fromToken).approve(address(defiManager), amount);
+        
+        try defiManager.swapTokenForTarget(fromToken, amount, toToken) returns (uint256 received) {
+            emit TokensSwapped(fromToken, toToken, amount, received);
+        } catch {
+            revert DefiActionFailed();
+        }
+    }
+    
     function withdrawFromYieldProtocol(address token, uint256 amount) external onlyOwner nonReentrant {
         try defiManager.withdrawFromYieldProtocol(token, amount) returns (uint256 withdrawn) {
             emit WithdrawnFromYield(token, withdrawn);
@@ -187,5 +198,9 @@ contract Campaign is Ownable, ReentrancyGuard {
     
     function getDepositedAmount(address token) external view returns (uint256) {
         return defiManager.getDepositedAmount(address(this), token);
+    }
+
+    function getCurrentYieldRate(address token) external view returns (uint256) {
+        return defiManager.getCurrentYieldRate(token);
     }
 }
