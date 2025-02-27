@@ -13,8 +13,18 @@ describe('CampaignContractFactory', function () {
     await mockTokenRegistry.waitForDeployment()
     const mockTokenRegistryAddress = await mockTokenRegistry.getAddress()
 
+    const mockYieldDistributor = await ethers.deployContract(
+      'MockYieldDistributor',
+      [
+        owner.address // Use owner as the platform treasury for testing
+      ]
+    )
+    await mockYieldDistributor.waitForDeployment()
+    const mockYieldDistributorAddress = await mockYieldDistributor.getAddress()
+
     const mockDefiManager = await ethers.deployContract('MockDefiManager', [
-      mockTokenRegistryAddress
+      mockTokenRegistryAddress,
+      mockYieldDistributorAddress
     ])
     await mockDefiManager.waitForDeployment()
     const mockDefiManagerAddress = await mockDefiManager.getAddress()
@@ -50,6 +60,7 @@ describe('CampaignContractFactory', function () {
       user1,
       mockDefiManager,
       mockTokenRegistry,
+      mockYieldDistributor,
       mockERC20,
       mockERC20_2
     }

@@ -283,7 +283,6 @@ contract Campaign is Ownable, ReentrancyGuard {
         return true;
     }
 
-    // Read functions 
     function getAddressContribution() external view returns(uint256) {
         return contributions[msg.sender];
     }

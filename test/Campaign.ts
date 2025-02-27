@@ -27,8 +27,16 @@ describe('Campaign', function () {
 
     await mockTokenRegistry.addSupportedToken(mockERC20Address, true)
 
+    const mockYieldDistributor = await ethers.deployContract(
+      'MockYieldDistributor',
+      [owner.address]
+    )
+    await mockYieldDistributor.waitForDeployment()
+    const mockYieldDistributorAddress = await mockYieldDistributor.getAddress()
+
     const mockDefiManager = await ethers.deployContract('MockDefiManager', [
-      mockTokenRegistryAddress
+      mockTokenRegistryAddress,
+      mockYieldDistributorAddress
     ])
     await mockDefiManager.waitForDeployment()
     const mockDefiManagerAddress = await mockDefiManager.getAddress()
@@ -54,6 +62,7 @@ describe('Campaign', function () {
       campaign,
       mockTokenRegistry,
       mockDefiManager,
+      mockYieldDistributor,
       CAMPAIGN_GOAL_AMOUNT,
       CAMPAIGN_DURATION
     }
@@ -115,6 +124,10 @@ describe('Campaign', function () {
 
       await mockToken1.waitForDeployment()
 
+      const mockTokenRegistry = await ethers.deployContract('MockTokenRegistry')
+      await mockTokenRegistry.waitForDeployment()
+      const mockTokenRegistryAddress = await mockTokenRegistry.getAddress()
+
       const mockERC20Address = await mockToken1.getAddress()
 
       const CAMPAIGN_GOAL_AMOUNT = 5
@@ -140,10 +153,21 @@ describe('Campaign', function () {
       await mockTokenRegistry.waitForDeployment()
       const mockTokenRegistryAddress = await mockTokenRegistry.getAddress()
 
+      const mockYieldDistributor = await ethers.deployContract(
+        'MockYieldDistributor',
+        [owner.address]
+      )
+      await mockYieldDistributor.waitForDeployment()
+      const mockYieldDistributorAddress =
+        await mockYieldDistributor.getAddress()
+
       const mockDefiManager = await ethers.deployContract('MockDefiManager', [
-        mockTokenRegistryAddress
+        mockTokenRegistryAddress,
+        mockYieldDistributorAddress
       ])
-      await mockDefiManager.waitForDeployment()
+
+      mockDefiManager.waitForDeployment()
+
       const mockDefiManagerAddress = await mockDefiManager.getAddress()
 
       const CAMPAIGN_GOAL_AMOUNT = 5
@@ -169,10 +193,21 @@ describe('Campaign', function () {
       await mockTokenRegistry.waitForDeployment()
       const mockTokenRegistryAddress = await mockTokenRegistry.getAddress()
 
+      const mockYieldDistributor = await ethers.deployContract(
+        'MockYieldDistributor',
+        [owner.address]
+      )
+      await mockYieldDistributor.waitForDeployment()
+      const mockYieldDistributorAddress =
+        await mockYieldDistributor.getAddress()
+
       const mockDefiManager = await ethers.deployContract('MockDefiManager', [
-        mockTokenRegistryAddress
+        mockTokenRegistryAddress,
+        mockYieldDistributorAddress
       ])
-      await mockDefiManager.waitForDeployment()
+
+      mockDefiManager.waitForDeployment()
+
       const mockDefiManagerAddress = await mockDefiManager.getAddress()
 
       const nonCompliantToken = await ethers.deployContract(
@@ -211,10 +246,21 @@ describe('Campaign', function () {
       await mockTokenRegistry.waitForDeployment()
       const mockTokenRegistryAddress = await mockTokenRegistry.getAddress()
 
+      const mockYieldDistributor = await ethers.deployContract(
+        'MockYieldDistributor',
+        [owner.address]
+      )
+      await mockYieldDistributor.waitForDeployment()
+      const mockYieldDistributorAddress =
+        await mockYieldDistributor.getAddress()
+
       const mockDefiManager = await ethers.deployContract('MockDefiManager', [
-        mockTokenRegistryAddress
+        mockTokenRegistryAddress,
+        mockYieldDistributorAddress
       ])
-      await mockDefiManager.waitForDeployment()
+
+      mockDefiManager.waitForDeployment()
+
       const mockDefiManagerAddress = await mockDefiManager.getAddress()
 
       const mockToken1 = await ethers.deployContract('MockERC20', [
@@ -254,9 +300,19 @@ describe('Campaign', function () {
       await mockTokenRegistry.waitForDeployment()
       const mockTokenRegistryAddress = await mockTokenRegistry.getAddress()
 
+      const mockYieldDistributor = await ethers.deployContract(
+        'MockYieldDistributor',
+        [owner.address]
+      )
+      await mockYieldDistributor.waitForDeployment()
+      const mockYieldDistributorAddress =
+        await mockYieldDistributor.getAddress()
+
       const mockDefiManager = await ethers.deployContract('MockDefiManager', [
-        mockTokenRegistryAddress
+        mockTokenRegistryAddress,
+        mockYieldDistributorAddress
       ])
+
       await mockDefiManager.waitForDeployment()
       const mockDefiManagerAddress = await mockDefiManager.getAddress()
 
@@ -714,10 +770,21 @@ describe('Campaign', function () {
           await mockFailingToken.getAddress(),
           true
         )
+        const mockTokenRegistryAddress = await mockTokenRegistry.getAddress()
+
+        const mockYieldDistributor = await ethers.deployContract(
+          'MockYieldDistributor',
+          [owner.address]
+        )
+        await mockYieldDistributor.waitForDeployment()
+        const mockYieldDistributorAddress =
+          await mockYieldDistributor.getAddress()
 
         const mockDefiManager = await ethers.deployContract('MockDefiManager', [
-          await mockTokenRegistry.getAddress()
+          mockTokenRegistryAddress,
+          mockYieldDistributorAddress
         ])
+
         await mockDefiManager.waitForDeployment()
 
         const CampaignFactory = await ethers.getContractFactory('Campaign')
@@ -1000,9 +1067,21 @@ describe('Campaign', function () {
           true
         )
 
+        const mockTokenRegistryAddress = await mockTokenRegistry.getAddress()
+
+        const mockYieldDistributor = await ethers.deployContract(
+          'MockYieldDistributor',
+          [owner.address]
+        )
+        await mockYieldDistributor.waitForDeployment()
+        const mockYieldDistributorAddress =
+          await mockYieldDistributor.getAddress()
+
         const mockDefiManager = await ethers.deployContract('MockDefiManager', [
-          await mockTokenRegistry.getAddress()
+          mockTokenRegistryAddress,
+          mockYieldDistributorAddress
         ])
+
         await mockDefiManager.waitForDeployment()
 
         const CampaignFactory = await ethers.getContractFactory('Campaign')
