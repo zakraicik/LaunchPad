@@ -367,6 +367,10 @@ describe('DefiIntegrationManager', function () {
       expect(await defiManager.authorizedCampaigns(campaignAddress)).to.equal(
         true
       )
+
+      expect(await defiManager.isCampaignAuthorized(campaignAddress)).to.equal(
+        true
+      )
     })
     it('Should revert when address besides campaign factory calls authorizeCampaign()', async function () {
       const { defiManager, owner, mockToken1 } = await loadFixture(
@@ -391,6 +395,10 @@ describe('DefiIntegrationManager', function () {
       await expect(defiManager.authorizeCampaign(campaignAddress))
         .to.revertedWithCustomError(defiManager, 'notCampaignFactory')
         .withArgs(owner.address)
+
+      expect(await defiManager.isCampaignAuthorized(campaignAddress)).to.equal(
+        false
+      )
     })
 
     it('Should allow owner to deauthorize campaigns', async function () {
@@ -1809,9 +1817,953 @@ describe('DefiIntegrationManager', function () {
           .withArgs(yieldAmount, mismatchAmount)
       })
     })
+
+    describe('getCurrentYieldRate', function () {
+      it('Should return the correct yield rate for a supported token', async function () {
+        const { defiManager, mockToken1, mockAavePool, owner } =
+          await loadFixture(deployDefiManagerFixture)
+
+        // Set up a test liquidity rate in the mock Aave pool
+        // The rate is stored in ray units (1e27) - e.g., 5% APY would be 0.05 * 1e27
+        const testRateInRay = ethers.parseUnits('0.05', 27) // 5% APY
+        const expectedScaledRate = 500 // 5% * 10000 = 500 basis points
+
+        // Configure the mock Aave pool with our test rate
+        await mockAavePool.setLiquidityRate(
+          await mockToken1.getAddress(),
+          testRateInRay
+        )
+
+        // Call the function and check the result
+        const yieldRate = await defiManager.getCurrentYieldRate(
+          await mockToken1.getAddress()
+        )
+
+        // The function should scale down from ray (1e27) and multiply by 10000 for basis points
+        expect(yieldRate).to.equal(expectedScaledRate)
+      })
+
+      it('Should return 0 when getReserveData fails', async function () {
+        const { defiManager, mockToken1, mockAavePool, owner } =
+          await loadFixture(deployDefiManagerFixture)
+
+        // Configure Aave mock to fail on getReserveData
+        await mockAavePool.setShouldFailGetReserveData(true)
+
+        // Call should return 0 instead of reverting
+        const yieldRate = await defiManager.getCurrentYieldRate(
+          await mockToken1.getAddress()
+        )
+        expect(yieldRate).to.equal(0)
+
+        // Reset for other tests
+        await mockAavePool.setShouldFailGetReserveData(false)
+      })
+
+      it('Should return 0 for an unsupported token with no reserve data', async function () {
+        const { defiManager, owner } = await loadFixture(
+          deployDefiManagerFixture
+        )
+
+        // Deploy a new token that doesn't have reserve data set up
+        const unsupportedToken = await ethers.deployContract('MockERC20', [
+          'Unsupported',
+          'UNSUP',
+          ethers.parseUnits('1000000')
+        ])
+        await unsupportedToken.waitForDeployment()
+
+        // Call should return 0 for this unsupported token
+        const yieldRate = await defiManager.getCurrentYieldRate(
+          await unsupportedToken.getAddress()
+        )
+        expect(yieldRate).to.equal(0)
+      })
+
+      it('Should handle various rate values correctly', async function () {
+        const { defiManager, mockToken1, mockToken2, mockAavePool, owner } =
+          await loadFixture(deployDefiManagerFixture)
+
+        // Test various rates
+        const testCases = [
+          { rateInRay: ethers.parseUnits('0.01', 27), expectedBps: 100 }, // 1%
+          { rateInRay: ethers.parseUnits('0.1', 27), expectedBps: 1000 }, // 10%
+          { rateInRay: ethers.parseUnits('0.2', 27), expectedBps: 2000 }, // 20%
+          { rateInRay: ethers.parseUnits('0', 27), expectedBps: 0 } // 0%
+        ]
+
+        // Use mockToken1 and mockToken2 for different test cases
+        const tokens = [
+          await mockToken1.getAddress(),
+          await mockToken2.getAddress()
+        ]
+
+        for (let i = 0; i < testCases.length; i++) {
+          const testCase = testCases[i]
+          const token = tokens[i % tokens.length]
+
+          // Configure the mock pool with this rate
+          await mockAavePool.setLiquidityRate(token, testCase.rateInRay)
+
+          // Call the function and check the result
+          const yieldRate = await defiManager.getCurrentYieldRate(token)
+          expect(yieldRate).to.equal(testCase.expectedBps)
+        }
+      })
+    })
   })
 
-  describe('Swapping Tokens', function () {})
+  describe('Swapping Tokens', function () {
+    describe('getTargetTokenEquivalent()', function () {
+      it('Should correctly return the token equivalent amount using default rate', async function () {
+        const { defiManager, mockToken1, mockToken2, mockUniswapQuoter } =
+          await loadFixture(deployDefiManagerFixture)
+
+        const fromTokenAddress = await mockToken1.getAddress()
+        const toTokenAddress = await mockToken2.getAddress()
+        const amount = ethers.parseUnits('100')
+
+        // Get the default quote rate (should be 2)
+        const defaultRate = await mockUniswapQuoter.defaultQuoteRate()
+        const expectedQuote = amount * BigInt(defaultRate)
+
+        // Call the function and verify the result
+        const result = await defiManager.getTargetTokenEquivalent(
+          fromTokenAddress,
+          amount,
+          toTokenAddress
+        )
+
+        expect(result).to.equal(expectedQuote)
+      })
+
+      it('Should correctly return the token equivalent amount using custom rate', async function () {
+        const { defiManager, mockToken1, mockToken2, mockUniswapQuoter } =
+          await loadFixture(deployDefiManagerFixture)
+
+        const fromTokenAddress = await mockToken1.getAddress()
+        const toTokenAddress = await mockToken2.getAddress()
+        const amount = ethers.parseUnits('100')
+        const customRate = 3 // Custom 1:3 exchange rate
+
+        // Set up the mock quoter with a custom rate
+        await mockUniswapQuoter.setCustomQuoteRate(
+          fromTokenAddress,
+          toTokenAddress,
+          customRate
+        )
+
+        const expectedQuote = amount * BigInt(customRate)
+
+        // Call the function and verify the result
+        const result = await defiManager.getTargetTokenEquivalent(
+          fromTokenAddress,
+          amount,
+          toTokenAddress
+        )
+
+        expect(result).to.equal(expectedQuote)
+      })
+
+      it('Should revert when tokens are the same', async function () {
+        const { defiManager, mockToken1 } = await loadFixture(
+          deployDefiManagerFixture
+        )
+
+        const tokenAddress = await mockToken1.getAddress()
+        const amount = ethers.parseUnits('100')
+
+        // Should revert when from and to tokens are the same
+        await expect(
+          defiManager.getTargetTokenEquivalent(
+            tokenAddress,
+            amount,
+            tokenAddress
+          )
+        )
+          .to.be.revertedWithCustomError(defiManager, 'TokensAreTheSame')
+          .withArgs(tokenAddress, tokenAddress)
+      })
+
+      it('Should return 0 when quoter fails globally', async function () {
+        const { defiManager, mockToken1, mockToken2, mockUniswapQuoter } =
+          await loadFixture(deployDefiManagerFixture)
+
+        const fromTokenAddress = await mockToken1.getAddress()
+        const toTokenAddress = await mockToken2.getAddress()
+        const amount = ethers.parseUnits('100')
+
+        // Set up the mock quoter to fail globally
+        await mockUniswapQuoter.setShouldFailQuote(true)
+
+        // Function should return 0 instead of reverting
+        const result = await defiManager.getTargetTokenEquivalent(
+          fromTokenAddress,
+          amount,
+          toTokenAddress
+        )
+
+        expect(result).to.equal(0)
+
+        // Reset for other tests
+        await mockUniswapQuoter.setShouldFailQuote(false)
+      })
+
+      it('Should return 0 when quoter fails for specific token pair', async function () {
+        const { defiManager, mockToken1, mockToken2, mockUniswapQuoter } =
+          await loadFixture(deployDefiManagerFixture)
+
+        const fromTokenAddress = await mockToken1.getAddress()
+        const toTokenAddress = await mockToken2.getAddress()
+        const amount = ethers.parseUnits('100')
+
+        // Set up the mock quoter to fail for this specific pair
+        await mockUniswapQuoter.setFailForSpecificPair(
+          fromTokenAddress,
+          toTokenAddress,
+          true
+        )
+
+        // Function should return 0 instead of reverting
+        const result = await defiManager.getTargetTokenEquivalent(
+          fromTokenAddress,
+          amount,
+          toTokenAddress
+        )
+
+        expect(result).to.equal(0)
+
+        // Reset for other tests
+        await mockUniswapQuoter.setFailForSpecificPair(
+          fromTokenAddress,
+          toTokenAddress,
+          false
+        )
+      })
+    })
+
+    describe('swapTokenForTarget', function () {
+      it('Should successfully swap tokens and emit the correct event', async function () {
+        const {
+          defiManager,
+          mockToken1,
+          mockToken2,
+          mockUniswapRouter,
+          mockTokenRegistry,
+          owner
+        } = await loadFixture(deployDefiManagerFixture)
+
+        const campaignFactoryAddress = await defiManager.campaignFactory()
+
+        await ethers.provider.send('hardhat_setBalance', [
+          campaignFactoryAddress,
+          '0x56BC75E2D63100000'
+        ])
+
+        await ethers.provider.send('hardhat_impersonateAccount', [
+          campaignFactoryAddress
+        ])
+        const campaignFactorySigner = await ethers.provider.getSigner(
+          campaignFactoryAddress
+        )
+
+        // Create a mock campaign to serve as a caller
+        const mockCampaign = await ethers.deployContract('MockCampaign', [
+          owner.address,
+          await mockToken1.getAddress(),
+          ethers.parseUnits('1000'),
+          30,
+          await defiManager.getAddress()
+        ])
+        await mockCampaign.waitForDeployment()
+
+        // Get the campaign address which will be used as the caller
+        const campaignAddress = await mockCampaign.getAddress()
+
+        // Authorize the campaign
+        await defiManager
+          .connect(campaignFactorySigner)
+          .authorizeCampaign(campaignAddress)
+
+        // Set up tokens
+        const fromTokenAddress = await mockToken1.getAddress()
+        const toTokenAddress = await mockToken2.getAddress()
+        const swapAmount = ethers.parseUnits('100')
+
+        // Setup token registry to support both tokens
+        await mockTokenRegistry.addSupportedToken(fromTokenAddress, true)
+        await mockTokenRegistry.addSupportedToken(toTokenAddress, true)
+
+        // Transfer tokens to campaign (which will approve and transfer to defi manager)
+        await mockToken1.transfer(campaignAddress, swapAmount)
+
+        // Set expected swap output rate
+        const swapRate = await mockUniswapRouter.swapRate()
+        const expectedOutput = swapAmount * BigInt(swapRate)
+
+        // Pre-fund the Uniswap router with output tokens
+        await mockToken2.transfer(
+          await mockUniswapRouter.getAddress(),
+          expectedOutput
+        )
+
+        // First impersonate the account
+        await ethers.provider.send('hardhat_impersonateAccount', [
+          campaignAddress
+        ])
+
+        // Then set the balance
+        await ethers.provider.send('hardhat_setBalance', [
+          campaignAddress,
+          '0x56BC75E2D63100000' // 100 ETH
+        ])
+
+        // Then get the signer
+        const campaignSigner = await ethers.provider.getSigner(campaignAddress)
+
+        // Approve the DefiIntegrationManager to spend tokens on behalf of the campaign
+        await mockToken1
+          .connect(campaignSigner)
+          .approve(await defiManager.getAddress(), swapAmount)
+
+        // Directly call swapTokenForTarget from the campaign address
+        await expect(
+          defiManager
+            .connect(campaignSigner)
+            .swapTokenForTarget(fromTokenAddress, swapAmount, toTokenAddress)
+        )
+          .to.emit(defiManager, 'TokenSwapped')
+          .withArgs(
+            fromTokenAddress,
+            toTokenAddress,
+            swapAmount,
+            expectedOutput
+          )
+
+        // Verify token balances after swap
+        expect(await mockToken1.balanceOf(campaignAddress)).to.equal(0)
+        expect(await mockToken2.balanceOf(campaignAddress)).to.equal(
+          expectedOutput
+        )
+      })
+
+      it('Should revert when a non-authorized campaign tries to swap', async function () {
+        const { defiManager, mockToken1, mockToken2, owner } =
+          await loadFixture(deployDefiManagerFixture)
+
+        // Create an unauthorized campaign
+        const mockCampaign = await ethers.deployContract('MockCampaign', [
+          owner.address,
+          await mockToken1.getAddress(),
+          ethers.parseUnits('1000'),
+          30,
+          await defiManager.getAddress()
+        ])
+        await mockCampaign.waitForDeployment()
+        const campaignAddress = await mockCampaign.getAddress()
+
+        const fromTokenAddress = await mockToken1.getAddress()
+        const toTokenAddress = await mockToken2.getAddress()
+        const swapAmount = ethers.parseUnits('100')
+
+        // Transfer tokens to campaign
+        await mockToken1.transfer(campaignAddress, swapAmount)
+
+        // First impersonate the account
+        await ethers.provider.send('hardhat_impersonateAccount', [
+          campaignAddress
+        ])
+
+        // Then set the balance
+        await ethers.provider.send('hardhat_setBalance', [
+          campaignAddress,
+          '0x56BC75E2D63100000' // 100 ETH
+        ])
+
+        // Then get the signer
+        const campaignSigner = await ethers.provider.getSigner(campaignAddress)
+
+        // Approve the DefiIntegrationManager to spend tokens
+        await mockToken1
+          .connect(campaignSigner)
+          .approve(await defiManager.getAddress(), swapAmount)
+
+        // Direct call should fail because campaign is not authorized
+        await expect(
+          defiManager
+            .connect(campaignSigner)
+            .swapTokenForTarget(fromTokenAddress, swapAmount, toTokenAddress)
+        ).to.be.revertedWithCustomError(defiManager, 'UnauthorizedAddress')
+      })
+
+      it('Should revert when swapping zero amount', async function () {
+        const {
+          defiManager,
+          mockToken1,
+          mockToken2,
+          mockTokenRegistry,
+          owner
+        } = await loadFixture(deployDefiManagerFixture)
+
+        const campaignFactoryAddress = await defiManager.campaignFactory()
+
+        await ethers.provider.send('hardhat_setBalance', [
+          campaignFactoryAddress,
+          '0x56BC75E2D63100000'
+        ])
+
+        await ethers.provider.send('hardhat_impersonateAccount', [
+          campaignFactoryAddress
+        ])
+        const campaignFactorySigner = await ethers.provider.getSigner(
+          campaignFactoryAddress
+        )
+
+        // Create a mock campaign
+        const mockCampaign = await ethers.deployContract('MockCampaign', [
+          owner.address,
+          await mockToken1.getAddress(),
+          ethers.parseUnits('1000'),
+          30,
+          await defiManager.getAddress()
+        ])
+        await mockCampaign.waitForDeployment()
+        const campaignAddress = await mockCampaign.getAddress()
+
+        // Authorize the campaign
+        await defiManager
+          .connect(campaignFactorySigner)
+          .authorizeCampaign(campaignAddress)
+
+        // Set up tokens
+        const fromTokenAddress = await mockToken1.getAddress()
+        const toTokenAddress = await mockToken2.getAddress()
+        const zeroAmount = 0
+
+        // Setup token registry to support both tokens
+        await mockTokenRegistry.addSupportedToken(fromTokenAddress, true)
+        await mockTokenRegistry.addSupportedToken(toTokenAddress, true)
+
+        // First impersonate the account
+        await ethers.provider.send('hardhat_impersonateAccount', [
+          campaignAddress
+        ])
+
+        // Then set the balance
+        await ethers.provider.send('hardhat_setBalance', [
+          campaignAddress,
+          '0x56BC75E2D63100000' // 100 ETH
+        ])
+
+        // Then get the signer
+        const campaignSigner = await ethers.provider.getSigner(campaignAddress)
+
+        // Direct call with zero amount should fail
+        await expect(
+          defiManager
+            .connect(campaignSigner)
+            .swapTokenForTarget(fromTokenAddress, zeroAmount, toTokenAddress)
+        )
+          .to.be.revertedWithCustomError(defiManager, 'ZeroAmount')
+          .withArgs(zeroAmount)
+      })
+
+      it('Should revert when fromToken is not supported', async function () {
+        const {
+          defiManager,
+          mockToken1,
+          mockToken2,
+          mockTokenRegistry,
+          owner
+        } = await loadFixture(deployDefiManagerFixture)
+
+        const campaignFactoryAddress = await defiManager.campaignFactory()
+
+        await ethers.provider.send('hardhat_setBalance', [
+          campaignFactoryAddress,
+          '0x56BC75E2D63100000'
+        ])
+
+        await ethers.provider.send('hardhat_impersonateAccount', [
+          campaignFactoryAddress
+        ])
+        const campaignFactorySigner = await ethers.provider.getSigner(
+          campaignFactoryAddress
+        )
+
+        // Create mock campaign
+        const mockCampaign = await ethers.deployContract('MockCampaign', [
+          owner.address,
+          await mockToken1.getAddress(),
+          ethers.parseUnits('1000'),
+          30,
+          await defiManager.getAddress()
+        ])
+        await mockCampaign.waitForDeployment()
+        const campaignAddress = await mockCampaign.getAddress()
+
+        // Authorize the campaign
+        await defiManager
+          .connect(campaignFactorySigner)
+          .authorizeCampaign(campaignAddress)
+
+        // Set up tokens
+        const fromTokenAddress = await mockToken1.getAddress()
+        const toTokenAddress = await mockToken2.getAddress()
+        const swapAmount = ethers.parseUnits('100')
+
+        // Setup token registry to only support toToken
+        await mockTokenRegistry.addSupportedToken(fromTokenAddress, false)
+        await mockTokenRegistry.addSupportedToken(toTokenAddress, true)
+
+        // Transfer tokens to campaign
+        await mockToken1.transfer(campaignAddress, swapAmount)
+
+        // First impersonate the account
+        await ethers.provider.send('hardhat_impersonateAccount', [
+          campaignAddress
+        ])
+
+        // Then set the balance
+        await ethers.provider.send('hardhat_setBalance', [
+          campaignAddress,
+          '0x56BC75E2D63100000' // 100 ETH
+        ])
+
+        // Then get the signer
+        const campaignSigner = await ethers.provider.getSigner(campaignAddress)
+
+        // Approve the DefiIntegrationManager to spend tokens
+        await mockToken1
+          .connect(campaignSigner)
+          .approve(await defiManager.getAddress(), swapAmount)
+
+        await expect(
+          defiManager
+            .connect(campaignSigner)
+            .swapTokenForTarget(fromTokenAddress, swapAmount, toTokenAddress)
+        )
+          .to.be.revertedWithCustomError(defiManager, 'TokenNotSupported')
+          .withArgs(fromTokenAddress)
+      })
+
+      it('Should revert when toToken is not supported', async function () {
+        const {
+          defiManager,
+          mockToken1,
+          mockToken2,
+          mockTokenRegistry,
+          owner
+        } = await loadFixture(deployDefiManagerFixture)
+
+        const campaignFactoryAddress = await defiManager.campaignFactory()
+
+        await ethers.provider.send('hardhat_setBalance', [
+          campaignFactoryAddress,
+          '0x56BC75E2D63100000'
+        ])
+
+        await ethers.provider.send('hardhat_impersonateAccount', [
+          campaignFactoryAddress
+        ])
+        const campaignFactorySigner = await ethers.provider.getSigner(
+          campaignFactoryAddress
+        )
+
+        // Create mock campaign
+        const mockCampaign = await ethers.deployContract('MockCampaign', [
+          owner.address,
+          await mockToken1.getAddress(),
+          ethers.parseUnits('1000'),
+          30,
+          await defiManager.getAddress()
+        ])
+        await mockCampaign.waitForDeployment()
+        const campaignAddress = await mockCampaign.getAddress()
+
+        // Authorize the campaign
+        await defiManager
+          .connect(campaignFactorySigner)
+          .authorizeCampaign(campaignAddress)
+
+        // Set up tokens
+        const fromTokenAddress = await mockToken1.getAddress()
+        const toTokenAddress = await mockToken2.getAddress()
+        const swapAmount = ethers.parseUnits('100')
+
+        // Setup token registry to only support fromToken
+        await mockTokenRegistry.addSupportedToken(fromTokenAddress, true)
+        await mockTokenRegistry.addSupportedToken(toTokenAddress, false)
+
+        // Transfer tokens to campaign
+        await mockToken1.transfer(campaignAddress, swapAmount)
+
+        // First impersonate the account
+        await ethers.provider.send('hardhat_impersonateAccount', [
+          campaignAddress
+        ])
+
+        // Then set the balance
+        await ethers.provider.send('hardhat_setBalance', [
+          campaignAddress,
+          '0x56BC75E2D63100000' // 100 ETH
+        ])
+
+        // Then get the signer
+        const campaignSigner = await ethers.provider.getSigner(campaignAddress)
+
+        // Approve the DefiIntegrationManager to spend tokens
+        await mockToken1
+          .connect(campaignSigner)
+          .approve(await defiManager.getAddress(), swapAmount)
+
+        await expect(
+          defiManager
+            .connect(campaignSigner)
+            .swapTokenForTarget(fromTokenAddress, swapAmount, toTokenAddress)
+        )
+          .to.be.revertedWithCustomError(defiManager, 'TokenNotSupported')
+          .withArgs(toTokenAddress)
+      })
+
+      it('Should revert when tokens are the same', async function () {
+        const { defiManager, mockToken1, mockTokenRegistry, owner } =
+          await loadFixture(deployDefiManagerFixture)
+
+        const campaignFactoryAddress = await defiManager.campaignFactory()
+
+        await ethers.provider.send('hardhat_setBalance', [
+          campaignFactoryAddress,
+          '0x56BC75E2D63100000'
+        ])
+
+        await ethers.provider.send('hardhat_impersonateAccount', [
+          campaignFactoryAddress
+        ])
+        const campaignFactorySigner = await ethers.provider.getSigner(
+          campaignFactoryAddress
+        )
+
+        // Create mock campaign
+        const mockCampaign = await ethers.deployContract('MockCampaign', [
+          owner.address,
+          await mockToken1.getAddress(),
+          ethers.parseUnits('1000'),
+          30,
+          await defiManager.getAddress()
+        ])
+        await mockCampaign.waitForDeployment()
+        const campaignAddress = await mockCampaign.getAddress()
+
+        // Authorize the campaign
+        await defiManager
+          .connect(campaignFactorySigner)
+          .authorizeCampaign(campaignAddress)
+
+        // Set up tokens - same token for from and to
+        const tokenAddress = await mockToken1.getAddress()
+        const swapAmount = ethers.parseUnits('100')
+
+        // Setup token registry to support the token
+        await mockTokenRegistry.addSupportedToken(tokenAddress, true)
+
+        // Transfer tokens to campaign
+        await mockToken1.transfer(campaignAddress, swapAmount)
+
+        // First impersonate the account
+        await ethers.provider.send('hardhat_impersonateAccount', [
+          campaignAddress
+        ])
+
+        // Then set the balance
+        await ethers.provider.send('hardhat_setBalance', [
+          campaignAddress,
+          '0x56BC75E2D63100000' // 100 ETH
+        ])
+
+        // Then get the signer
+        const campaignSigner = await ethers.provider.getSigner(campaignAddress)
+
+        // Approve the DefiIntegrationManager to spend tokens
+        await mockToken1
+          .connect(campaignSigner)
+          .approve(await defiManager.getAddress(), swapAmount)
+
+        await expect(
+          defiManager
+            .connect(campaignSigner)
+            .swapTokenForTarget(tokenAddress, swapAmount, tokenAddress)
+        )
+          .to.be.revertedWithCustomError(defiManager, 'TokensAreTheSame')
+          .withArgs(tokenAddress, tokenAddress)
+      })
+
+      it('Should revert when swap quote is invalid', async function () {
+        const {
+          defiManager,
+          mockToken1,
+          mockToken2,
+          mockTokenRegistry,
+          mockUniswapQuoter,
+          owner
+        } = await loadFixture(deployDefiManagerFixture)
+
+        const campaignFactoryAddress = await defiManager.campaignFactory()
+
+        await ethers.provider.send('hardhat_setBalance', [
+          campaignFactoryAddress,
+          '0x56BC75E2D63100000'
+        ])
+
+        await ethers.provider.send('hardhat_impersonateAccount', [
+          campaignFactoryAddress
+        ])
+        const campaignFactorySigner = await ethers.provider.getSigner(
+          campaignFactoryAddress
+        )
+
+        // Create mock campaign
+        const mockCampaign = await ethers.deployContract('MockCampaign', [
+          owner.address,
+          await mockToken1.getAddress(),
+          ethers.parseUnits('1000'),
+          30,
+          await defiManager.getAddress()
+        ])
+        await mockCampaign.waitForDeployment()
+        const campaignAddress = await mockCampaign.getAddress()
+
+        // Authorize the campaign
+        await defiManager
+          .connect(campaignFactorySigner)
+          .authorizeCampaign(campaignAddress)
+
+        // Set up tokens
+        const fromTokenAddress = await mockToken1.getAddress()
+        const toTokenAddress = await mockToken2.getAddress()
+        const swapAmount = ethers.parseUnits('100')
+
+        // Setup token registry to support both tokens
+        await mockTokenRegistry.addSupportedToken(fromTokenAddress, true)
+        await mockTokenRegistry.addSupportedToken(toTokenAddress, true)
+
+        // Set up the quoter to fail for this pair
+        await mockUniswapQuoter.setFailForSpecificPair(
+          fromTokenAddress,
+          toTokenAddress,
+          true
+        )
+
+        // Transfer tokens to campaign
+        await mockToken1.transfer(campaignAddress, swapAmount)
+
+        // First impersonate the account
+        await ethers.provider.send('hardhat_impersonateAccount', [
+          campaignAddress
+        ])
+
+        // Then set the balance
+        await ethers.provider.send('hardhat_setBalance', [
+          campaignAddress,
+          '0x56BC75E2D63100000' // 100 ETH
+        ])
+
+        // Then get the signer
+        const campaignSigner = await ethers.provider.getSigner(campaignAddress)
+
+        // Approve the DefiIntegrationManager to spend tokens
+        await mockToken1
+          .connect(campaignSigner)
+          .approve(await defiManager.getAddress(), swapAmount)
+
+        await expect(
+          defiManager
+            .connect(campaignSigner)
+            .swapTokenForTarget(fromTokenAddress, swapAmount, toTokenAddress)
+        ).to.be.revertedWithCustomError(defiManager, 'SwapQuoteInvalid')
+      })
+
+      it('Should revert when Uniswap swap fails', async function () {
+        const {
+          defiManager,
+          mockToken1,
+          mockToken2,
+          mockTokenRegistry,
+          mockUniswapRouter,
+          owner
+        } = await loadFixture(deployDefiManagerFixture)
+
+        const campaignFactoryAddress = await defiManager.campaignFactory()
+
+        await ethers.provider.send('hardhat_setBalance', [
+          campaignFactoryAddress,
+          '0x56BC75E2D63100000'
+        ])
+
+        await ethers.provider.send('hardhat_impersonateAccount', [
+          campaignFactoryAddress
+        ])
+        const campaignFactorySigner = await ethers.provider.getSigner(
+          campaignFactoryAddress
+        )
+
+        // Create mock campaign
+        const mockCampaign = await ethers.deployContract('MockCampaign', [
+          owner.address,
+          await mockToken1.getAddress(),
+          ethers.parseUnits('1000'),
+          30,
+          await defiManager.getAddress()
+        ])
+        await mockCampaign.waitForDeployment()
+        const campaignAddress = await mockCampaign.getAddress()
+
+        // Authorize the campaign
+        await defiManager
+          .connect(campaignFactorySigner)
+          .authorizeCampaign(campaignAddress)
+
+        // Set up tokens
+        const fromTokenAddress = await mockToken1.getAddress()
+        const toTokenAddress = await mockToken2.getAddress()
+        const swapAmount = ethers.parseUnits('100')
+
+        // Setup token registry to support both tokens
+        await mockTokenRegistry.addSupportedToken(fromTokenAddress, true)
+        await mockTokenRegistry.addSupportedToken(toTokenAddress, true)
+
+        // Configure the Uniswap router to fail
+        await mockUniswapRouter.setShouldFailSwap(true)
+
+        // Transfer tokens to campaign
+        await mockToken1.transfer(campaignAddress, swapAmount)
+
+        // First impersonate the account
+        await ethers.provider.send('hardhat_impersonateAccount', [
+          campaignAddress
+        ])
+
+        // Then set the balance
+        await ethers.provider.send('hardhat_setBalance', [
+          campaignAddress,
+          '0x56BC75E2D63100000' // 100 ETH
+        ])
+
+        // Then get the signer
+        const campaignSigner = await ethers.provider.getSigner(campaignAddress)
+
+        // Approve the DefiIntegrationManager to spend tokens
+        await mockToken1
+          .connect(campaignSigner)
+          .approve(await defiManager.getAddress(), swapAmount)
+
+        await expect(
+          defiManager
+            .connect(campaignSigner)
+            .swapTokenForTarget(fromTokenAddress, swapAmount, toTokenAddress)
+        )
+          .to.be.revertedWithCustomError(defiManager, 'SwapFailed')
+          .withArgs('Swap failed')
+      })
+
+      it('Should revert when slippage exceeds tolerance', async function () {
+        const {
+          defiManager,
+          mockToken1,
+          mockToken2,
+          mockTokenRegistry,
+          mockUniswapRouter,
+          owner
+        } = await loadFixture(deployDefiManagerFixture)
+
+        const campaignFactoryAddress = await defiManager.campaignFactory()
+
+        await ethers.provider.send('hardhat_setBalance', [
+          campaignFactoryAddress,
+          '0x56BC75E2D63100000'
+        ])
+
+        await ethers.provider.send('hardhat_impersonateAccount', [
+          campaignFactoryAddress
+        ])
+        const campaignFactorySigner = await ethers.provider.getSigner(
+          campaignFactoryAddress
+        )
+
+        // Create mock campaign
+        const mockCampaign = await ethers.deployContract('MockCampaign', [
+          owner.address,
+          await mockToken1.getAddress(),
+          ethers.parseUnits('1000'),
+          30,
+          await defiManager.getAddress()
+        ])
+        await mockCampaign.waitForDeployment()
+        const campaignAddress = await mockCampaign.getAddress()
+
+        // Authorize the campaign
+        await defiManager
+          .connect(campaignFactorySigner)
+          .authorizeCampaign(campaignAddress)
+
+        // Set up tokens
+        const fromTokenAddress = await mockToken1.getAddress()
+        const toTokenAddress = await mockToken2.getAddress()
+        const swapAmount = ethers.parseUnits('100')
+
+        // Setup token registry to support both tokens
+        await mockTokenRegistry.addSupportedToken(fromTokenAddress, true)
+        await mockTokenRegistry.addSupportedToken(toTokenAddress, true)
+
+        // Configure the router to return less than minimum
+        await mockUniswapRouter.setShouldReturnLessThanMinimum(true)
+
+        // Transfer tokens to campaign
+        await mockToken1.transfer(campaignAddress, swapAmount)
+
+        // Also transfer some output tokens to the router for the swap
+        await mockToken2.transfer(
+          await mockUniswapRouter.getAddress(),
+          ethers.parseUnits('200')
+        )
+
+        // First impersonate the account
+        await ethers.provider.send('hardhat_impersonateAccount', [
+          campaignAddress
+        ])
+
+        // Then set the balance
+        await ethers.provider.send('hardhat_setBalance', [
+          campaignAddress,
+          '0x56BC75E2D63100000' // 100 ETH
+        ])
+
+        // Then get the signer
+        const campaignSigner = await ethers.provider.getSigner(campaignAddress)
+
+        // Approve the DefiIntegrationManager to spend tokens
+        await mockToken1
+          .connect(campaignSigner)
+          .approve(await defiManager.getAddress(), swapAmount)
+
+        // Get expected values for the error args
+        const slippageTolerance = await defiManager.SLIPPAGE_TOLERANCE()
+        const swapRate = await mockUniswapRouter.swapRate()
+        const expectedOutput = swapAmount * BigInt(swapRate)
+        const minAmountOut =
+          (expectedOutput * (10000n - BigInt(slippageTolerance))) / 10000n
+        const actualOut = minAmountOut - 1n // This is what the mock will return when shouldReturnLessThanMinimum is true
+
+        await expect(
+          defiManager
+            .connect(campaignSigner)
+            .swapTokenForTarget(fromTokenAddress, swapAmount, toTokenAddress)
+        )
+          .to.be.revertedWithCustomError(defiManager, 'SlippageExceeded')
+          .withArgs(minAmountOut, actualOut)
+      })
+    })
+  })
 
   describe('Setter functions', function () {
     describe('setCampaignFactory()', function () {
@@ -1901,6 +2853,10 @@ describe('DefiIntegrationManager', function () {
           .withArgs(mockTokenRegistryBefore, mockTokenRegistryAfter)
 
         expect(await defiManager.tokenRegistry()).to.equal(
+          mockTokenRegistryAfter
+        )
+
+        expect(await defiManager.getTokenRegistry()).to.equal(
           mockTokenRegistryAfter
         )
       })
