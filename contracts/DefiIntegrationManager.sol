@@ -37,6 +37,7 @@ contract DefiIntegrationManager is Ownable, ReentrancyGuard {
     error YieldDepositFailed(string reason);
     error YieldwithdrawalFailed(string reason);
     error InvalidAddress();
+    error InvalidConstructorInput(uint8, address);
     error NoYield(address token);
     error WithdrawalAmountMismatch(uint256 requestedAmount, uint256 withdrawAmount);
     error FailedToGetATokenAddress();
@@ -72,13 +73,28 @@ contract DefiIntegrationManager is Ownable, ReentrancyGuard {
         address _yieldDistributor, 
         address _owner
     ) Ownable(_owner) {
-        if (_aavePool == address(0) || 
-            _uniswapRouter == address(0) || 
-            _uniswapQuoter == address(0) || 
-            _tokenRegistry == address(0) ||
-            _campaignFactory == address(0) ||
-            _yieldDistributor == address(0)) {
-            revert InvalidAddress();
+        if(_aavePool == address(0)){
+            revert InvalidConstructorInput(0, _aavePool);
+        }
+
+        if(_uniswapRouter == address(0)){
+            revert InvalidConstructorInput(1, _uniswapRouter);
+        }
+
+        if(_uniswapQuoter == address(0)){
+            revert InvalidConstructorInput(2, _uniswapQuoter);
+        }
+
+        if(_tokenRegistry == address(0)){
+            revert InvalidConstructorInput(3, _tokenRegistry);
+        }
+
+        if(_campaignFactory == address(0)){
+            revert InvalidConstructorInput(4, _campaignFactory);
+        }
+
+        if(_yieldDistributor == address(0)){
+            revert InvalidConstructorInput(5, _yieldDistributor);
         }
 
         aavePool = IAavePool(_aavePool);

@@ -160,9 +160,237 @@ describe('DefiIntegrationManager', function () {
 
   describe('Deployment', function () {
     it('Should correctly deploy all defimanager', async function () {
-      const { defiManager } = await loadFixture(deployDefiManagerFixture)
+      const {
+        defiManager,
+        mockAavePool,
+        mockUniswapRouter,
+        mockUniswapQuoter,
+        mockTokenRegistry,
+        campaignFactory,
+        mockYieldDistributor
+      } = await loadFixture(deployDefiManagerFixture)
 
       expect(await defiManager.getAddress()).to.be.properAddress
+
+      const aavePoolAddress = await defiManager.aavePool()
+      const uniswapRouterAddress = await defiManager.uniswapRouter()
+      const uniswapQuoterAddress = await defiManager.uniswapQuoter()
+      const tokenRegistryAddress = await defiManager.tokenRegistry()
+      const campaignFactoryAddress = await defiManager.campaignFactory()
+      const yieldDistributorAddress = await defiManager.yieldDistributor()
+
+      expect(await mockAavePool.getAddress()).to.equal(aavePoolAddress)
+      expect(await mockUniswapRouter.getAddress()).to.equal(
+        uniswapRouterAddress
+      )
+      expect(await mockUniswapQuoter.getAddress()).to.equal(
+        uniswapQuoterAddress
+      )
+      expect(await mockTokenRegistry.getAddress()).to.equal(
+        tokenRegistryAddress
+      )
+      expect(await campaignFactory.getAddress()).to.equal(
+        campaignFactoryAddress
+      )
+      expect(await mockYieldDistributor.getAddress()).to.equal(
+        yieldDistributorAddress
+      )
+    })
+
+    it('Should revert on any incorrect constructor inputs', async function () {
+      const [owner, user1, platformTreasury] = await ethers.getSigners()
+
+      // Deploy mock dependencies
+      const mockAToken = await ethers.deployContract('MockAToken', [
+        'aMock Token',
+        'aMT',
+        ethers.ZeroAddress
+      ])
+      await mockAToken.waitForDeployment()
+
+      const mockAavePool = await ethers.deployContract('MockAavePool', [
+        await mockAToken.getAddress()
+      ])
+      const mockUniswapRouter = await ethers.deployContract('MockUniswapRouter')
+      const mockUniswapQuoter = await ethers.deployContract('MockUniswapQuoter')
+      const mockTokenRegistry = await ethers.deployContract('MockTokenRegistry')
+      const mockCampaignFactory = await ethers.deployContract(
+        'MockCampaignFactory',
+        [ethers.ZeroAddress]
+      )
+      const mockYieldDistributor = await ethers.deployContract(
+        'MockYieldDistributor',
+        [platformTreasury.address]
+      )
+
+      await Promise.all([
+        mockAavePool.waitForDeployment(),
+        mockUniswapRouter.waitForDeployment(),
+        mockUniswapQuoter.waitForDeployment(),
+        mockTokenRegistry.waitForDeployment(),
+        mockCampaignFactory.waitForDeployment(),
+        mockYieldDistributor.waitForDeployment()
+      ])
+
+      // Store addresses
+      const aavePoolAddress = await mockAavePool.getAddress()
+      const uniswapRouterAddress = await mockUniswapRouter.getAddress()
+      const uniswapQuoterAddress = await mockUniswapQuoter.getAddress()
+      const tokenRegistryAddress = await mockTokenRegistry.getAddress()
+      const campaignFactoryAddress = await mockCampaignFactory.getAddress()
+      const yieldDistributorAddress = await mockYieldDistributor.getAddress()
+
+      // Get contract factory
+      const DefiManager = await ethers.getContractFactory(
+        'DefiIntegrationManager'
+      )
+
+      // Test zero address for aavePool (index 0)
+      await expect(
+        DefiManager.deploy(
+          ethers.ZeroAddress,
+          uniswapRouterAddress,
+          uniswapQuoterAddress,
+          tokenRegistryAddress,
+          campaignFactoryAddress,
+          yieldDistributorAddress,
+          owner.address
+        )
+      ).to.be.revertedWithCustomError(DefiManager, 'InvalidConstructorInput')
+
+      // Test zero address for uniswapRouter (index 1)
+      await expect(
+        DefiManager.deploy(
+          aavePoolAddress,
+          ethers.ZeroAddress,
+          uniswapQuoterAddress,
+          tokenRegistryAddress,
+          campaignFactoryAddress,
+          yieldDistributorAddress,
+          owner.address
+        )
+      ).to.be.revertedWithCustomError(DefiManager, 'InvalidConstructorInput')
+
+      // Test zero address for uniswapQuoter (index 2)
+      await expect(
+        DefiManager.deploy(
+          aavePoolAddress,
+          uniswapRouterAddress,
+          ethers.ZeroAddress,
+          tokenRegistryAddress,
+          campaignFactoryAddress,
+          yieldDistributorAddress,
+          owner.address
+        )
+      ).to.be.revertedWithCustomError(DefiManager, 'InvalidConstructorInput')
+
+      // Test zero address for tokenRegistry (index 3)
+      await expect(
+        DefiManager.deploy(
+          aavePoolAddress,
+          uniswapRouterAddress,
+          uniswapQuoterAddress,
+          ethers.ZeroAddress,
+          campaignFactoryAddress,
+          yieldDistributorAddress,
+          owner.address
+        )
+      ).to.be.revertedWithCustomError(DefiManager, 'InvalidConstructorInput')
+
+      // Test zero address for campaignFactory (index 4)
+      await expect(
+        DefiManager.deploy(
+          aavePoolAddress,
+          uniswapRouterAddress,
+          uniswapQuoterAddress,
+          tokenRegistryAddress,
+          ethers.ZeroAddress,
+          yieldDistributorAddress,
+          owner.address
+        )
+      ).to.be.revertedWithCustomError(DefiManager, 'InvalidConstructorInput')
+
+      // Test zero address for yieldDistributor (index 5)
+      await expect(
+        DefiManager.deploy(
+          aavePoolAddress,
+          uniswapRouterAddress,
+          uniswapQuoterAddress,
+          tokenRegistryAddress,
+          campaignFactoryAddress,
+          ethers.ZeroAddress,
+          owner.address
+        )
+      ).to.be.revertedWithCustomError(DefiManager, 'InvalidConstructorInput')
+    })
+  })
+
+  describe('Authorizing Campaigns', function () {})
+
+  describe('Yield Distributor Integration', function () {})
+
+  describe('Swapping Tokens', function () {})
+
+  describe('Setter functions', function () {
+    it('Should correctly set the campaign factory', async function () {
+      const { defiManager } = await loadFixture(deployDefiManagerFixture)
+
+      const campaignFactoryBefore = await defiManager.campaignFactory()
+
+      const campaignFactory = await ethers.deployContract(
+        'MockCampaignFactory',
+        [await defiManager.getAddress()]
+      )
+      await campaignFactory.waitForDeployment()
+
+      const campaignFactoryAfter = await campaignFactory.getAddress()
+
+      await expect(defiManager.setCampaignFactory(campaignFactoryAfter))
+        .to.emit(defiManager, 'CampaignFactoryUpdated')
+        .withArgs(campaignFactoryBefore, campaignFactoryAfter)
+
+      expect(await defiManager.campaignFactory()).to.equal(campaignFactoryAfter)
+    })
+
+    it('Should revert if non-owner tries to set campaign factory', async function () {
+      const { defiManager, user1 } = await loadFixture(deployDefiManagerFixture)
+
+      const campaignFactoryBefore = await defiManager.campaignFactory()
+
+      const campaignFactory = await ethers.deployContract(
+        'MockCampaignFactory',
+        [await defiManager.getAddress()]
+      )
+      await campaignFactory.waitForDeployment()
+
+      const campaignFactoryAfter = await campaignFactory.getAddress()
+
+      await expect(
+        defiManager.connect(user1).setCampaignFactory(campaignFactoryAfter)
+      )
+        .to.be.revertedWithCustomError(
+          defiManager,
+          'OwnableUnauthorizedAccount'
+        )
+        .withArgs(user1.address)
+
+      expect(await defiManager.campaignFactory()).to.equal(
+        campaignFactoryBefore
+      )
+    })
+
+    it('Should revert if invalid address passed to setCampaignFactory()', async function () {
+      const { defiManager, user1 } = await loadFixture(deployDefiManagerFixture)
+
+      const campaignFactoryBefore = await defiManager.campaignFactory()
+
+      await expect(
+        defiManager.setCampaignFactory(ethers.ZeroAddress)
+      ).to.be.revertedWithCustomError(defiManager, 'InvalidAddress')
+
+      expect(await defiManager.campaignFactory()).to.equal(
+        campaignFactoryBefore
+      )
     })
   })
 })
