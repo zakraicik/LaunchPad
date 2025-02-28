@@ -1,8 +1,8 @@
 import { token } from '../typechain-types/@openzeppelin/contracts'
 
-const { expect } = require('chai')
-const { ethers } = require('hardhat')
-const { loadFixture } = require('@nomicfoundation/hardhat-network-helpers')
+import { expect } from 'chai'
+import { ethers } from 'hardhat'
+import { loadFixture } from '@nomicfoundation/hardhat-network-helpers'
 
 describe('Campaign', function () {
   async function deployCampaignFixture () {
@@ -1390,6 +1390,28 @@ describe('Campaign', function () {
           await mockToken1.getAddress()
         )
         expect(depositedAmount).to.equal(BigInt(depositAmount))
+      })
+
+      it('Should handle failed transfer during harvest yield', async function () {
+        const { campaign, mockDefiManager, mockToken1, user1 } =
+          await loadFixture(deployCampaignFixture)
+
+        const depositAmount = 100
+        await mockToken1
+          .connect(user1)
+          .approve(await campaign.getAddress(), depositAmount)
+        await campaign.connect(user1).contribute(depositAmount)
+
+        await campaign.depositToYieldProtocol(
+          await mockToken1.getAddress(),
+          depositAmount
+        )
+
+        await mockDefiManager.setHarvestSuccess(false)
+
+        await expect(
+          campaign.harvestYield(await mockToken1.getAddress())
+        ).to.be.revertedWithCustomError(campaign, 'DefiActionFailed')
       })
     })
 

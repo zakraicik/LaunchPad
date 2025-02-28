@@ -32,7 +32,6 @@ contract Campaign is Ownable, ReentrancyGuard {
     event YieldHarvested(address indexed token, uint256 creatorYield);
     event WithdrawnFromYield(address indexed token, uint256 amount);
     event TokensSwapped(address indexed fromToken, address indexed toToken, uint256 amountIn, uint256 amountOut);
-    
 
     error InvalidAddress();
     error ContributionTokenNotSupported(address token);
@@ -124,9 +123,6 @@ contract Campaign is Ownable, ReentrancyGuard {
         hasBeenRefunded[msg.sender] = true;
         contributions[msg.sender] = 0;
         
-        hasBeenRefunded[msg.sender] = true;
-        contributions[msg.sender] = 0;
-        
         IERC20(campaignToken).safeTransfer(msg.sender, refundAmount);
         
         emit RefundIssued(msg.sender, refundAmount);
@@ -195,7 +191,6 @@ contract Campaign is Ownable, ReentrancyGuard {
             revert DefiActionFailed();
         }
     }
-    
     
     function isCampaignActive() public view returns (bool) {
         return (

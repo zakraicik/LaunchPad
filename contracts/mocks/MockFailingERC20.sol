@@ -5,6 +5,7 @@ import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
 contract MockFailingERC20 is ERC20 {
     bool public transferShouldFail = false;
+    bool public shouldFailAllowance = false;
     
     constructor(string memory name, string memory symbol, uint256 initialSupply) 
         ERC20(name, symbol) {
@@ -28,4 +29,9 @@ contract MockFailingERC20 is ERC20 {
         }
         return super.transferFrom(from, to, amount);
     }
+
+    function setShouldFailAllowance(bool _fail) external {
+        shouldFailAllowance = _fail;
+    }
+
 }
