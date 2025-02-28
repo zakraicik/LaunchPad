@@ -13,6 +13,9 @@ contract MockAavePool is IAavePool {
     mapping(address => address) public aTokens;
     mapping(address => uint128) public liquidityRates; // in ray (1e27)
 
+    bool public mismatchWithdraw = false;
+    uint256 public mismatchWithdrawAmount = 0;
+
     // Mock aToken contract we deploy separately 
     address public mockATokenImplementation;
     
@@ -22,6 +25,11 @@ contract MockAavePool is IAavePool {
     
     constructor(address _mockATokenImplementation) {
         mockATokenImplementation = _mockATokenImplementation;
+    }
+
+    function setMismatchWithdraw(bool shouldMismatch, uint256 amount) external {
+        mismatchWithdraw = shouldMismatch;
+        mismatchWithdrawAmount = amount;
     }
     
     // Configuration functions
@@ -88,18 +96,21 @@ contract MockAavePool is IAavePool {
             revert("No aToken for asset");
         }
         
+        // If mismatch is enabled, return a different amount
+        uint256 actualWithdrawAmount = mismatchWithdraw ? mismatchWithdrawAmount : amount;
+        
         // Burn aTokens
         (bool callSuccess, ) = aToken.call(
-            abi.encodeWithSignature("burn(address,uint256)", msg.sender, amount)
+            abi.encodeWithSignature("burn(address,uint256)", msg.sender, actualWithdrawAmount)
         );
         require(callSuccess, "aToken burn failed");
         
         // Transfer underlying to recipient
-        bool success = IERC20(asset).transfer(to, amount);
+        bool success = IERC20(asset).transfer(to, actualWithdrawAmount);
         require(success, "Transfer failed");
         
-        emit Withdraw(asset, amount, to);
-        return amount;
+        emit Withdraw(asset, actualWithdrawAmount, to);
+        return actualWithdrawAmount;
     }
     
     function getReserveData(address asset) external view override returns (DataTypes.ReserveData memory) {
