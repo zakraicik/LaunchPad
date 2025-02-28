@@ -325,7 +325,165 @@ describe('DefiIntegrationManager', function () {
     })
   })
 
-  describe('Authorizing Campaigns', function () {})
+  describe('Authorizing Campaigns', function () {
+    it('Should allow campaign faactory to authorize new campaigns', async function () {
+      const { defiManager, owner, mockToken1 } = await loadFixture(
+        deployDefiManagerFixture
+      )
+
+      const campaignFactoryAddress = await defiManager.campaignFactory()
+
+      await ethers.provider.send('hardhat_setBalance', [
+        campaignFactoryAddress,
+        '0x56BC75E2D63100000'
+      ])
+
+      await ethers.provider.send('hardhat_impersonateAccount', [
+        campaignFactoryAddress
+      ])
+      const campaignFactorySigner = await ethers.provider.getSigner(
+        campaignFactoryAddress
+      )
+
+      const mockCampaign = await ethers.deployContract('MockCampaign', [
+        owner.address,
+        await mockToken1.getAddress(),
+        ethers.parseUnits('1000'),
+        30,
+        await defiManager.getAddress()
+      ])
+      await mockCampaign.waitForDeployment()
+
+      const campaignAddress = await mockCampaign.getAddress()
+
+      await expect(
+        defiManager
+          .connect(campaignFactorySigner)
+          .authorizeCampaign(campaignAddress)
+      )
+        .to.emit(defiManager, 'CampaignAuthorized')
+        .withArgs(campaignAddress)
+
+      expect(await defiManager.authorizedCampaigns(campaignAddress)).to.equal(
+        true
+      )
+    })
+    it('Should revert when address besides campaign factory calls authorizeCampaign()', async function () {
+      const { defiManager, owner, mockToken1 } = await loadFixture(
+        deployDefiManagerFixture
+      )
+
+      const mockCampaign = await ethers.deployContract('MockCampaign', [
+        owner.address,
+        await mockToken1.getAddress(),
+        ethers.parseUnits('1000'),
+        30,
+        await defiManager.getAddress()
+      ])
+      await mockCampaign.waitForDeployment()
+
+      const campaignAddress = await mockCampaign.getAddress()
+
+      expect(await defiManager.authorizedCampaigns(campaignAddress)).to.equal(
+        false
+      )
+
+      await expect(defiManager.authorizeCampaign(campaignAddress))
+        .to.revertedWithCustomError(defiManager, 'notCampaignFactory')
+        .withArgs(owner.address)
+    })
+
+    it('Should allow owner to deauthorize campaigns', async function () {
+      const { defiManager, owner, mockToken1 } = await loadFixture(
+        deployDefiManagerFixture
+      )
+
+      const campaignFactoryAddress = await defiManager.campaignFactory()
+
+      await ethers.provider.send('hardhat_setBalance', [
+        campaignFactoryAddress,
+        '0x56BC75E2D63100000'
+      ])
+
+      await ethers.provider.send('hardhat_impersonateAccount', [
+        campaignFactoryAddress
+      ])
+      const campaignFactorySigner = await ethers.provider.getSigner(
+        campaignFactoryAddress
+      )
+
+      const mockCampaign = await ethers.deployContract('MockCampaign', [
+        owner.address,
+        await mockToken1.getAddress(),
+        ethers.parseUnits('1000'),
+        30,
+        await defiManager.getAddress()
+      ])
+      await mockCampaign.waitForDeployment()
+
+      const campaignAddress = await mockCampaign.getAddress()
+
+      await defiManager
+        .connect(campaignFactorySigner)
+        .authorizeCampaign(campaignAddress)
+
+      await expect(defiManager.unauthorizeCampaign(campaignAddress))
+        .to.emit(defiManager, 'CampaignUnauthorized')
+        .withArgs(campaignAddress)
+
+      expect(await defiManager.authorizedCampaigns(campaignAddress)).to.equal(
+        false
+      )
+    })
+
+    it('Should revert if anyone other than owner tries to deauthorize a campaign', async function () {
+      const { defiManager, owner, user1, mockToken1 } = await loadFixture(
+        deployDefiManagerFixture
+      )
+
+      const campaignFactoryAddress = await defiManager.campaignFactory()
+
+      await ethers.provider.send('hardhat_setBalance', [
+        campaignFactoryAddress,
+        '0x56BC75E2D63100000'
+      ])
+
+      await ethers.provider.send('hardhat_impersonateAccount', [
+        campaignFactoryAddress
+      ])
+      const campaignFactorySigner = await ethers.provider.getSigner(
+        campaignFactoryAddress
+      )
+
+      const mockCampaign = await ethers.deployContract('MockCampaign', [
+        owner.address,
+        await mockToken1.getAddress(),
+        ethers.parseUnits('1000'),
+        30,
+        await defiManager.getAddress()
+      ])
+      await mockCampaign.waitForDeployment()
+
+      const campaignAddress = await mockCampaign.getAddress()
+
+      await defiManager
+        .connect(campaignFactorySigner)
+        .authorizeCampaign(campaignAddress)
+
+      await expect(
+        defiManager.connect(user1).unauthorizeCampaign(campaignAddress)
+      )
+        .to.be.revertedWithCustomError(
+          defiManager,
+          'OwnableUnauthorizedAccount'
+        )
+        .withArgs(user1.address)
+
+      expect(await defiManager.authorizedCampaigns(campaignAddress)).to.equal(
+        true
+      )
+    })
+  })
 
   describe('Yield Distributor Integration', function () {})
 

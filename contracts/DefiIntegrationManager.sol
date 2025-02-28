@@ -29,7 +29,7 @@ contract DefiIntegrationManager is Ownable, ReentrancyGuard {
     uint256 public constant SLIPPAGE_TOLERANCE = 50;
 
     error UnauthorizedAddress();
-    error invalidCampaignFactory(address campaignFactory);
+    error notCampaignFactory(address campaignFactory);
     error ZeroAmount(uint256 amount);
     error InsufficientDeposit(address token, uint256 requested, uint256 available);
     error TokenNotSupported(address token);
@@ -107,7 +107,7 @@ contract DefiIntegrationManager is Ownable, ReentrancyGuard {
 
     modifier onlyCampaignFactory() {
         if (msg.sender != campaignFactory) {
-            revert invalidCampaignFactory(campaignFactory);
+            revert notCampaignFactory(msg.sender);
         }
         _;
     }
@@ -182,7 +182,6 @@ contract DefiIntegrationManager is Ownable, ReentrancyGuard {
         uniswapQuoter = IQuoter(_uniswapQuoter);
         emit UniswapQuoterUpdated(oldUniswapQuoter, _uniswapQuoter);
     }
-
 
     function authorizeCampaign(address _campaign) external onlyCampaignFactory {
         authorizedCampaigns[_campaign] = true;
@@ -314,7 +313,6 @@ contract DefiIntegrationManager is Ownable, ReentrancyGuard {
             revert YieldwithdrawalFailed("Yield withdrawal failed.");
         }        
     }
-
 
     function getTargetTokenEquivalent(address _fromToken, uint256 _amount, address _toToken) public view returns (uint256) {
         if (_fromToken == _toToken){
