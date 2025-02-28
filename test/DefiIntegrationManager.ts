@@ -332,65 +332,409 @@ describe('DefiIntegrationManager', function () {
   describe('Swapping Tokens', function () {})
 
   describe('Setter functions', function () {
-    it('Should correctly set the campaign factory', async function () {
-      const { defiManager } = await loadFixture(deployDefiManagerFixture)
+    describe('setCampaignFactory()', function () {
+      it('Should correctly set the campaign factory', async function () {
+        const { defiManager } = await loadFixture(deployDefiManagerFixture)
 
-      const campaignFactoryBefore = await defiManager.campaignFactory()
+        const campaignFactoryBefore = await defiManager.campaignFactory()
 
-      const campaignFactory = await ethers.deployContract(
-        'MockCampaignFactory',
-        [await defiManager.getAddress()]
-      )
-      await campaignFactory.waitForDeployment()
-
-      const campaignFactoryAfter = await campaignFactory.getAddress()
-
-      await expect(defiManager.setCampaignFactory(campaignFactoryAfter))
-        .to.emit(defiManager, 'CampaignFactoryUpdated')
-        .withArgs(campaignFactoryBefore, campaignFactoryAfter)
-
-      expect(await defiManager.campaignFactory()).to.equal(campaignFactoryAfter)
-    })
-
-    it('Should revert if non-owner tries to set campaign factory', async function () {
-      const { defiManager, user1 } = await loadFixture(deployDefiManagerFixture)
-
-      const campaignFactoryBefore = await defiManager.campaignFactory()
-
-      const campaignFactory = await ethers.deployContract(
-        'MockCampaignFactory',
-        [await defiManager.getAddress()]
-      )
-      await campaignFactory.waitForDeployment()
-
-      const campaignFactoryAfter = await campaignFactory.getAddress()
-
-      await expect(
-        defiManager.connect(user1).setCampaignFactory(campaignFactoryAfter)
-      )
-        .to.be.revertedWithCustomError(
-          defiManager,
-          'OwnableUnauthorizedAccount'
+        const campaignFactory = await ethers.deployContract(
+          'MockCampaignFactory',
+          [await defiManager.getAddress()]
         )
-        .withArgs(user1.address)
+        await campaignFactory.waitForDeployment()
 
-      expect(await defiManager.campaignFactory()).to.equal(
-        campaignFactoryBefore
-      )
+        const campaignFactoryAfter = await campaignFactory.getAddress()
+
+        await expect(defiManager.setCampaignFactory(campaignFactoryAfter))
+          .to.emit(defiManager, 'CampaignFactoryUpdated')
+          .withArgs(campaignFactoryBefore, campaignFactoryAfter)
+
+        expect(await defiManager.campaignFactory()).to.equal(
+          campaignFactoryAfter
+        )
+      })
+
+      it('Should revert if non-owner tries to set campaign factory', async function () {
+        const { defiManager, user1 } = await loadFixture(
+          deployDefiManagerFixture
+        )
+
+        const campaignFactoryBefore = await defiManager.campaignFactory()
+
+        const campaignFactory = await ethers.deployContract(
+          'MockCampaignFactory',
+          [await defiManager.getAddress()]
+        )
+        await campaignFactory.waitForDeployment()
+
+        const campaignFactoryAfter = await campaignFactory.getAddress()
+
+        await expect(
+          defiManager.connect(user1).setCampaignFactory(campaignFactoryAfter)
+        )
+          .to.be.revertedWithCustomError(
+            defiManager,
+            'OwnableUnauthorizedAccount'
+          )
+          .withArgs(user1.address)
+
+        expect(await defiManager.campaignFactory()).to.equal(
+          campaignFactoryBefore
+        )
+      })
+
+      it('Should revert if invalid address passed to setCampaignFactory()', async function () {
+        const { defiManager, user1 } = await loadFixture(
+          deployDefiManagerFixture
+        )
+
+        const campaignFactoryBefore = await defiManager.campaignFactory()
+
+        await expect(
+          defiManager.setCampaignFactory(ethers.ZeroAddress)
+        ).to.be.revertedWithCustomError(defiManager, 'InvalidAddress')
+
+        expect(await defiManager.campaignFactory()).to.equal(
+          campaignFactoryBefore
+        )
+      })
     })
 
-    it('Should revert if invalid address passed to setCampaignFactory()', async function () {
-      const { defiManager, user1 } = await loadFixture(deployDefiManagerFixture)
+    describe('setTokenRegistry()', function () {
+      it('Should correctly set the token registry', async function () {
+        const { defiManager } = await loadFixture(deployDefiManagerFixture)
 
-      const campaignFactoryBefore = await defiManager.campaignFactory()
+        const mockTokenRegistryBefore = await defiManager.tokenRegistry()
 
-      await expect(
-        defiManager.setCampaignFactory(ethers.ZeroAddress)
-      ).to.be.revertedWithCustomError(defiManager, 'InvalidAddress')
+        const mockTokenRegistry = await ethers.deployContract(
+          'MockTokenRegistry'
+        )
+        await mockTokenRegistry.waitForDeployment()
 
-      expect(await defiManager.campaignFactory()).to.equal(
-        campaignFactoryBefore
-      )
+        const mockTokenRegistryAfter = await mockTokenRegistry.getAddress()
+
+        await expect(defiManager.setTokenRegistry(mockTokenRegistryAfter))
+          .to.emit(defiManager, 'TokenRegistryUpdated')
+          .withArgs(mockTokenRegistryBefore, mockTokenRegistryAfter)
+
+        expect(await defiManager.tokenRegistry()).to.equal(
+          mockTokenRegistryAfter
+        )
+      })
+
+      it('Should revert if non-owner tries to set token registry', async function () {
+        const { defiManager, user1 } = await loadFixture(
+          deployDefiManagerFixture
+        )
+
+        const mockTokenRegistryBefore = await defiManager.tokenRegistry()
+
+        const mockTokenRegistry = await ethers.deployContract(
+          'MockTokenRegistry'
+        )
+        await mockTokenRegistry.waitForDeployment()
+
+        const mockTokenRegistryAfter = await mockTokenRegistry.getAddress()
+
+        await expect(
+          defiManager.connect(user1).setTokenRegistry(mockTokenRegistryAfter)
+        )
+          .to.be.revertedWithCustomError(
+            defiManager,
+            'OwnableUnauthorizedAccount'
+          )
+          .withArgs(user1.address)
+
+        expect(await defiManager.tokenRegistry()).to.equal(
+          mockTokenRegistryBefore
+        )
+      })
+
+      it('Should revert if invalid address passed to setTokenRegistry()', async function () {
+        const { defiManager, user1 } = await loadFixture(
+          deployDefiManagerFixture
+        )
+
+        const mockTokenRegistryBefore = await defiManager.tokenRegistry()
+
+        await expect(
+          defiManager.setTokenRegistry(ethers.ZeroAddress)
+        ).to.be.revertedWithCustomError(defiManager, 'InvalidAddress')
+
+        expect(await defiManager.tokenRegistry()).to.equal(
+          mockTokenRegistryBefore
+        )
+      })
+    })
+
+    describe('setYieldDistributor()', function () {
+      it('Should correctly set the yield distributor', async function () {
+        const { defiManager, platformTreasury } = await loadFixture(
+          deployDefiManagerFixture
+        )
+
+        const mockYieldDistributorBefore = await defiManager.yieldDistributor()
+
+        const mockYieldDistributor = await ethers.deployContract(
+          'MockYieldDistributor',
+          [platformTreasury.address]
+        )
+        await mockYieldDistributor.waitForDeployment()
+
+        const mockYieldDistributorAfter =
+          await mockYieldDistributor.getAddress()
+
+        await expect(defiManager.setYieldDistributor(mockYieldDistributorAfter))
+          .to.emit(defiManager, 'YieldDistributorUpdated')
+          .withArgs(mockYieldDistributorBefore, mockYieldDistributorAfter)
+
+        expect(await defiManager.yieldDistributor()).to.equal(
+          mockYieldDistributorAfter
+        )
+      })
+
+      it('Should revert if non-owner tries to set yieldDistributor', async function () {
+        const { defiManager, user1, platformTreasury } = await loadFixture(
+          deployDefiManagerFixture
+        )
+
+        const mockYieldDistributorBefore = await defiManager.yieldDistributor()
+
+        const mockYieldDistributor = await ethers.deployContract(
+          'MockYieldDistributor',
+          [platformTreasury.address]
+        )
+        await mockYieldDistributor.waitForDeployment()
+
+        const mockYieldDistributorAfter =
+          await mockYieldDistributor.getAddress()
+
+        await expect(
+          defiManager
+            .connect(user1)
+            .setYieldDistributor(mockYieldDistributorAfter)
+        )
+          .to.be.revertedWithCustomError(
+            defiManager,
+            'OwnableUnauthorizedAccount'
+          )
+          .withArgs(user1.address)
+
+        expect(await defiManager.yieldDistributor()).to.equal(
+          mockYieldDistributorBefore
+        )
+      })
+
+      it('Should revert if invalid address passed to setYieldDistributor()', async function () {
+        const { defiManager, user1 } = await loadFixture(
+          deployDefiManagerFixture
+        )
+
+        const mockYieldDistributorBefore = await defiManager.yieldDistributor()
+
+        await expect(
+          defiManager.setYieldDistributor(ethers.ZeroAddress)
+        ).to.be.revertedWithCustomError(defiManager, 'InvalidAddress')
+
+        expect(await defiManager.yieldDistributor()).to.equal(
+          mockYieldDistributorBefore
+        )
+      })
+    })
+
+    describe('setAavePool()', function () {
+      it('Should correctly set the Aave Pool', async function () {
+        const { defiManager, mockAToken1 } = await loadFixture(
+          deployDefiManagerFixture
+        )
+
+        const mockAavePoolBefore = await defiManager.aavePool()
+
+        const mockAavePool = await ethers.deployContract('MockAavePool', [
+          await mockAToken1.getAddress()
+        ])
+        await mockAavePool.waitForDeployment()
+
+        const mockAavePoolAfter = await mockAavePool.getAddress()
+
+        await expect(defiManager.setAavePool(mockAavePoolAfter))
+          .to.emit(defiManager, 'AavePoolUpdated')
+          .withArgs(mockAavePoolBefore, mockAavePoolAfter)
+
+        expect(await defiManager.aavePool()).to.equal(mockAavePoolAfter)
+      })
+
+      it('Should revert if non-owner tries to set Aave pool', async function () {
+        const { defiManager, mockAToken1, user1 } = await loadFixture(
+          deployDefiManagerFixture
+        )
+
+        const mockAavePoolBefore = await defiManager.aavePool()
+
+        const mockAavePool = await ethers.deployContract('MockAavePool', [
+          await mockAToken1.getAddress()
+        ])
+        await mockAavePool.waitForDeployment()
+
+        const mockAavePoolAfter = await mockAavePool.getAddress()
+
+        await expect(defiManager.connect(user1).setAavePool(mockAavePoolAfter))
+          .to.be.revertedWithCustomError(
+            defiManager,
+            'OwnableUnauthorizedAccount'
+          )
+          .withArgs(user1.address)
+
+        expect(await defiManager.aavePool()).to.equal(mockAavePoolBefore)
+      })
+
+      it('Should revert if invalid address passed to setAavePool()', async function () {
+        const { defiManager, user1 } = await loadFixture(
+          deployDefiManagerFixture
+        )
+
+        const mockAavePoolBefore = await defiManager.aavePool()
+
+        await expect(
+          defiManager.setAavePool(ethers.ZeroAddress)
+        ).to.be.revertedWithCustomError(defiManager, 'InvalidAddress')
+
+        expect(await defiManager.aavePool()).to.equal(mockAavePoolBefore)
+      })
+    })
+
+    describe('setUniswapRouter()', function () {
+      it('Should correctly set the Uniswap Router', async function () {
+        const { defiManager } = await loadFixture(deployDefiManagerFixture)
+
+        const mockUniswapRouterBefore = await defiManager.uniswapRouter()
+
+        const mockUniswapRouter = await ethers.deployContract(
+          'MockUniswapRouter'
+        )
+        await mockUniswapRouter.waitForDeployment()
+
+        const mockUniswapRouterAfter = await mockUniswapRouter.getAddress()
+
+        await expect(defiManager.setUniswapRouter(mockUniswapRouterAfter))
+          .to.emit(defiManager, 'UniswapRouterUpdated')
+          .withArgs(mockUniswapRouterBefore, mockUniswapRouterAfter)
+
+        expect(await defiManager.uniswapRouter()).to.equal(
+          mockUniswapRouterAfter
+        )
+      })
+
+      it('Should revert if non-owner tries to set Uniswap Router', async function () {
+        const { defiManager, user1 } = await loadFixture(
+          deployDefiManagerFixture
+        )
+
+        const mockUniswapRouterBefore = await defiManager.uniswapRouter()
+
+        const mockUniswapRouter = await ethers.deployContract(
+          'MockUniswapRouter'
+        )
+        await mockUniswapRouter.waitForDeployment()
+
+        const mockUniswapRouterAfter = await mockUniswapRouter.getAddress()
+
+        await expect(
+          defiManager.connect(user1).setUniswapRouter(mockUniswapRouterAfter)
+        )
+          .to.be.revertedWithCustomError(
+            defiManager,
+            'OwnableUnauthorizedAccount'
+          )
+          .withArgs(user1.address)
+
+        expect(await defiManager.uniswapRouter()).to.equal(
+          mockUniswapRouterBefore
+        )
+      })
+
+      it('Should revert if invalid address passed to setUniswapRouter()', async function () {
+        const { defiManager, user1 } = await loadFixture(
+          deployDefiManagerFixture
+        )
+
+        const mockUniswapRouterBefore = await defiManager.uniswapRouter()
+
+        await expect(
+          defiManager.setUniswapRouter(ethers.ZeroAddress)
+        ).to.be.revertedWithCustomError(defiManager, 'InvalidAddress')
+
+        expect(await defiManager.uniswapRouter()).to.equal(
+          mockUniswapRouterBefore
+        )
+      })
+    })
+
+    describe('setUniswapQuoter()', function () {
+      it('Should correctly set the Uniswap Quoter', async function () {
+        const { defiManager } = await loadFixture(deployDefiManagerFixture)
+
+        const mockUniswapQuoterBefore = await defiManager.uniswapQuoter()
+
+        const mockUniswapQuoter = await ethers.deployContract(
+          'MockUniswapQuoter'
+        )
+        await mockUniswapQuoter.waitForDeployment()
+
+        const mockUniswapQuoterAfter = await mockUniswapQuoter.getAddress()
+
+        await expect(defiManager.setUniswapQuoter(mockUniswapQuoterAfter))
+          .to.emit(defiManager, 'UniswapQuoterUpdated')
+          .withArgs(mockUniswapQuoterBefore, mockUniswapQuoterAfter)
+
+        expect(await defiManager.uniswapQuoter()).to.equal(
+          mockUniswapQuoterAfter
+        )
+      })
+
+      it('Should revert if non-owner tries to set Uniswap Quoter', async function () {
+        const { defiManager, user1 } = await loadFixture(
+          deployDefiManagerFixture
+        )
+
+        const mockUniswapQuoterrBefore = await defiManager.uniswapQuoter()
+
+        const mockUniswapQuoter = await ethers.deployContract(
+          'MockUniswapQuoter'
+        )
+        await mockUniswapQuoter.waitForDeployment()
+
+        const mockUniswapQuoterAfter = await mockUniswapQuoter.getAddress()
+
+        await expect(
+          defiManager.connect(user1).setUniswapQuoter(mockUniswapQuoterAfter)
+        )
+          .to.be.revertedWithCustomError(
+            defiManager,
+            'OwnableUnauthorizedAccount'
+          )
+          .withArgs(user1.address)
+
+        expect(await defiManager.uniswapQuoter()).to.equal(
+          mockUniswapQuoterrBefore
+        )
+      })
+
+      it('Should revert if invalid address passed to setUniswapQuoter()', async function () {
+        const { defiManager, user1 } = await loadFixture(
+          deployDefiManagerFixture
+        )
+        const mockUniswapQuoterrBefore = await defiManager.uniswapQuoter()
+
+        await expect(
+          defiManager.setUniswapQuoter(ethers.ZeroAddress)
+        ).to.be.revertedWithCustomError(defiManager, 'InvalidAddress')
+
+        expect(await defiManager.uniswapQuoter()).to.equal(
+          mockUniswapQuoterrBefore
+        )
+      })
     })
   })
 })
