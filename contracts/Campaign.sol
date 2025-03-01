@@ -13,9 +13,9 @@ contract Campaign is Ownable, ReentrancyGuard {
 
     address public campaignToken;
     uint256 public campaignGoalAmount;
-    uint256 public campaignDuration;
-    uint256 public campaignStartTime;
-    uint256 public campaignEndTime;
+    uint64 public campaignDuration;     
+    uint64 public campaignStartTime;    
+    uint64 public campaignEndTime;      
     uint256 public totalAmountRaised;
     bool public isClaimed;
     bytes32 public campaignId;
@@ -61,7 +61,6 @@ contract Campaign is Ownable, ReentrancyGuard {
         if (_campaignToken == address(0)) revert InvalidAddress();
         if (_defiManager == address(0)) revert InvalidAddress();
         
-        
         defiManager = IDefiIntegrationManager(_defiManager);
         ITokenRegistry tokenRegistry = defiManager.tokenRegistry();
         
@@ -74,11 +73,10 @@ contract Campaign is Ownable, ReentrancyGuard {
         
         campaignToken = _campaignToken;
         campaignGoalAmount = _campaignGoalAmount;
-        campaignDuration = _campaignDuration;
+        campaignDuration = uint64(_campaignDuration);  // Explicit casting
         
-        
-        campaignStartTime = block.timestamp;
-        campaignEndTime = campaignStartTime + (_campaignDuration * 1 days);
+        campaignStartTime = uint64(block.timestamp);  // Explicit casting
+        campaignEndTime = uint64(campaignStartTime + (_campaignDuration * 1 days));  // Explicit casting
         
         campaignId = keccak256(
             abi.encodePacked(

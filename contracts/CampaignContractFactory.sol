@@ -28,7 +28,7 @@ contract CampaignFactory {
         uint256 _campaignGoalAmount,
         uint16 _campaignDuration
     ) external returns(address) {
-        
+        // Function body remains unchanged
         if (_campaignToken == address(0)) {
             revert InvalidAddress();
         }

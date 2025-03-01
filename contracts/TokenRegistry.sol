@@ -8,9 +8,9 @@ contract TokenRegistry is Ownable {
     constructor(address _owner) Ownable(_owner) {}
 
     struct TokenConfig {
-        bool isSupported;
-        uint256 minimumContributionAmount; 
-        uint8 decimals;  
+        bool isSupported;     
+        uint8 decimals;       
+        uint256 minimumContributionAmount;
     }
 
     mapping(address => TokenConfig) public tokenConfigs;
@@ -43,7 +43,7 @@ contract TokenRegistry is Ownable {
     function _convertFromSmallestUnit(uint256 amount, uint8 decimals) internal pure returns (uint256) {
         return amount / (10 ** decimals);
     }
-
+    
     function _validateAndGetDecimals(address _token) internal view returns (uint8) {
         if (_token == address(0)) {
             revert InvalidToken(_token);

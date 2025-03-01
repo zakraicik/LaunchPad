@@ -19,14 +19,13 @@ contract DefiIntegrationManager is Ownable, ReentrancyGuard {
     IQuoter public uniswapQuoter;
     ITokenRegistry public tokenRegistry;
     IYieldDistributor public yieldDistributor;
-
     address public campaignFactory;
-    mapping(address => bool) public authorizedCampaigns;
-
-    mapping(address => mapping(address => uint256)) public aaveDeposits;
-
+    
     uint24 public constant UNISWAP_FEE_TIER = 3000; // 0.3%
-    uint256 public constant SLIPPAGE_TOLERANCE = 50;
+    uint16 public constant SLIPPAGE_TOLERANCE = 50;  // Changed from uint256 to uint16
+    
+    mapping(address => bool) public authorizedCampaigns;
+    mapping(address => mapping(address => uint256)) public aaveDeposits;
 
     error UnauthorizedAddress();
     error notCampaignFactory(address campaignFactory);
