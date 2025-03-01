@@ -12,12 +12,12 @@ contract Campaign is Ownable, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
     address public campaignToken;
-    uint256 public campaignGoalAmount;
-    uint64 public campaignDuration;     
-    uint64 public campaignStartTime;    
-    uint64 public campaignEndTime;      
-    uint256 public totalAmountRaised;
     bool public isClaimed;
+    uint256 public campaignGoalAmount;
+    uint256 public campaignDuration;     
+    uint256 public campaignStartTime;    
+    uint256 public campaignEndTime;      
+    uint256 public totalAmountRaised;
     bytes32 public campaignId;
     
     IDefiIntegrationManager public immutable defiManager;
