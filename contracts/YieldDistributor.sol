@@ -1,16 +1,17 @@
 //SPDX-License-Identifier: MIT
 pragma solidity ^0.8.28;
-
-import "@openzeppelin/contracts/access/Ownable.sol";
+import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 
 contract YieldDistributor is Ownable {
 
     address public platformTreasury;
-    uint public platformYieldShare = 2000;
+    uint16 public platformYieldShare = 2000;
+    uint16 public constant maximumYieldShare = 5000;
 
     error InvalidAddress();
     error InvalidShare(uint256 share);
     error ShareExceedsMaximum(uint256 share);
+    error Overflow();
 
     event PlatformTreasuryUpdated(address oldTreasury, address newTreasury);
     event PlatformYieldShareUpdated(uint256 oldShare, uint256 newShare);
@@ -42,25 +43,35 @@ contract YieldDistributor is Ownable {
     }
 
     function updatePlatformYieldShare(uint256 _platformYieldShare) external onlyOwner {
-        if(_platformYieldShare > 5000){
-            revert ShareExceedsMaximum(_platformYieldShare);
+        // Cast to uint16 since that's our storage type
+        uint16 newShare = uint16(_platformYieldShare);
+        
+        if(newShare > maximumYieldShare){
+            revert ShareExceedsMaximum(newShare);
         }
 
         uint256 oldshare = platformYieldShare;
-        platformYieldShare = _platformYieldShare;
+        platformYieldShare = newShare;
         
-        emit PlatformYieldShareUpdated(oldshare,_platformYieldShare);
+        emit PlatformYieldShareUpdated(oldshare, newShare);
     }
 
     function calculateYieldShares(uint256 totalYield) 
         external 
         view 
-        returns (uint256 creatorShare, uint256 platformShare) {
+        returns (uint256 creatorShare, uint256 platformShare) 
+    {
+        // Simplified overflow check
+        if (totalYield > 0 && platformYieldShare > 0 && 
+            totalYield > type(uint256).max / platformYieldShare) {
+            revert Overflow();
+        }
         
         platformShare = (totalYield * platformYieldShare) / 10000;
-        
-        
-        creatorShare = totalYield - platformShare;
+        // Use unchecked for this subtraction since overflow is impossible
+        unchecked {
+            creatorShare = totalYield - platformShare;
+        }
         
         return (creatorShare, platformShare);
     }
@@ -73,15 +84,4 @@ contract YieldDistributor is Ownable {
         return platformYieldShare;
     }
 
-    function getYieldSplitPreview(uint256 yieldAmount) 
-        external 
-        view 
-        returns (uint256 creatorAmount, uint256 platformAmount) 
-    {
-        platformAmount = (yieldAmount * platformYieldShare) / 10000;
-        creatorAmount = yieldAmount - platformAmount;
-        
-        return (creatorAmount, platformAmount);
-    }
-    
 }

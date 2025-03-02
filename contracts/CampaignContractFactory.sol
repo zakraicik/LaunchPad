@@ -5,16 +5,16 @@ import "./interfaces/IDefiIntegrationManager.sol";
 
 
 contract CampaignFactory {
-    // State variables
     address[] public deployedCampaigns;
     mapping(address => address[]) public creatorToCampaigns;
     IDefiIntegrationManager public defiManager;
     
-    // Events
-    event CampaignCreated(address indexed campaignAddress, address indexed creator);
+    event CampaignCreated(address indexed campaignAddress, address indexed creator, bytes32 campaignId);
     
-    // Errors
     error InvalidAddress();
+    error InvalidGoalAmount(uint256);
+    error InvalidCampaignDuration(uint256);
+    error ContributionTokenNotSupported(address);
 
     constructor(address _defiManager) {
         if(_defiManager == address(0)) {
@@ -24,27 +24,49 @@ contract CampaignFactory {
     }
     
     function deploy(
+        address _campaignToken,
         uint256 _campaignGoalAmount,
-        uint16 _campaignDuration,
-        string memory _campaignName,
-        string memory _campaignDescription
+        uint16 _campaignDuration
     ) external returns(address) {
+        // Function body remains unchanged
+        if (_campaignToken == address(0)) {
+            revert InvalidAddress();
+        }
+        
+
+        ITokenRegistry tokenRegistry = defiManager.tokenRegistry();
+        if(!tokenRegistry.isTokenSupported(_campaignToken)){
+            revert ContributionTokenNotSupported(_campaignToken);
+        }
+
+
+        if(_campaignGoalAmount <= 0) {
+            revert InvalidGoalAmount(_campaignGoalAmount);
+        }
+
+        if(_campaignDuration <= 0) {
+            revert InvalidCampaignDuration(_campaignDuration);
+        }
+
         Campaign newCampaign = new Campaign(
             msg.sender, 
+            _campaignToken,
             _campaignGoalAmount, 
-            _campaignDuration, 
-            _campaignName, 
-            _campaignDescription,
-            address(defiManager)  // Pass the DefiIntegrationManager address
+            _campaignDuration,
+            address(defiManager)
         );
         
+
         address campaignAddress = address(newCampaign);
         deployedCampaigns.push(campaignAddress);
         creatorToCampaigns[msg.sender].push(campaignAddress);
         
+
         defiManager.authorizeCampaign(campaignAddress);
         
-        emit CampaignCreated(campaignAddress, msg.sender);
+
+        bytes32 campaignId = newCampaign.campaignId();
+        emit CampaignCreated(campaignAddress, msg.sender, campaignId);
         
         return campaignAddress;
     }
@@ -65,4 +87,5 @@ contract CampaignFactory {
     function getCreatorCampaignsCount(address _creator) external view returns(uint256) {
         return creatorToCampaigns[_creator].length;
     }
+
 }
