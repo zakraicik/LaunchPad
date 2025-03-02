@@ -87,4 +87,5 @@ contract CampaignFactory {
     function getCreatorCampaignsCount(address _creator) external view returns(uint256) {
         return creatorToCampaigns[_creator].length;
     }
+
 }
