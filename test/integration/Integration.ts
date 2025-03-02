@@ -2,6 +2,14 @@ import { expect } from 'chai'
 import { ethers } from 'hardhat'
 import { loadFixture } from '@nomicfoundation/hardhat-network-helpers'
 
+interface ICampaign {
+  owner(): Promise<string>
+  campaignToken(): Promise<string>
+  campaignGoalAmount(): Promise<bigint>
+  campaignDuration(): Promise<number>
+  isCampaignActive(): Promise<boolean>
+}
+
 describe('Integration', function () {
   // Constants for testing
   const TOKEN_AMOUNT = ethers.parseUnits('1000', 18)
@@ -166,9 +174,66 @@ describe('Integration', function () {
     }
   }
 
-  describe('Deployment', function () {
-    it('Should ', async function () {
-      const { owner } = await loadFixture(deployPlatformFixture)
+  describe('Campaign Lifecycle', function () {
+    it('Should create a campaign through factory and verify authorization', async function () {
+      const { campaignFactory, creator, mockDAI, defiManager } =
+        await loadFixture(deployPlatformFixture)
+
+      const tx = await campaignFactory
+        .connect(creator)
+        .deploy(await mockDAI.getAddress(), CAMPAIGN_GOAL, CAMPAIGN_DURATION)
+
+      // Add proper null checking
+      const receipt = await tx.wait()
+      if (!receipt) {
+        throw new Error('Transaction failed')
+      }
+
+      // Now TypeScript knows receipt is not null
+      const event = receipt.logs.find(log => {
+        try {
+          const parsed = campaignFactory.interface.parseLog(log)
+          return parsed && parsed.name === 'CampaignCreated'
+        } catch {
+          return false
+        }
+      })
+
+      // You should also check if event exists
+      if (!event) {
+        throw new Error('Failed to find CampaignCreated event')
+      }
+
+      const parsedEvent = campaignFactory.interface.parseLog(event)
+      if (!parsedEvent) {
+        throw new Error('Failed to parse event')
+      }
+
+      const campaignAddress = parsedEvent.args[0]
+
+      // Check if the campaign is authorized in the DefiIntegrationManager
+      expect(await defiManager.isCampaignAuthorized(campaignAddress)).to.be.true
+
+      // Verify campaign was correctly added to factory records
+      expect(await campaignFactory.deployedCampaigns(0)).to.equal(
+        campaignAddress
+      )
+      expect(
+        await campaignFactory.creatorToCampaigns(creator.address, 0)
+      ).to.equal(campaignAddress)
+
+      // Get the Campaign contract instance
+      const Campaign = await ethers.getContractFactory('Campaign')
+      const campaign = Campaign.attach(campaignAddress) as unknown as ICampaign
+
+      // Verify campaign parameters
+      expect(await campaign.owner()).to.equal(creator.address)
+      expect(await campaign.campaignToken()).to.equal(
+        await mockDAI.getAddress()
+      )
+      expect(await campaign.campaignGoalAmount()).to.equal(CAMPAIGN_GOAL)
+      expect(await campaign.campaignDuration()).to.equal(CAMPAIGN_DURATION)
+      expect(await campaign.isCampaignActive()).to.be.true
     })
   })
 })
