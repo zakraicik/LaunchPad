@@ -467,4 +467,6 @@ describe('Integration', function () {
       expect(await campaign.contributions(contributor2.address)).to.equal(0)
     })
   })
+
+  describe('Defi Integration', function () {})
 })
