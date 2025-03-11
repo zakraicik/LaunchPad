@@ -6,6 +6,17 @@ import "../interfaces/ITokenRegistry.sol";
 import "../interfaces/IYieldDistributor.sol";
 
 contract MockDefiManager {
+    // Custom errors matching real implementation
+    error UnauthorizedAddress();
+    error ZeroAmount(uint256 amount);
+    error InsufficientDeposit(address token, uint256 requested, uint256 available);
+    error TokenNotSupported(address token);
+    error YieldDepositFailed(string reason);
+    error YieldwithdrawalFailed(string reason);
+    error NoYield(address token);
+    error TokensAreTheSame(address fromToken, address outToken);
+    error SwapFailed(string reason);
+    
     // State tracking
     bool public authorizeSuccess = true;
     bool public depositSuccess = true;
@@ -73,75 +84,85 @@ contract MockDefiManager {
     
     // Interface implementation
     function authorizeCampaign(address campaign) external returns (bool) {
-        if (authorizeSuccess) {
-            authorizedCampaigns[campaign] = true;
-            emit CampaignAuthorized(campaign);
-            return true;
+        if (!authorizeSuccess) {
+            revert UnauthorizedAddress();
         }
-        return false;
+        authorizedCampaigns[campaign] = true;
+        emit CampaignAuthorized(campaign);
+        return true;
     }
     
     function tokenRegistry() external view returns (ITokenRegistry) {
         return ITokenRegistry(mockTokenRegistryAddress);
     }
 
-    function depositToYieldProtocol(address token, uint256 amount) external returns (bool) {
+    function depositToYieldProtocol(address token, uint256 amount) external {
         if (!depositSuccess) {
-            revert("Deposit failed");
+            revert YieldDepositFailed("Deposit failed");
+        }
+        
+        if (amount <= 0) {
+            revert ZeroAmount(amount);
         }
         
         // Validate token via registry
         ITokenRegistry registry = ITokenRegistry(mockTokenRegistryAddress);
-        require(registry.isTokenSupported(token), "Token not supported");
+        if (!registry.isTokenSupported(token)) {
+            revert TokenNotSupported(token);
+        }
         
         // Transfer tokens from sender
         bool success = IERC20(token).transferFrom(msg.sender, address(this), amount);
-        require(success, "Token transfer failed");
+        if (!success) {
+            revert YieldDepositFailed("Token transfer failed");
+        }
         
         // Update deposits for the calling campaign
         aaveDeposits[msg.sender][token] += amount;
         
         emit YieldDeposited(msg.sender, token, amount);
-        return true;
     }
     
     function withdrawFromYieldProtocol(address token, uint256 amount) external returns (uint256) {
         if (!withdrawSuccess) {
-            revert("Withdrawal failed");
+            revert YieldwithdrawalFailed("Withdrawal failed");
+        }
+        
+        if (amount <= 0) {
+            revert ZeroAmount(amount);
         }
         
         uint256 availableAmount = aaveDeposits[msg.sender][token];
         if (amount > availableAmount) {
-            revert("Insufficient deposit");
+            revert InsufficientDeposit(token, amount, availableAmount);
         }
         
-        uint256 withdrawAmount = amount;
-        
-        if (withdrawAmount > 0) {
-            aaveDeposits[msg.sender][token] -= withdrawAmount;
-            bool success = IERC20(token).transfer(msg.sender, withdrawAmount);
-            require(success, "Token transfer failed");
-            
-            emit YieldWithdrawn(msg.sender, token, withdrawAmount);
+        aaveDeposits[msg.sender][token] -= amount;
+        bool success = IERC20(token).transfer(msg.sender, amount);
+        if (!success) {
+            revert YieldwithdrawalFailed("Token transfer failed");
         }
         
-        return withdrawAmount;
+        emit YieldWithdrawn(msg.sender, token, amount);
+        return amount;
     }
     
     function withdrawAllFromYieldProtocol(address token) external returns (uint256) {
         if (!withdrawSuccess) {
-            revert("Withdrawal failed");
+            revert YieldwithdrawalFailed("Withdrawal failed");
         }
         
         uint256 withdrawAmount = aaveDeposits[msg.sender][token];
         
         if (withdrawAmount == 0) {
-            revert("Zero amount");
+            revert ZeroAmount(withdrawAmount);
         }
         
         aaveDeposits[msg.sender][token] = 0;
         bool success = IERC20(token).transfer(msg.sender, withdrawAmount);
-        require(success, "Token transfer failed");
+        if (!success) {
+            revert YieldwithdrawalFailed("Token transfer failed");
+        }
             
         emit YieldWithdrawn(msg.sender, token, withdrawAmount);
         
@@ -150,19 +171,19 @@ contract MockDefiManager {
     
     function harvestYield(address token) external returns (uint256, uint256) {
         if (!harvestSuccess) {
-            revert("Harvest failed");
+            revert YieldwithdrawalFailed("Harvest failed");
         }
         
         uint256 depositAmount = aaveDeposits[msg.sender][token];
         if (depositAmount == 0) {
-            revert("No yield");
+            revert NoYield(token);
         }
         
         // Calculate yield based on deposit amount and yield rate
         uint256 totalYield = (depositAmount * yieldRate) / 10000;
         
         if (totalYield == 0) {
-            revert("No yield");
+            revert NoYield(token);
         }
         
         // Use the actual YieldDistributor logic to calculate shares
@@ -171,12 +192,16 @@ contract MockDefiManager {
         
         // Transfer to campaign
         bool success = IERC20(token).transfer(msg.sender, creatorYield);
-        require(success, "Token transfer failed");
+        if (!success) {
+            revert YieldwithdrawalFailed("Token transfer failed");
+        }
         
         // Transfer to platform treasury
         address treasury = distributor.getPlatformTreasury();
         success = IERC20(token).transfer(treasury, platformYield);
-        require(success, "Token transfer to treasury failed");
+        if (!success) {
+            revert YieldwithdrawalFailed("Token transfer to treasury failed");
+        }
         
         emit YieldHarvested(msg.sender, token, totalYield, creatorYield, platformYield);
         
@@ -197,26 +222,39 @@ contract MockDefiManager {
     
     function swapTokenForTarget(address fromToken, uint256 amount, address toToken) external returns (uint256) {
         if (!swapSuccess) {
-            revert("Swap failed");
+            revert SwapFailed("Swap failed");
+        }
+        
+        if (amount <= 0) {
+            revert ZeroAmount(amount);
         }
         
         // Token validation
         ITokenRegistry registry = ITokenRegistry(mockTokenRegistryAddress);
-        require(registry.isTokenSupported(fromToken), "Source token not supported");
-        require(registry.isTokenSupported(toToken), "Target token not supported");
+        if (!registry.isTokenSupported(fromToken)) {
+            revert TokenNotSupported(fromToken);
+        }
+        
+        if (!registry.isTokenSupported(toToken)) {
+            revert TokenNotSupported(toToken);
+        }
         
         if (fromToken == toToken) {
-            revert("Tokens are the same");
+            revert TokensAreTheSame(fromToken, toToken);
         }
         
         // Transfer tokens from caller
         bool success = IERC20(fromToken).transferFrom(msg.sender, address(this), amount);
-        require(success, "Token transfer failed");
+        if (!success) {
+            revert SwapFailed("Token transfer failed");
+        }
         
         uint256 receivedAmount = amount * 2; // 2:1 exchange rate for testing
         
         success = IERC20(toToken).transfer(msg.sender, receivedAmount);
-        require(success, "Token transfer failed");
+        if (!success) {
+            revert SwapFailed("Token transfer failed");
+        }
         
         emit TokenSwapped(fromToken, toToken, amount, receivedAmount);
         

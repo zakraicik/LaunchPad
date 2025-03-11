@@ -48,7 +48,6 @@ contract Campaign is Ownable, ReentrancyGuard {
     error RefundFailed();
     error FundsAlreadyClaimed();
     error ClaimTransferFailed();
-    error DefiActionFailed();
     error InvalidSwapAmount(uint256);
 
     constructor(
@@ -94,17 +93,35 @@ contract Campaign is Ownable, ReentrancyGuard {
         revert ETHNotAccepted();
     }
     
-    function contribute(uint256 amount) external nonReentrant {
+    function contribute(address fromToken, uint256 amount) external nonReentrant {
         if (amount == 0) revert InvalidContributionAmount(amount);
         if (!isCampaignActive()) revert CampaignNotActive();
         if (totalAmountRaised >= campaignGoalAmount) revert CampaignGoalReached();
+
+        ITokenRegistry tokenRegistry = defiManager.tokenRegistry();
+        if(!tokenRegistry.isTokenSupported(fromToken)) {
+            revert ContributionTokenNotSupported(fromToken);
+        }
         
-        contributions[msg.sender] += amount;
-        totalAmountRaised += amount;
+        uint256 contributionAmount;
         
-        IERC20(campaignToken).safeTransferFrom(msg.sender, address(this), amount);
+        if (fromToken == campaignToken) {
+            IERC20(campaignToken).safeTransferFrom(msg.sender, address(this), amount);
+            contributionAmount = amount;
+        } else {
+            IERC20(fromToken).safeTransferFrom(msg.sender, address(this), amount);
+            IERC20(fromToken).safeIncreaseAllowance(address(defiManager), amount);
+            
+            uint256 received = defiManager.swapTokenForTarget(fromToken, amount, campaignToken);
+            contributionAmount = received;
+            emit TokensSwapped(fromToken, campaignToken, amount, received);
+           
+        }
         
-        emit Contribution(msg.sender, amount);
+        contributions[msg.sender] += contributionAmount;
+        totalAmountRaised += contributionAmount;
+        
+        emit Contribution(msg.sender, contributionAmount);
     }
     
 
@@ -140,54 +157,27 @@ contract Campaign is Ownable, ReentrancyGuard {
         emit FundsClaimed(owner(), balance);
     }
     
-
     function depositToYieldProtocol(address token, uint256 amount) external onlyOwner nonReentrant {
         IERC20(token).safeIncreaseAllowance(address(defiManager), amount);
         
-        try defiManager.depositToYieldProtocol(token, amount) {
-            emit FundsDeposited(token, amount);
-        } catch {
-            revert DefiActionFailed();
-        }
+        defiManager.depositToYieldProtocol(token, amount);
+        emit FundsDeposited(token, amount);
         
     }
-    
 
     function harvestYield(address token) external onlyOwner nonReentrant {
-        try defiManager.harvestYield(token) returns (uint256 _creatorYield, uint256) {
-            emit YieldHarvested(token, _creatorYield);
-        } catch {
-            revert DefiActionFailed();
-        }
-    }
-
-    function swapTokens(address fromToken, uint256 amount, address toToken) external onlyOwner nonReentrant {
-
-        if (amount == 0) revert InvalidSwapAmount(amount);
-
-        IERC20(fromToken).safeIncreaseAllowance(address(defiManager), amount);
-        
-        try defiManager.swapTokenForTarget(fromToken, amount, toToken) returns (uint256 received) {
-            emit TokensSwapped(fromToken, toToken, amount, received);
-        } catch {
-            revert DefiActionFailed();
-        }
+        (uint256 _creatorYield, ) = defiManager.harvestYield(token);
+        emit YieldHarvested(token, _creatorYield);
     }
     
     function withdrawAllFromYieldProtocol(address token) external onlyOwner nonReentrant {
-        try defiManager.withdrawAllFromYieldProtocol(token) returns (uint256 withdrawn) {
-            emit WithdrawnFromYield(token, withdrawn);
-        } catch {
-            revert DefiActionFailed();
-        }
+        uint256 withdrawn = defiManager.withdrawAllFromYieldProtocol(token);
+        emit WithdrawnFromYield(token, withdrawn);
     }
 
     function withdrawFromYieldProtocol(address token, uint256 amount) external onlyOwner nonReentrant {
-        try defiManager.withdrawFromYieldProtocol(token, amount) returns (uint256 withdrawn) {
-            emit WithdrawnFromYield(token, withdrawn);
-        } catch {
-            revert DefiActionFailed();
-        }
+        uint256 withdrawn =  defiManager.withdrawFromYieldProtocol(token, amount);
+        emit WithdrawnFromYield(token, withdrawn);
     }
     
     function isCampaignActive() public view returns (bool) {

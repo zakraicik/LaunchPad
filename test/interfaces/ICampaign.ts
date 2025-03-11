@@ -14,7 +14,7 @@ export interface ICampaign {
   // Contribution methods
   contributions(address: string): Promise<bigint>
   totalAmountRaised(): Promise<bigint>
-  contribute(amount: bigint): Promise<any>
+  contribute(fromToken: string, amount: bigint): Promise<any>
   claimFunds(): Promise<any>
   requestRefund(): Promise<any>
 
