@@ -98,6 +98,18 @@ describe('Integration', function () {
       1
     )
 
+    // Add these two lines to your fixture:
+    await mockUniswapQuoter.setCustomQuoteRate(
+      await mockUSDC.getAddress(),
+      await mockDAI.getAddress(),
+      1
+    ) // 1:1 rate
+    await mockUniswapRouter.setCustomSwapRate(
+      await mockUSDC.getAddress(),
+      await mockDAI.getAddress(),
+      1
+    )
+
     // // Deploy TokenRegistry
     const tokenRegistry = await ethers.deployContract('TokenRegistry', [
       owner.address
@@ -276,13 +288,17 @@ describe('Integration', function () {
       await mockDAI
         .connect(contributor1)
         .approve(campaignAddress, CONTRIBUTION_AMOUNT)
-      await campaign.connect(contributor1).contribute(CONTRIBUTION_AMOUNT)
+      await campaign
+        .connect(contributor1)
+        .contribute(await mockDAI.getAddress(), CONTRIBUTION_AMOUNT)
 
       // Contributor 2 contributes
       await mockDAI
         .connect(contributor2)
         .approve(campaignAddress, CONTRIBUTION_AMOUNT)
-      await campaign.connect(contributor2).contribute(CONTRIBUTION_AMOUNT)
+      await campaign
+        .connect(contributor2)
+        .contribute(await mockDAI.getAddress(), CONTRIBUTION_AMOUNT)
 
       // Verify contributions
       expect(await campaign.contributions(contributor1.address)).to.equal(
@@ -296,6 +312,187 @@ describe('Integration', function () {
       )
       expect(await mockDAI.balanceOf(campaignAddress)).to.equal(
         CONTRIBUTION_AMOUNT * 2n
+      )
+    })
+
+    it('Should allow users to contribute in a non campaign token', async function () {
+      const {
+        campaignFactory,
+        creator,
+        contributor1,
+        mockDAI,
+        mockUSDC,
+        mockUniswapRouter
+      } = await loadFixture(deployPlatformFixture)
+
+      // Create a campaign with DAI as the target token
+      const tx = await campaignFactory
+        .connect(creator)
+        .deploy(await mockDAI.getAddress(), CAMPAIGN_GOAL, CAMPAIGN_DURATION)
+
+      const receipt = await tx.wait()
+      if (!receipt) throw new Error('Transaction failed')
+
+      const event = receipt.logs.find(log => {
+        try {
+          const parsed = campaignFactory.interface.parseLog(log)
+          return parsed && parsed.name === 'CampaignCreated'
+        } catch {
+          return false
+        }
+      })
+      if (!event) throw new Error('Event failed')
+
+      const parsedEvent = campaignFactory.interface.parseLog(event)
+      if (!parsedEvent) throw new Error('parsedEvent failed')
+
+      const campaignAddress = parsedEvent.args[0]
+      const Campaign = await ethers.getContractFactory('Campaign')
+      const campaign = Campaign.attach(campaignAddress) as unknown as ICampaign
+
+      // Initial balances
+      const initialDAIBalance = await mockDAI.balanceOf(campaignAddress)
+      const initialUSDCBalance = await mockUSDC.balanceOf(contributor1.address)
+      const initialContribution = await campaign.contributions(
+        contributor1.address
+      )
+      const initialTotalRaised = await campaign.totalAmountRaised()
+
+      // Fund the mock Uniswap router with DAI for the swap result
+      // The mock router will give a 1:1 exchange rate (configured in the fixture)
+      const contributionAmount = ethers.parseUnits('100', 18)
+      await mockDAI.transfer(
+        await mockUniswapRouter.getAddress(),
+        contributionAmount
+      )
+
+      // Approve and contribute using USDC (not the campaign token)
+      await mockUSDC
+        .connect(contributor1)
+        .approve(campaignAddress, contributionAmount)
+
+      // This will swap USDC to DAI and track the contribution
+      await campaign
+        .connect(contributor1)
+        .contribute(await mockUSDC.getAddress(), contributionAmount)
+
+      // Verify the contribution was tracked correctly
+      expect(await campaign.contributions(contributor1.address)).to.equal(
+        initialContribution + contributionAmount
+      )
+
+      // Verify total raised increased
+      expect(await campaign.totalAmountRaised()).to.equal(
+        initialTotalRaised + contributionAmount
+      )
+
+      // Verify the campaign has DAI (target token) balance, not USDC
+      expect(await mockDAI.balanceOf(campaignAddress)).to.equal(
+        initialDAIBalance + contributionAmount
+      )
+
+      // Contributor's USDC balance should have decreased
+      expect(await mockUSDC.balanceOf(contributor1.address)).to.equal(
+        initialUSDCBalance - contributionAmount
+      )
+    })
+
+    it('Should track contributions correctly with a non-1:1 exchange rate', async function () {
+      const {
+        campaignFactory,
+        creator,
+        contributor1,
+        mockDAI,
+        mockUSDC,
+        mockUniswapRouter,
+        mockUniswapQuoter
+      } = await loadFixture(deployPlatformFixture)
+
+      // Create a campaign with DAI as the target token
+      const tx = await campaignFactory
+        .connect(creator)
+        .deploy(await mockDAI.getAddress(), CAMPAIGN_GOAL, CAMPAIGN_DURATION)
+
+      const receipt = await tx.wait()
+      if (!receipt) throw new Error('Transaction failed')
+
+      const event = receipt.logs.find(log => {
+        try {
+          const parsed = campaignFactory.interface.parseLog(log)
+          return parsed && parsed.name === 'CampaignCreated'
+        } catch {
+          return false
+        }
+      })
+
+      if (!event) throw new Error('Event failed')
+
+      const parsedEvent = campaignFactory.interface.parseLog(event)
+
+      if (!parsedEvent) throw new Error('parsedEvent failed')
+
+      const campaignAddress = parsedEvent.args[0]
+      const Campaign = await ethers.getContractFactory('Campaign')
+      const campaign = Campaign.attach(campaignAddress) as unknown as ICampaign
+
+      const exchangeRate = 1n
+
+      await mockUniswapRouter.setCustomSwapRate(
+        await mockUSDC.getAddress(),
+        await mockDAI.getAddress(),
+        exchangeRate // 1n - means 1:1 swap rate with your current mocks
+      )
+
+      await mockUniswapQuoter.setCustomQuoteRate(
+        await mockUSDC.getAddress(),
+        await mockDAI.getAddress(),
+        exchangeRate
+      )
+
+      // Initial balances
+      const initialDAIBalance = await mockDAI.balanceOf(campaignAddress)
+      const initialUSDCBalance = await mockUSDC.balanceOf(contributor1.address)
+      const initialContribution = await campaign.contributions(
+        contributor1.address
+      )
+      const initialTotalRaised = await campaign.totalAmountRaised()
+
+      // Input amount and expected output amount
+      const inputAmount = ethers.parseUnits('100', 18)
+      const expectedOutputAmount = inputAmount * exchangeRate
+
+      // Fund the mock Uniswap router with DAI for the swap result
+      await mockDAI.transfer(
+        await mockUniswapRouter.getAddress(),
+        expectedOutputAmount
+      )
+
+      // Approve and contribute using USDC
+      await mockUSDC.connect(contributor1).approve(campaignAddress, inputAmount)
+
+      // This will swap USDC to DAI and track the contribution
+      await campaign
+        .connect(contributor1)
+        .contribute(await mockUSDC.getAddress(), inputAmount)
+
+      // Verify the contribution was tracked correctly based on the DAI amount received
+      expect(await campaign.contributions(contributor1.address)).to.equal(
+        initialContribution + expectedOutputAmount
+      )
+
+      // Verify total raised increased by the DAI amount
+      expect(await campaign.totalAmountRaised()).to.equal(
+        initialTotalRaised + expectedOutputAmount
+      )
+
+      // Verify the campaign has received the correct DAI amount
+      expect(await mockDAI.balanceOf(campaignAddress)).to.equal(
+        initialDAIBalance + expectedOutputAmount
+      )
+
+      // Contributor's USDC balance should have decreased by the input amount
+      expect(await mockUSDC.balanceOf(contributor1.address)).to.equal(
+        initialUSDCBalance - inputAmount
       )
     })
 
@@ -342,10 +539,14 @@ describe('Integration', function () {
       const halfGoal = CAMPAIGN_GOAL / 2n
 
       await mockDAI.connect(contributor1).approve(campaignAddress, halfGoal)
-      await campaign.connect(contributor1).contribute(halfGoal)
+      await campaign
+        .connect(contributor1)
+        .contribute(await mockDAI.getAddress(), halfGoal)
 
       await mockDAI.connect(contributor2).approve(campaignAddress, halfGoal)
-      await campaign.connect(contributor2).contribute(halfGoal)
+      await campaign
+        .connect(contributor2)
+        .contribute(await mockDAI.getAddress(), halfGoal)
 
       // Verify campaign is successful
       expect(await campaign.isCampaignSuccessful()).to.be.true
@@ -415,12 +616,16 @@ describe('Integration', function () {
       await mockDAI
         .connect(contributor1)
         .approve(campaignAddress, partialAmount)
-      await campaign.connect(contributor1).contribute(partialAmount)
+      await campaign
+        .connect(contributor1)
+        .contribute(await mockDAI.getAddress(), partialAmount)
 
       await mockDAI
         .connect(contributor2)
         .approve(campaignAddress, partialAmount)
-      await campaign.connect(contributor2).contribute(partialAmount)
+      await campaign
+        .connect(contributor2)
+        .contribute(await mockDAI.getAddress(), partialAmount)
 
       // Verify campaign is not successful
       expect(await campaign.isCampaignSuccessful()).to.be.false
@@ -519,7 +724,9 @@ describe('Integration', function () {
       await mockDAI
         .connect(contributor1)
         .approve(campaignAddress, CAMPAIGN_GOAL)
-      await campaign.connect(contributor1).contribute(CAMPAIGN_GOAL)
+      await campaign
+        .connect(contributor1)
+        .contribute(await mockDAI.getAddress(), CAMPAIGN_GOAL)
 
       // Check initial balances
       expect(await mockDAI.balanceOf(campaignAddress)).to.equal(CAMPAIGN_GOAL)
@@ -618,7 +825,9 @@ describe('Integration', function () {
       await mockDAI
         .connect(contributor1)
         .approve(campaignAddress, CAMPAIGN_GOAL)
-      await campaign.connect(contributor1).contribute(CAMPAIGN_GOAL)
+      await campaign
+        .connect(contributor1)
+        .contribute(await mockDAI.getAddress(), CAMPAIGN_GOAL)
 
       // Deposit to yield protocol
       await campaign
@@ -653,89 +862,6 @@ describe('Integration', function () {
       expect(
         await campaign.getDepositedAmount(await mockDAI.getAddress())
       ).to.equal(0)
-    })
-
-    it('Should swap tokens through Uniswap', async function () {
-      const {
-        campaignFactory,
-        creator,
-        contributor1,
-        mockDAI,
-        mockUSDC,
-        mockUniswapRouter
-      } = await loadFixture(deployPlatformFixture)
-
-      // Create a new campaign with DAI as the campaign token
-      const tx = await campaignFactory
-        .connect(creator)
-        .deploy(await mockDAI.getAddress(), CAMPAIGN_GOAL, CAMPAIGN_DURATION)
-
-      const receipt = await tx.wait()
-
-      if (!receipt) {
-        throw new Error('Transaction failed')
-      }
-
-      const event = receipt.logs.find(log => {
-        try {
-          const parsed = campaignFactory.interface.parseLog(log)
-          return parsed && parsed.name === 'CampaignCreated'
-        } catch {
-          return false
-        }
-      })
-
-      if (!event) {
-        throw new Error('Event failed')
-      }
-
-      const parsedEvent = campaignFactory.interface.parseLog(event)
-
-      if (!parsedEvent) {
-        throw new Error('parsedEvent failed')
-      }
-
-      const campaignAddress = parsedEvent.args[0]
-
-      // Get the Campaign contract instance
-      const Campaign = await ethers.getContractFactory('Campaign')
-      const campaign = Campaign.attach(campaignAddress) as unknown as ICampaign
-
-      // Contributor funds the campaign with DAI
-      await mockDAI
-        .connect(contributor1)
-        .approve(campaignAddress, CAMPAIGN_GOAL)
-      await campaign.connect(contributor1).contribute(CAMPAIGN_GOAL)
-
-      // Verify initial balances
-      expect(await mockDAI.balanceOf(campaignAddress)).to.equal(CAMPAIGN_GOAL)
-      expect(await mockUSDC.balanceOf(campaignAddress)).to.equal(0)
-
-      // Set up USDC for the swap result
-      const swapAmount = CAMPAIGN_GOAL / 2n
-      // Since we have a 1:1 swap rate, the expected output is the same as input
-      const expectedOutput = swapAmount
-
-      // We need to fund the mock Uniswap router with USDC for the swap
-      await mockUSDC.transfer(
-        await mockUniswapRouter.getAddress(),
-        expectedOutput
-      )
-
-      // Swap half of DAI to USDC
-      await campaign
-        .connect(creator)
-        .swapTokens(
-          await mockDAI.getAddress(),
-          swapAmount,
-          await mockUSDC.getAddress()
-        )
-
-      // Verify balances after swap
-      expect(await mockDAI.balanceOf(campaignAddress)).to.equal(
-        CAMPAIGN_GOAL - swapAmount
-      )
-      expect(await mockUSDC.balanceOf(campaignAddress)).to.equal(expectedOutput)
     })
 
     it('Should change yield distribution parameters and verify effect', async function () {
@@ -791,7 +917,9 @@ describe('Integration', function () {
       await mockDAI
         .connect(contributor1)
         .approve(campaignAddress, CAMPAIGN_GOAL)
-      await campaign.connect(contributor1).contribute(CAMPAIGN_GOAL)
+      await campaign
+        .connect(contributor1)
+        .contribute(await mockDAI.getAddress(), CAMPAIGN_GOAL)
 
       // Deposit to yield protocol
       await campaign
@@ -874,13 +1002,13 @@ describe('Integration', function () {
             await mockDAI.getAddress(),
             CONTRIBUTION_AMOUNT
           )
-      ).to.be.revertedWithCustomError(unauthorizedCampaign, 'DefiActionFailed')
+      ).to.be.revertedWithCustomError(defiManager, 'UnauthorizedAddress')
 
       await expect(
         unauthorizedCampaign
           .connect(creator)
           .harvestYield(await mockDAI.getAddress())
-      ).to.be.revertedWithCustomError(unauthorizedCampaign, 'DefiActionFailed')
+      ).to.be.revertedWithCustomError(defiManager, 'UnauthorizedAddress')
 
       await expect(
         unauthorizedCampaign
@@ -889,17 +1017,7 @@ describe('Integration', function () {
             await mockDAI.getAddress(),
             CONTRIBUTION_AMOUNT
           )
-      ).to.be.revertedWithCustomError(unauthorizedCampaign, 'DefiActionFailed')
-
-      await expect(
-        unauthorizedCampaign
-          .connect(creator)
-          .swapTokens(
-            await mockDAI.getAddress(),
-            CONTRIBUTION_AMOUNT,
-            ethers.ZeroAddress
-          )
-      ).to.be.revertedWithCustomError(unauthorizedCampaign, 'DefiActionFailed')
+      ).to.be.revertedWithCustomError(defiManager, 'UnauthorizedAddress')
     })
 
     it('Should prevent unauthorized users from managing campaigns', async function () {
@@ -946,7 +1064,9 @@ describe('Integration', function () {
       await mockDAI
         .connect(contributor1)
         .approve(campaignAddress, CONTRIBUTION_AMOUNT)
-      await campaign.connect(contributor1).contribute(CONTRIBUTION_AMOUNT)
+      await campaign
+        .connect(contributor1)
+        .contribute(await mockDAI.getAddress(), CONTRIBUTION_AMOUNT)
 
       // Non-owner should not be able to manage campaign
       await expect(
@@ -970,26 +1090,17 @@ describe('Integration', function () {
       await expect(
         campaign.connect(contributor1).harvestYield(await mockDAI.getAddress())
       ).to.be.revertedWithCustomError(campaign, 'OwnableUnauthorizedAccount')
-
-      await expect(
-        campaign
-          .connect(contributor1)
-          .swapTokens(
-            await mockDAI.getAddress(),
-            CONTRIBUTION_AMOUNT,
-            ethers.ZeroAddress
-          )
-      ).to.be.revertedWithCustomError(campaign, 'OwnableUnauthorizedAccount')
     })
 
-    it('Should disable token support during an active campaign and check impact', async function () {
+    it('Should prevent deposits to yield protocol when token is not supported', async function () {
       const {
         campaignFactory,
         creator,
         contributor1,
         mockDAI,
         tokenRegistry,
-        owner
+        owner,
+        defiManager
       } = await loadFixture(deployPlatformFixture)
 
       // Create a new campaign
@@ -1032,7 +1143,9 @@ describe('Integration', function () {
       await mockDAI
         .connect(contributor1)
         .approve(campaignAddress, CONTRIBUTION_AMOUNT)
-      await campaign.connect(contributor1).contribute(CONTRIBUTION_AMOUNT)
+      await campaign
+        .connect(contributor1)
+        .contribute(await mockDAI.getAddress(), CONTRIBUTION_AMOUNT)
 
       // Disable token support in the registry
       await tokenRegistry
@@ -1047,7 +1160,7 @@ describe('Integration', function () {
             await mockDAI.getAddress(),
             CONTRIBUTION_AMOUNT / 2n
           )
-      ).to.be.revertedWithCustomError(campaign, 'DefiActionFailed')
+      ).to.be.revertedWithCustomError(defiManager, 'TokenNotSupported')
     })
 
     it('Should allow platform to revoke campaign authorization', async function () {
@@ -1100,7 +1213,9 @@ describe('Integration', function () {
       await mockDAI
         .connect(contributor1)
         .approve(campaignAddress, CONTRIBUTION_AMOUNT)
-      await campaign.connect(contributor1).contribute(CONTRIBUTION_AMOUNT)
+      await campaign
+        .connect(contributor1)
+        .contribute(await mockDAI.getAddress(), CONTRIBUTION_AMOUNT)
 
       // Verify the campaign is authorized
       expect(await defiManager.isCampaignAuthorized(campaignAddress)).to.be.true
@@ -1128,13 +1243,15 @@ describe('Integration', function () {
             await mockDAI.getAddress(),
             CONTRIBUTION_AMOUNT / 2n
           )
-      ).to.be.revertedWithCustomError(campaign, 'DefiActionFailed')
+      ).to.be.revertedWithCustomError(defiManager, 'UnauthorizedAddress')
 
       // But campaign can still handle contributions and claim funds directly
       await mockDAI
         .connect(contributor1)
         .approve(campaignAddress, CONTRIBUTION_AMOUNT)
-      await campaign.connect(contributor1).contribute(CONTRIBUTION_AMOUNT)
+      await campaign
+        .connect(contributor1)
+        .contribute(await mockDAI.getAddress(), CONTRIBUTION_AMOUNT)
     })
 
     it('Should handle operations at token support boundaries', async function () {
@@ -1187,7 +1304,9 @@ describe('Integration', function () {
       await mockDAI
         .connect(contributor1)
         .approve(campaignAddress, CONTRIBUTION_AMOUNT)
-      await campaign.connect(contributor1).contribute(CONTRIBUTION_AMOUNT)
+      await campaign
+        .connect(contributor1)
+        .contribute(await mockDAI.getAddress(), CONTRIBUTION_AMOUNT)
 
       // Increase minimum contribution amount
       const newMinContribution = 200 // Higher than initial setting
@@ -1201,7 +1320,9 @@ describe('Integration', function () {
       // Small contributions below the new minimum should still work with existing campaigns
       const smallAmount = ethers.parseUnits('10', 18)
       await mockDAI.connect(contributor1).approve(campaignAddress, smallAmount)
-      await campaign.connect(contributor1).contribute(smallAmount)
+      await campaign
+        .connect(contributor1)
+        .contribute(await mockDAI.getAddress(), smallAmount)
 
       // Create a second campaign with the same token
       const tx2 = await campaignFactory
@@ -1245,35 +1366,134 @@ describe('Integration', function () {
 
       // This should work as it's enforced at the campaign factory level, not contract level
       // The token registry restriction is only applied during campaign creation
-      await campaign2.connect(contributor1).contribute(smallAmount)
+      await campaign2
+        .connect(contributor1)
+        .contribute(await mockDAI.getAddress(), smallAmount)
     })
   })
 
   describe('Cross-contract Workflow Scenarios', function () {
-    it('Should handle a complete campaign lifecycle with yield generation and token swaps', async function () {
+    it('Should handle multiple campaigns by the same creator with different tokens', async function () {
       const {
         campaignFactory,
         creator,
         contributor1,
         contributor2,
         mockDAI,
-        mockUSDC,
+        mockUSDC
+      } = await loadFixture(deployPlatformFixture)
+
+      // Create a DAI campaign
+      const tx1 = await campaignFactory
+        .connect(creator)
+        .deploy(await mockDAI.getAddress(), CAMPAIGN_GOAL, CAMPAIGN_DURATION)
+
+      const receipt1 = await tx1.wait()
+      if (!receipt1) throw new Error('Reciept1 failed')
+
+      const event1 = receipt1.logs.find(log => {
+        try {
+          const parsed = campaignFactory.interface.parseLog(log)
+          return parsed && parsed.name === 'CampaignCreated'
+        } catch {
+          return false
+        }
+      })
+
+      if (!event1) throw new Error('event1 failed')
+
+      const parsedEvent1 = campaignFactory.interface.parseLog(event1)
+
+      if (!parsedEvent1) throw new Error('parsedEvent1 failed')
+
+      const campaign1Address = parsedEvent1.args[0]
+
+      // Create a USDC campaign
+      const tx2 = await campaignFactory
+        .connect(creator)
+        .deploy(await mockUSDC.getAddress(), CAMPAIGN_GOAL, CAMPAIGN_DURATION)
+
+      const receipt2 = await tx2.wait()
+      if (!receipt2) throw new Error('receipt2 failed')
+
+      const event2 = receipt2.logs.find(log => {
+        try {
+          const parsed = campaignFactory.interface.parseLog(log)
+          return parsed && parsed.name === 'CampaignCreated'
+        } catch {
+          return false
+        }
+      })
+
+      if (!event2) throw new Error('event2 failed')
+
+      const parsedEvent2 = campaignFactory.interface.parseLog(event2)
+      if (!parsedEvent2) throw new Error('parsedEvent2 failed')
+
+      const campaign2Address = parsedEvent2.args[0]
+
+      // Get the Campaign contract instances
+      const Campaign = await ethers.getContractFactory('Campaign')
+      const campaign1 = Campaign.attach(
+        campaign1Address
+      ) as unknown as ICampaign
+      const campaign2 = Campaign.attach(
+        campaign2Address
+      ) as unknown as ICampaign
+
+      // Verify both campaigns are owned by the creator
+      expect(await campaign1.owner()).to.equal(creator.address)
+      expect(await campaign2.owner()).to.equal(creator.address)
+
+      // Fund the DAI campaign
+      await mockDAI
+        .connect(contributor1)
+        .approve(campaign1Address, CAMPAIGN_GOAL)
+      await campaign1
+        .connect(contributor1)
+        .contribute(await mockDAI.getAddress(), CAMPAIGN_GOAL)
+
+      // Fund the USDC campaign
+      await mockUSDC
+        .connect(contributor2)
+        .approve(campaign2Address, CAMPAIGN_GOAL)
+      await campaign2
+        .connect(contributor2)
+        .contribute(await mockUSDC.getAddress(), CAMPAIGN_GOAL)
+
+      // Verify both campaigns are successful
+      expect(await campaign1.isCampaignSuccessful()).to.be.true
+      expect(await campaign2.isCampaignSuccessful()).to.be.true
+
+      // Verify the campaigns are tracked correctly in the factory
+      const creatorCampaigns = await campaignFactory.getCampaignsByCreator(
+        creator.address
+      )
+      expect(creatorCampaigns).to.include(campaign1Address)
+      expect(creatorCampaigns).to.include(campaign2Address)
+      expect(creatorCampaigns.length).to.equal(2)
+    })
+
+    it('Should handle a campaign that updates treasury address during its lifecycle', async function () {
+      const {
+        campaignFactory,
+        creator,
+        contributor1,
+        mockDAI,
         mockDAIAToken,
         defiManager,
         treasury,
-        mockUniswapRouter
+        yieldDistributor,
+        owner
       } = await loadFixture(deployPlatformFixture)
 
-      // 1. Create a campaign
+      // Create a new campaign
       const tx = await campaignFactory
         .connect(creator)
         .deploy(await mockDAI.getAddress(), CAMPAIGN_GOAL, CAMPAIGN_DURATION)
 
       const receipt = await tx.wait()
-
-      if (!receipt) {
-        throw new Error('Transaction failed')
-      }
+      if (!receipt) throw new Error('Reciept failed')
 
       const event = receipt.logs.find(log => {
         try {
@@ -1283,267 +1503,84 @@ describe('Integration', function () {
           return false
         }
       })
-
-      if (!event) {
-        throw new Error('Event failed')
-      }
+      if (!event) throw new Error('event failed')
 
       const parsedEvent = campaignFactory.interface.parseLog(event)
-      if (!parsedEvent) {
-        throw new Error('parsedEvent failed')
-      }
+      if (!parsedEvent) throw new Error('parsedEvent failed')
 
       const campaignAddress = parsedEvent.args[0]
 
+      // Get the Campaign contract instance
       const Campaign = await ethers.getContractFactory('Campaign')
       const campaign = Campaign.attach(campaignAddress) as unknown as ICampaign
 
-      // 2. Contributors fund the campaign
+      // Fund the campaign
       await mockDAI
         .connect(contributor1)
-        .approve(campaignAddress, CAMPAIGN_GOAL / 2n)
-      await campaign.connect(contributor1).contribute(CAMPAIGN_GOAL / 2n)
+        .approve(campaignAddress, CAMPAIGN_GOAL)
+      await campaign
+        .connect(contributor1)
+        .contribute(await mockDAI.getAddress(), CAMPAIGN_GOAL)
 
-      await mockDAI
-        .connect(contributor2)
-        .approve(campaignAddress, CAMPAIGN_GOAL / 2n)
-      await campaign.connect(contributor2).contribute(CAMPAIGN_GOAL / 2n)
-
-      // 3. Campaign is now fully funded
-      expect(await campaign.isCampaignSuccessful()).to.be.true
-
-      // 4. Creator deposits half of the funds into yield protocol
-      const depositAmount = CAMPAIGN_GOAL / 2n
+      // Deposit to yield protocol
       await campaign
         .connect(creator)
-        .depositToYieldProtocol(await mockDAI.getAddress(), depositAmount)
+        .depositToYieldProtocol(await mockDAI.getAddress(), CAMPAIGN_GOAL)
 
-      // 5. Simulate yield generation
-      const yieldAmount = (depositAmount * 5n) / 100n
+      // Generate first yield
+      const yieldAmount = (CAMPAIGN_GOAL * 5n) / 100n
       await mockDAIAToken.mint(await defiManager.getAddress(), yieldAmount)
       await mockDAI.transfer(await defiManager.getAddress(), yieldAmount)
 
-      // 6. Creator harvests yield
+      // Harvest first yield with original treasury
+      const treasuryBalanceBefore = await mockDAI.balanceOf(treasury.address)
+
       await campaign.connect(creator).harvestYield(await mockDAI.getAddress())
 
-      // 7. Creator swaps part of the NON-DEPOSITED funds (the other half that wasn't deposited to Aave)
-      const swapAmount = CAMPAIGN_GOAL / 4n
+      const treasuryBalanceAfter = await mockDAI.balanceOf(treasury.address)
+      const platformShare = (yieldAmount * 20n) / 100n // 20% platform share
 
-      // Fund the mock Uniswap router with USDC for the swap
-      await mockUSDC.transfer(await mockUniswapRouter.getAddress(), swapAmount)
+      expect(treasuryBalanceAfter - treasuryBalanceBefore).to.equal(
+        platformShare
+      )
 
-      // Perform the swap with the funds still in the campaign (not from Aave)
-      await campaign
-        .connect(creator)
-        .swapTokens(
-          await mockDAI.getAddress(),
-          swapAmount,
-          await mockUSDC.getAddress()
-        )
+      // Create a new treasury address
+      const [, , , , , newTreasury] = await ethers.getSigners()
 
-      // 8. Wait for campaign to end
-      const campaignEndTime = await campaign.campaignEndTime()
-      await time.increaseTo(campaignEndTime + 1n)
+      // Update treasury address
+      await yieldDistributor
+        .connect(owner)
+        .updatePlatformTreasury(newTreasury.address)
 
-      // 9. Withdraw all funds from yield protocol
-      await campaign
-        .connect(creator)
-        .withdrawAllFromYieldProtocol(await mockDAI.getAddress())
+      // Verify treasury was updated
+      expect(await yieldDistributor.getPlatformTreasury()).to.equal(
+        newTreasury.address
+      )
 
-      // 10. Creator claims all funds
-      const daiBalanceBefore = await mockDAI.balanceOf(creator.address)
-      const usdcBalanceBefore = await mockUSDC.balanceOf(creator.address)
+      // Generate second yield
+      await mockDAIAToken.mint(await defiManager.getAddress(), yieldAmount)
+      await mockDAI.transfer(await defiManager.getAddress(), yieldAmount)
 
-      await campaign.connect(creator).claimFunds()
+      // Harvest second yield with new treasury
+      const newTreasuryBalanceBefore = await mockDAI.balanceOf(
+        newTreasury.address
+      )
 
-      const daiBalanceAfter = await mockDAI.balanceOf(creator.address)
-      const usdcBalanceAfter = await mockUSDC.balanceOf(creator.address)
+      await campaign.connect(creator).harvestYield(await mockDAI.getAddress())
 
-      // 11. Verify final balances
-      // DAI balance increase should be the remaining DAI in the campaign
-      const expectedDAI = CAMPAIGN_GOAL - swapAmount
-      expect(daiBalanceAfter - daiBalanceBefore).to.equal(expectedDAI)
+      const newTreasuryBalanceAfter = await mockDAI.balanceOf(
+        newTreasury.address
+      )
 
-      // USDC balance increase should be the swapped amount
-      expect(usdcBalanceAfter - usdcBalanceBefore).to.equal(swapAmount)
+      // Verify new treasury received the yield
+      expect(newTreasuryBalanceAfter - newTreasuryBalanceBefore).to.equal(
+        platformShare
+      )
 
-      // Campaign balances should be zero
-      expect(await mockDAI.balanceOf(campaignAddress)).to.equal(0)
-      expect(await mockUSDC.balanceOf(campaignAddress)).to.equal(0)
+      // Original treasury balance should not have changed
+      expect(await mockDAI.balanceOf(treasury.address)).to.equal(
+        treasuryBalanceAfter
+      )
     })
-
-    // it('Should handle multiple campaigns by the same creator with different tokens', async function () {
-    //   const {
-    //     campaignFactory,
-    //     creator,
-    //     contributor1,
-    //     contributor2,
-    //     mockDAI,
-    //     mockUSDC
-    //   } = await loadFixture(deployPlatformFixture)
-
-    //   // Create a DAI campaign
-    //   const tx1 = await campaignFactory
-    //     .connect(creator)
-    //     .deploy(await mockDAI.getAddress(), CAMPAIGN_GOAL, CAMPAIGN_DURATION)
-
-    //   const receipt1 = await tx1.wait()
-    //   const event1 = receipt1.logs.find(log => {
-    //     try {
-    //       const parsed = campaignFactory.interface.parseLog(log)
-    //       return parsed && parsed.name === 'CampaignCreated'
-    //     } catch {
-    //       return false
-    //     }
-    //   })
-
-    //   const parsedEvent1 = campaignFactory.interface.parseLog(event1)
-    //   const campaign1Address = parsedEvent1.args[0]
-
-    //   // Create a USDC campaign
-    //   const tx2 = await campaignFactory
-    //     .connect(creator)
-    //     .deploy(await mockUSDC.getAddress(), CAMPAIGN_GOAL, CAMPAIGN_DURATION)
-
-    //   const receipt2 = await tx2.wait()
-    //   const event2 = receipt2.logs.find(log => {
-    //     try {
-    //       const parsed = campaignFactory.interface.parseLog(log)
-    //       return parsed && parsed.name === 'CampaignCreated'
-    //     } catch {
-    //       return false
-    //     }
-    //   })
-
-    //   const parsedEvent2 = campaignFactory.interface.parseLog(event2)
-    //   const campaign2Address = parsedEvent2.args[0]
-
-    //   // Get the Campaign contract instances
-    //   const Campaign = await ethers.getContractFactory('Campaign')
-    //   const campaign1 = Campaign.attach(campaign1Address)
-    //   const campaign2 = Campaign.attach(campaign2Address)
-
-    //   // Verify both campaigns are owned by the creator
-    //   expect(await campaign1.owner()).to.equal(creator.address)
-    //   expect(await campaign2.owner()).to.equal(creator.address)
-
-    //   // Fund the DAI campaign
-    //   await mockDAI.connect(contributor1).approve(campaign1Address, CAMPAIGN_GOAL)
-    //   await campaign1.connect(contributor1).contribute(CAMPAIGN_GOAL)
-
-    //   // Fund the USDC campaign
-    //   await mockUSDC
-    //     .connect(contributor2)
-    //     .approve(campaign2Address, CAMPAIGN_GOAL)
-    //   await campaign2.connect(contributor2).contribute(CAMPAIGN_GOAL)
-
-    //   // Verify both campaigns are successful
-    //   expect(await campaign1.isCampaignSuccessful()).to.be.true
-    //   expect(await campaign2.isCampaignSuccessful()).to.be.true
-
-    //   // Verify the campaigns are tracked correctly in the factory
-    //   const creatorCampaigns = await campaignFactory.getCampaignsByCreator(
-    //     creator.address
-    //   )
-    //   expect(creatorCampaigns).to.include(campaign1Address)
-    //   expect(creatorCampaigns).to.include(campaign2Address)
-    //   expect(creatorCampaigns.length).to.equal(2)
-    // })
-
-    // it('Should handle a campaign that updates treasury address during its lifecycle', async function () {
-    //   const {
-    //     campaignFactory,
-    //     creator,
-    //     contributor1,
-    //     mockDAI,
-    //     mockDAIAToken,
-    //     defiManager,
-    //     treasury,
-    //     yieldDistributor,
-    //     owner
-    //   } = await loadFixture(deployPlatformFixture)
-
-    //   // Create a new campaign
-    //   const tx = await campaignFactory
-    //     .connect(creator)
-    //     .deploy(await mockDAI.getAddress(), CAMPAIGN_GOAL, CAMPAIGN_DURATION)
-
-    //   const receipt = await tx.wait()
-    //   const event = receipt.logs.find(log => {
-    //     try {
-    //       const parsed = campaignFactory.interface.parseLog(log)
-    //       return parsed && parsed.name === 'CampaignCreated'
-    //     } catch {
-    //       return false
-    //     }
-    //   })
-
-    //   const parsedEvent = campaignFactory.interface.parseLog(event)
-    //   const campaignAddress = parsedEvent.args[0]
-
-    //   // Get the Campaign contract instance
-    //   const Campaign = await ethers.getContractFactory('Campaign')
-    //   const campaign = Campaign.attach(campaignAddress)
-
-    //   // Fund the campaign
-    //   await mockDAI.connect(contributor1).approve(campaignAddress, CAMPAIGN_GOAL)
-    //   await campaign.connect(contributor1).contribute(CAMPAIGN_GOAL)
-
-    //   // Deposit to yield protocol
-    //   await campaign
-    //     .connect(creator)
-    //     .depositToYieldProtocol(await mockDAI.getAddress(), CAMPAIGN_GOAL)
-
-    //   // Generate first yield
-    //   const yieldAmount = (CAMPAIGN_GOAL * 5n) / 100n
-    //   await mockDAIAToken.mint(await defiManager.getAddress(), yieldAmount)
-    //   await mockDAI.transfer(await defiManager.getAddress(), yieldAmount)
-
-    //   // Harvest first yield with original treasury
-    //   const treasuryBalanceBefore = await mockDAI.balanceOf(treasury.address)
-
-    //   await campaign.connect(creator).harvestYield(await mockDAI.getAddress())
-
-    //   const treasuryBalanceAfter = await mockDAI.balanceOf(treasury.address)
-    //   const platformShare = (yieldAmount * 20n) / 100n // 20% platform share
-
-    //   expect(treasuryBalanceAfter - treasuryBalanceBefore).to.equal(platformShare)
-
-    //   // Create a new treasury address
-    //   const [, , , , , newTreasury] = await ethers.getSigners()
-
-    //   // Update treasury address
-    //   await yieldDistributor
-    //     .connect(owner)
-    //     .updatePlatformTreasury(newTreasury.address)
-
-    //   // Verify treasury was updated
-    //   expect(await yieldDistributor.getPlatformTreasury()).to.equal(
-    //     newTreasury.address
-    //   )
-
-    //   // Generate second yield
-    //   await mockDAIAToken.mint(await defiManager.getAddress(), yieldAmount)
-    //   await mockDAI.transfer(await defiManager.getAddress(), yieldAmount)
-
-    //   // Harvest second yield with new treasury
-    //   const newTreasuryBalanceBefore = await mockDAI.balanceOf(
-    //     newTreasury.address
-    //   )
-
-    //   await campaign.connect(creator).harvestYield(await mockDAI.getAddress())
-
-    //   const newTreasuryBalanceAfter = await mockDAI.balanceOf(newTreasury.address)
-
-    //   // Verify new treasury received the yield
-    //   expect(newTreasuryBalanceAfter - newTreasuryBalanceBefore).to.equal(
-    //     platformShare
-    //   )
-
-    //   // Original treasury balance should not have changed
-    //   expect(await mockDAI.balanceOf(treasury.address)).to.equal(
-    //     treasuryBalanceAfter
-    //   )
-    // })
   })
 })
