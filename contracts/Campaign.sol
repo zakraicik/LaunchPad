@@ -119,12 +119,15 @@ contract Campaign is Ownable, ReentrancyGuard {
         uint256 contributionAmount;
 
         if (fromToken == campaignToken) {
+            contributionAmount = amount;
+            contributions[msg.sender] += contributionAmount;
+            totalAmountRaised += contributionAmount;
+
             IERC20(campaignToken).safeTransferFrom(
                 msg.sender,
                 address(this),
                 amount
             );
-            contributionAmount = amount;
         } else {
             IERC20(fromToken).safeTransferFrom(
                 msg.sender,
@@ -142,11 +145,12 @@ contract Campaign is Ownable, ReentrancyGuard {
                 campaignToken
             );
             contributionAmount = received;
+
+            contributions[msg.sender] += contributionAmount;
+            totalAmountRaised += contributionAmount;
+
             emit TokensSwapped(fromToken, campaignToken, amount, received);
         }
-
-        contributions[msg.sender] += contributionAmount;
-        totalAmountRaised += contributionAmount;
 
         emit Contribution(msg.sender, contributionAmount);
     }
