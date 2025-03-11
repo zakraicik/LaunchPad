@@ -20,17 +20,21 @@ contract DefiIntegrationManager is Ownable, ReentrancyGuard {
     ITokenRegistry public tokenRegistry;
     IYieldDistributor public yieldDistributor;
     address public campaignFactory;
-    
+
     uint24 public constant UNISWAP_FEE_TIER = 3000; // 0.3%
-    uint16 public constant SLIPPAGE_TOLERANCE = 50;  // Changed from uint256 to uint16
-    
+    uint16 public constant SLIPPAGE_TOLERANCE = 50; // Changed from uint256 to uint16
+
     mapping(address => bool) public authorizedCampaigns;
     mapping(address => mapping(address => uint256)) public aaveDeposits;
 
     error UnauthorizedAddress();
     error notCampaignFactory(address campaignFactory);
     error ZeroAmount(uint256 amount);
-    error InsufficientDeposit(address token, uint256 requested, uint256 available);
+    error InsufficientDeposit(
+        address token,
+        uint256 requested,
+        uint256 available
+    );
     error TokenNotSupported(address token);
     error SlippageExceeded(uint256 expected, uint256 received);
     error YieldDepositFailed(string reason);
@@ -38,22 +42,38 @@ contract DefiIntegrationManager is Ownable, ReentrancyGuard {
     error InvalidAddress();
     error InvalidConstructorInput(uint8, address);
     error NoYield(address token);
-    error WithdrawalAmountMismatch(uint256 requestedAmount, uint256 withdrawAmount);
+    error WithdrawalAmountMismatch(
+        uint256 requestedAmount,
+        uint256 withdrawAmount
+    );
     error FailedToGetATokenAddress();
     error TokensAreTheSame(address fromToken, address outToken);
     error SwapQuoteInvalid();
     error SwapFailed(string reason);
-    
-    event YieldDeposited(address indexed campaign, address indexed token, uint256 amount);
-    event YieldWithdrawn(address indexed campaign, address indexed token, uint256 amount);
+
+    event YieldDeposited(
+        address indexed campaign,
+        address indexed token,
+        uint256 amount
+    );
+    event YieldWithdrawn(
+        address indexed campaign,
+        address indexed token,
+        uint256 amount
+    );
     event YieldHarvested(
-        address indexed campaign, 
-        address indexed token, 
+        address indexed campaign,
+        address indexed token,
         uint256 totalYield,
         uint256 creatorShare,
         uint256 platformShare
     );
-    event TokenSwapped(address indexed fromToken, address indexed toToken, uint256 amountIn, uint256 amountOut);
+    event TokenSwapped(
+        address indexed fromToken,
+        address indexed toToken,
+        uint256 amountIn,
+        uint256 amountOut
+    );
     event CampaignAuthorized(address indexed campaign);
     event CampaignUnauthorized(address indexed campaign);
     event CampaignFactoryUpdated(address oldAddress, address newAddress);
@@ -64,35 +84,35 @@ contract DefiIntegrationManager is Ownable, ReentrancyGuard {
     event UniswapQuoterUpdated(address oldAddress, address newAddress);
 
     constructor(
-        address _aavePool, 
-        address _uniswapRouter, 
-        address _uniswapQuoter, 
+        address _aavePool,
+        address _uniswapRouter,
+        address _uniswapQuoter,
         address _tokenRegistry,
         address _campaignFactory,
-        address _yieldDistributor, 
+        address _yieldDistributor,
         address _owner
     ) Ownable(_owner) {
-        if(_aavePool == address(0)){
+        if (_aavePool == address(0)) {
             revert InvalidConstructorInput(0, _aavePool);
         }
 
-        if(_uniswapRouter == address(0)){
+        if (_uniswapRouter == address(0)) {
             revert InvalidConstructorInput(1, _uniswapRouter);
         }
 
-        if(_uniswapQuoter == address(0)){
+        if (_uniswapQuoter == address(0)) {
             revert InvalidConstructorInput(2, _uniswapQuoter);
         }
 
-        if(_tokenRegistry == address(0)){
+        if (_tokenRegistry == address(0)) {
             revert InvalidConstructorInput(3, _tokenRegistry);
         }
 
-        if(_campaignFactory == address(0)){
+        if (_campaignFactory == address(0)) {
             revert InvalidConstructorInput(4, _campaignFactory);
         }
 
-        if(_yieldDistributor == address(0)){
+        if (_yieldDistributor == address(0)) {
             revert InvalidConstructorInput(5, _yieldDistributor);
         }
 
@@ -118,9 +138,8 @@ contract DefiIntegrationManager is Ownable, ReentrancyGuard {
         _;
     }
 
-
     function setCampaignFactory(address _campaignFactory) external onlyOwner {
-        if (_campaignFactory == address(0)){
+        if (_campaignFactory == address(0)) {
             revert InvalidAddress();
         }
 
@@ -131,7 +150,7 @@ contract DefiIntegrationManager is Ownable, ReentrancyGuard {
     }
 
     function setTokenRegistry(address _tokenRegistry) external onlyOwner {
-        if (_tokenRegistry == address(0)){
+        if (_tokenRegistry == address(0)) {
             revert InvalidAddress();
         }
 
@@ -142,18 +161,18 @@ contract DefiIntegrationManager is Ownable, ReentrancyGuard {
     }
 
     function setYieldDistributor(address _yieldDistributor) external onlyOwner {
-        if(_yieldDistributor == address(0)){
+        if (_yieldDistributor == address(0)) {
             revert InvalidAddress();
         }
 
         address oldDistributor = address(yieldDistributor);
         yieldDistributor = IYieldDistributor(_yieldDistributor);
 
-        emit YieldDistributorUpdated(oldDistributor,_yieldDistributor);
+        emit YieldDistributorUpdated(oldDistributor, _yieldDistributor);
     }
 
     function setAavePool(address _aavePool) external onlyOwner {
-        if (_aavePool == address(0)){
+        if (_aavePool == address(0)) {
             revert InvalidAddress();
         }
 
@@ -163,7 +182,7 @@ contract DefiIntegrationManager is Ownable, ReentrancyGuard {
     }
 
     function setUniswapRouter(address _uniswapRouter) external onlyOwner {
-        if (_uniswapRouter == address(0)){
+        if (_uniswapRouter == address(0)) {
             revert InvalidAddress();
         }
 
@@ -173,7 +192,7 @@ contract DefiIntegrationManager is Ownable, ReentrancyGuard {
     }
 
     function setUniswapQuoter(address _uniswapQuoter) external onlyOwner {
-        if (_uniswapQuoter == address(0)){
+        if (_uniswapQuoter == address(0)) {
             revert InvalidAddress();
         }
 
@@ -192,13 +211,15 @@ contract DefiIntegrationManager is Ownable, ReentrancyGuard {
         emit CampaignUnauthorized(_campaign);
     }
 
-
-    function depositToYieldProtocol(address _token, uint256 _amount) external onlyCampaign nonReentrant {
+    function depositToYieldProtocol(
+        address _token,
+        uint256 _amount
+    ) external onlyCampaign nonReentrant {
         if (_amount <= 0) {
             revert ZeroAmount(_amount);
         }
 
-        if (!tokenRegistry.isTokenSupported(_token)){
+        if (!tokenRegistry.isTokenSupported(_token)) {
             revert TokenNotSupported(_token);
         }
 
@@ -208,24 +229,29 @@ contract DefiIntegrationManager is Ownable, ReentrancyGuard {
         try aavePool.supply(_token, _amount, address(this), 0) {
             aaveDeposits[msg.sender][_token] += _amount;
             emit YieldDeposited(msg.sender, _token, _amount);
-        } catch Error(string memory reason){
+        } catch Error(string memory reason) {
             revert YieldDepositFailed(reason);
         } catch {
             revert YieldDepositFailed("Aave deposit failed");
         }
     }
 
-    function withdrawFromYieldProtocol(address _token, uint256 _amount) external onlyCampaign nonReentrant returns (uint256) {
+    function withdrawFromYieldProtocol(
+        address _token,
+        uint256 _amount
+    ) external onlyCampaign nonReentrant returns (uint256) {
         if (_amount <= 0) {
             revert ZeroAmount(_amount);
         }
 
         uint256 deposited = aaveDeposits[msg.sender][_token];
-        if(_amount > deposited){
+        if (_amount > deposited) {
             revert InsufficientDeposit(_token, _amount, deposited);
         }
 
-        try aavePool.withdraw(_token, _amount, address(this)) returns(uint256 withdrawn) {
+        try aavePool.withdraw(_token, _amount, address(this)) returns (
+            uint256 withdrawn
+        ) {
             if (withdrawn != _amount) {
                 revert WithdrawalAmountMismatch(_amount, withdrawn);
             }
@@ -235,22 +261,26 @@ contract DefiIntegrationManager is Ownable, ReentrancyGuard {
             emit YieldWithdrawn(msg.sender, _token, withdrawn);
 
             return withdrawn;
-        } catch Error(string memory reason){
+        } catch Error(string memory reason) {
             revert YieldwithdrawalFailed(reason);
         } catch {
             revert YieldwithdrawalFailed("Aave withdrawal failed.");
         }
     }
 
-    function withdrawAllFromYieldProtocol(address _token) external onlyCampaign nonReentrant returns(uint256) {
+    function withdrawAllFromYieldProtocol(
+        address _token
+    ) external onlyCampaign nonReentrant returns (uint256) {
         uint256 amount = aaveDeposits[msg.sender][_token];
 
-        if (amount <= 0){
+        if (amount <= 0) {
             revert ZeroAmount(amount);
         }
 
-        try aavePool.withdraw(_token, amount, address(this)) returns(uint256 withdrawn) {
-            if(withdrawn != amount){
+        try aavePool.withdraw(_token, amount, address(this)) returns (
+            uint256 withdrawn
+        ) {
+            if (withdrawn != amount) {
                 revert WithdrawalAmountMismatch(amount, withdrawn);
             }
 
@@ -259,16 +289,23 @@ contract DefiIntegrationManager is Ownable, ReentrancyGuard {
             emit YieldWithdrawn(msg.sender, _token, withdrawn);
 
             return withdrawn;
-        } catch Error(string memory reason){
+        } catch Error(string memory reason) {
             revert YieldwithdrawalFailed(reason);
         } catch {
             revert YieldwithdrawalFailed("Aave withdrawal failed.");
-        }        
+        }
     }
 
-    function harvestYield(address _token) external onlyCampaign nonReentrant returns (uint256 creatorYield, uint256 platformYield) {
+    function harvestYield(
+        address _token
+    )
+        external
+        onlyCampaign
+        nonReentrant
+        returns (uint256 creatorYield, uint256 platformYield)
+    {
         uint256 deposited = aaveDeposits[msg.sender][_token];
-        if(deposited <= 0){
+        if (deposited <= 0) {
             revert NoYield(_token);
         }
 
@@ -281,96 +318,124 @@ contract DefiIntegrationManager is Ownable, ReentrancyGuard {
             revert FailedToGetATokenAddress();
         }
 
-        if (aToken == address(0)){
+        if (aToken == address(0)) {
             revert InvalidAddress();
         }
 
         uint256 aTokenBalance = IERC20(aToken).balanceOf(address(this));
-        if (aTokenBalance <= deposited){
+        if (aTokenBalance <= deposited) {
             revert NoYield(_token);
         }
 
         uint256 totalYield = aTokenBalance - deposited;
 
-        try aavePool.withdraw(_token, totalYield, address(this)) returns(uint256 withdrawn) {
-            if(withdrawn != totalYield){
+        try aavePool.withdraw(_token, totalYield, address(this)) returns (
+            uint256 withdrawn
+        ) {
+            if (withdrawn != totalYield) {
                 revert WithdrawalAmountMismatch(totalYield, withdrawn);
             }
-            
-            (creatorYield, platformYield) = yieldDistributor.calculateYieldShares(withdrawn);
-            
+
+            (creatorYield, platformYield) = yieldDistributor
+                .calculateYieldShares(withdrawn);
+
             IERC20(_token).safeTransfer(msg.sender, creatorYield);
-            
+
             address treasury = yieldDistributor.getPlatformTreasury();
             IERC20(_token).safeTransfer(treasury, platformYield);
 
-            emit YieldHarvested(msg.sender, _token, withdrawn, creatorYield, platformYield);
+            emit YieldHarvested(
+                msg.sender,
+                _token,
+                withdrawn,
+                creatorYield,
+                platformYield
+            );
             return (creatorYield, platformYield);
-        } catch Error(string memory reason){
+        } catch Error(string memory reason) {
             revert YieldwithdrawalFailed(reason);
         } catch {
             revert YieldwithdrawalFailed("Yield withdrawal failed.");
-        }        
+        }
     }
 
-    function getTargetTokenEquivalent(address _fromToken, uint256 _amount, address _toToken) public view returns (uint256) {
-        if (_fromToken == _toToken){
+    function getTargetTokenEquivalent(
+        address _fromToken,
+        uint256 _amount,
+        address _toToken
+    ) public view returns (uint256) {
+        if (_fromToken == _toToken) {
             revert TokensAreTheSame(_fromToken, _toToken);
         }
 
-        try uniswapQuoter.quoteExactInputSingle(
-            _fromToken, 
-            _toToken,
-            UNISWAP_FEE_TIER,
-            _amount,
-            0
-        ) returns (uint256 quote) {
+        try
+            uniswapQuoter.quoteExactInputSingle(
+                _fromToken,
+                _toToken,
+                UNISWAP_FEE_TIER,
+                _amount,
+                0
+            )
+        returns (uint256 quote) {
             return quote;
         } catch {
             return 0;
         }
     }
 
-    function swapTokenForTarget(address _fromToken, uint256 _amount, address _toToken) external onlyCampaign nonReentrant returns(uint256) {
-        if (_amount <= 0){
+    function swapTokenForTarget(
+        address _fromToken,
+        uint256 _amount,
+        address _toToken
+    ) external onlyCampaign nonReentrant returns (uint256) {
+        if (_amount <= 0) {
             revert ZeroAmount(_amount);
         }
 
-        if (!tokenRegistry.isTokenSupported(_fromToken)){
+        if (!tokenRegistry.isTokenSupported(_fromToken)) {
             revert TokenNotSupported(_fromToken);
         }
 
-        if (!tokenRegistry.isTokenSupported(_toToken)){
+        if (!tokenRegistry.isTokenSupported(_toToken)) {
             revert TokenNotSupported(_toToken);
         }
 
-        if (_fromToken == _toToken){
+        if (_fromToken == _toToken) {
             revert TokensAreTheSame(_fromToken, _toToken);
         }
 
-        uint256 expectedOut = getTargetTokenEquivalent(_fromToken, _amount, _toToken);
-        if (expectedOut == 0){
+        uint256 expectedOut = getTargetTokenEquivalent(
+            _fromToken,
+            _amount,
+            _toToken
+        );
+        if (expectedOut == 0) {
             revert SwapQuoteInvalid();
         }
 
-        uint256 minAmountOut = expectedOut * (10000-SLIPPAGE_TOLERANCE)/10000;
+        uint256 minAmountOut = (expectedOut * (10000 - SLIPPAGE_TOLERANCE)) /
+            10000;
 
         IERC20(_fromToken).safeTransferFrom(msg.sender, address(this), _amount);
-        IERC20(_fromToken).safeIncreaseAllowance(address(uniswapRouter), _amount);
-        
-        ISwapRouter.ExactInputSingleParams memory params = ISwapRouter.ExactInputSingleParams({
-            tokenIn: _fromToken,
-            tokenOut: _toToken,
-            fee: UNISWAP_FEE_TIER,
-            recipient: address(this),
-            deadline: block.timestamp + 15 minutes,
-            amountIn: _amount,
-            amountOutMinimum: minAmountOut,
-            sqrtPriceLimitX96: 0
-        });
+        IERC20(_fromToken).safeIncreaseAllowance(
+            address(uniswapRouter),
+            _amount
+        );
+
+        ISwapRouter.ExactInputSingleParams memory params = ISwapRouter
+            .ExactInputSingleParams({
+                tokenIn: _fromToken,
+                tokenOut: _toToken,
+                fee: UNISWAP_FEE_TIER,
+                recipient: address(this),
+                deadline: block.timestamp + 15 minutes,
+                amountIn: _amount,
+                amountOutMinimum: minAmountOut,
+                sqrtPriceLimitX96: 0
+            });
 
         try uniswapRouter.exactInputSingle(params) returns (uint256 received) {
-            if (received < minAmountOut){
+            if (received < minAmountOut) {
                 revert SlippageExceeded(minAmountOut, received);
             }
 
@@ -385,20 +450,28 @@ contract DefiIntegrationManager is Ownable, ReentrancyGuard {
         }
     }
 
-
-    function getCurrentYieldRate(address token) external view returns (uint256 yieldRate) {
-        try aavePool.getReserveData(token) returns (DataTypes.ReserveData memory data) {
-            return data.currentLiquidityRate * 10000 / 1e27;
+    function getCurrentYieldRate(
+        address token
+    ) external view returns (uint256 yieldRate) {
+        try aavePool.getReserveData(token) returns (
+            DataTypes.ReserveData memory data
+        ) {
+            return (data.currentLiquidityRate * 10000) / 1e27;
         } catch {
             return 0;
         }
     }
 
-    function getDepositedAmount(address campaign, address token) external view returns (uint256 amount) {
+    function getDepositedAmount(
+        address campaign,
+        address token
+    ) external view returns (uint256 amount) {
         return aaveDeposits[campaign][token];
     }
 
-    function isCampaignAuthorized(address campaign) external view returns (bool isAuthorized) {
+    function isCampaignAuthorized(
+        address campaign
+    ) external view returns (bool isAuthorized) {
         return authorizedCampaigns[campaign];
     }
 
