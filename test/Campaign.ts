@@ -90,6 +90,10 @@ describe('Campaign', function () {
       const endTime = await campaign.campaignEndTime()
 
       const latestBlock = await ethers.provider.getBlock('latest')
+
+      if (!latestBlock) {
+        throw new Error('Latest block does not exist')
+      }
       const currentTimestamp = latestBlock.timestamp
 
       expect(startTime).to.be.closeTo(currentTimestamp, 5)
@@ -369,7 +373,11 @@ describe('Campaign', function () {
       const initialContribution = await campaign.contributions(user1.address)
       const initialTotalRaised = await campaign.totalAmountRaised()
 
-      await expect(campaign.connect(user1).contribute(contributionAmount))
+      await expect(
+        campaign
+          .connect(user1)
+          .contribute(await mockToken1.getAddress(), contributionAmount)
+      )
         .to.emit(campaign, 'Contribution')
         .withArgs(user1.address, contributionAmount)
 
@@ -381,6 +389,79 @@ describe('Campaign', function () {
       )
       expect(await campaign.totalAmountRaised()).to.equal(
         initialTotalRaised + BigInt(contributionAmount)
+      )
+    })
+
+    it('Should allow user to contribute with a different token which gets swapped to campaign token', async function () {
+      const { campaign, mockToken1, user1, mockDefiManager } =
+        await loadFixture(deployCampaignFixture)
+
+      const mockToken2 = await ethers.deployContract('MockERC20', [
+        'Second Token',
+        'TKN2',
+        ethers.parseUnits('100')
+      ])
+      await mockToken2.waitForDeployment()
+      const token2Address = await mockToken2.getAddress()
+
+      const tokenRegistry = await ethers.getContractAt(
+        'MockTokenRegistry',
+        await mockDefiManager.mockTokenRegistryAddress()
+      )
+      await tokenRegistry.addSupportedToken(token2Address, true)
+
+      await mockToken2.transfer(user1.address, ethers.parseUnits('10'))
+
+      const contributionAmount = 2
+      const expectedSwappedAmount = contributionAmount * 2
+
+      await mockToken1.transfer(
+        await mockDefiManager.getAddress(),
+        expectedSwappedAmount
+      )
+
+      await mockToken2
+        .connect(user1)
+        .approve(await campaign.getAddress(), contributionAmount)
+
+      const initialCampaignToken1Balance = await mockToken1.balanceOf(
+        await campaign.getAddress()
+      )
+      const initialCampaignToken2Balance = await mockToken2.balanceOf(
+        await campaign.getAddress()
+      )
+      const initialContribution = await campaign.contributions(user1.address)
+      const initialTotalRaised = await campaign.totalAmountRaised()
+
+      const tx = await campaign
+        .connect(user1)
+        .contribute(token2Address, contributionAmount)
+
+      await expect(tx)
+        .to.emit(campaign, 'Contribution')
+        .withArgs(user1.address, expectedSwappedAmount)
+
+      await expect(tx)
+        .to.emit(campaign, 'TokensSwapped')
+        .withArgs(
+          token2Address,
+          await mockToken1.getAddress(),
+          contributionAmount,
+          expectedSwappedAmount
+        )
+
+      expect(await mockToken1.balanceOf(await campaign.getAddress())).to.equal(
+        initialCampaignToken1Balance + BigInt(expectedSwappedAmount)
+      )
+      expect(await mockToken2.balanceOf(await campaign.getAddress())).to.equal(
+        initialCampaignToken2Balance
+      )
+
+      expect(await campaign.contributions(user1.address)).to.equal(
+        initialContribution + BigInt(expectedSwappedAmount)
+      )
+      expect(await campaign.totalAmountRaised()).to.equal(
+        initialTotalRaised + BigInt(expectedSwappedAmount)
       )
     })
 
@@ -405,7 +486,11 @@ describe('Campaign', function () {
 
       const initialTotalRaised = await campaign.totalAmountRaised()
 
-      await expect(campaign.connect(user1).contribute(contributionAmount))
+      await expect(
+        campaign
+          .connect(user1)
+          .contribute(await mockToken1.getAddress(), contributionAmount)
+      )
         .to.emit(campaign, 'Contribution')
         .withArgs(user1.address, contributionAmount)
 
@@ -420,7 +505,11 @@ describe('Campaign', function () {
         initialTotalRaised + BigInt(contributionAmount)
       )
 
-      await expect(campaign.connect(user2).contribute(contributionAmount))
+      await expect(
+        campaign
+          .connect(user2)
+          .contribute(await mockToken1.getAddress(), contributionAmount)
+      )
         .to.emit(campaign, 'Contribution')
         .withArgs(user2.address, contributionAmount)
 
@@ -434,6 +523,79 @@ describe('Campaign', function () {
 
       expect(await campaign.totalAmountRaised()).to.equal(
         initialTotalRaised + BigInt(2) * BigInt(contributionAmount)
+      )
+    })
+
+    it('Should track contributions correctly when user contributes with multiple tokens', async function () {
+      const {
+        campaign,
+        mockToken1,
+        user1,
+        mockDefiManager,
+        CAMPAIGN_GOAL_AMOUNT
+      } = await loadFixture(deployCampaignFixture)
+
+      // Setup second token
+      const mockToken2 = await ethers.deployContract('MockERC20', [
+        'Second Token',
+        'TKN2',
+        ethers.parseUnits('100')
+      ])
+      await mockToken2.waitForDeployment()
+      const token2Address = await mockToken2.getAddress()
+
+      const tokenRegistry = await ethers.getContractAt(
+        'MockTokenRegistry',
+        await mockDefiManager.mockTokenRegistryAddress()
+      )
+      await tokenRegistry.addSupportedToken(token2Address, true)
+      await mockToken2.transfer(user1.address, 100)
+
+      // Calculate amounts to stay under the campaign goal
+      // Assuming CAMPAIGN_GOAL_AMOUNT = 5, we'll contribute a total of 4
+      const token1ContributionAmount = 1
+      const token2ContributionAmount = 1 // This will become 2 after swap (2x rate)
+      const token2SwappedAmount = token2ContributionAmount * 2
+
+      // Fund defi manager for the swap
+      await mockToken1.transfer(
+        await mockDefiManager.getAddress(),
+        token2SwappedAmount
+      )
+
+      // Approve both tokens
+      await mockToken1
+        .connect(user1)
+        .approve(await campaign.getAddress(), token1ContributionAmount)
+      await mockToken2
+        .connect(user1)
+        .approve(await campaign.getAddress(), token2ContributionAmount)
+
+      // First contribution with campaign token
+      await campaign
+        .connect(user1)
+        .contribute(await mockToken1.getAddress(), token1ContributionAmount)
+
+      // Second contribution with different token
+      await campaign
+        .connect(user1)
+        .contribute(token2Address, token2ContributionAmount)
+
+      // Total contribution should be original amount + swapped amount
+      const expectedTotalContribution =
+        BigInt(token1ContributionAmount) + BigInt(token2SwappedAmount)
+      expect(await campaign.contributions(user1.address)).to.equal(
+        expectedTotalContribution
+      )
+
+      // Total raised should reflect the sum of both contributions
+      expect(await campaign.totalAmountRaised()).to.equal(
+        expectedTotalContribution
+      )
+
+      // Verify we're still under the goal
+      expect(await campaign.totalAmountRaised()).to.be.lessThan(
+        CAMPAIGN_GOAL_AMOUNT
       )
     })
 
@@ -454,7 +616,11 @@ describe('Campaign', function () {
 
       const initialTotalRaised = await campaign.totalAmountRaised()
 
-      await expect(campaign.connect(user1).contribute(contributionAmount))
+      await expect(
+        campaign
+          .connect(user1)
+          .contribute(await mockToken1.getAddress(), contributionAmount)
+      )
         .to.emit(campaign, 'Contribution')
         .withArgs(user1.address, contributionAmount)
 
@@ -469,7 +635,11 @@ describe('Campaign', function () {
         initialTotalRaised + BigInt(contributionAmount)
       )
 
-      await expect(campaign.connect(user1).contribute(contributionAmount))
+      await expect(
+        campaign
+          .connect(user1)
+          .contribute(await mockToken1.getAddress(), contributionAmount)
+      )
         .to.emit(campaign, 'Contribution')
         .withArgs(user1.address, contributionAmount)
 
@@ -492,10 +662,210 @@ describe('Campaign', function () {
       )
 
       await mockToken1.connect(user1).approve(await campaign.getAddress(), 100)
-
-      await expect(campaign.connect(user1).contribute(0))
+      await expect(
+        campaign.connect(user1).contribute(await mockToken1.getAddress(), 0)
+      )
         .to.be.revertedWithCustomError(campaign, 'InvalidContributionAmount')
         .withArgs(0)
+    })
+
+    it('Should handle swap failure during contribution', async function () {
+      const { campaign, mockToken1, user1, mockDefiManager } =
+        await loadFixture(deployCampaignFixture)
+
+      // Setup second token
+      const mockToken2 = await ethers.deployContract('MockERC20', [
+        'Second Token',
+        'TKN2',
+        ethers.parseUnits('100')
+      ])
+      await mockToken2.waitForDeployment()
+      const token2Address = await mockToken2.getAddress()
+
+      const tokenRegistry = await ethers.getContractAt(
+        'MockTokenRegistry',
+        await mockDefiManager.mockTokenRegistryAddress()
+      )
+      await tokenRegistry.addSupportedToken(token2Address, true)
+      await mockToken2.transfer(user1.address, 50)
+
+      // Set swap to fail
+      await mockDefiManager.setSwapSuccess(false)
+
+      // Approve the token
+      await mockToken2.connect(user1).approve(await campaign.getAddress(), 20)
+
+      // Attempt to contribute with token that requires swap
+      await expect(
+        campaign.connect(user1).contribute(token2Address, 20)
+      ).to.be.revertedWithCustomError(mockDefiManager, 'SwapFailed')
+
+      // Check that no contribution was recorded
+      expect(await campaign.contributions(user1.address)).to.equal(0)
+      expect(await campaign.totalAmountRaised()).to.equal(0)
+    })
+
+    it('Should correctly apply different exchange rates during swap', async function () {
+      const {
+        campaign,
+        mockToken1,
+        user1,
+        mockDefiManager,
+        CAMPAIGN_GOAL_AMOUNT
+      } = await loadFixture(deployCampaignFixture)
+
+      // Setup second token
+      const mockToken2 = await ethers.deployContract('MockERC20', [
+        'Second Token',
+        'TKN2',
+        ethers.parseUnits('100')
+      ])
+      await mockToken2.waitForDeployment()
+      const token2Address = await mockToken2.getAddress()
+
+      // Setup third token with different exchange rate
+      const mockToken3 = await ethers.deployContract('MockERC20', [
+        'Third Token',
+        'TKN3',
+        ethers.parseUnits('100')
+      ])
+      await mockToken3.waitForDeployment()
+      const token3Address = await mockToken3.getAddress()
+
+      const tokenRegistry = await ethers.getContractAt(
+        'MockTokenRegistry',
+        await mockDefiManager.mockTokenRegistryAddress()
+      )
+      await tokenRegistry.addSupportedToken(token2Address, true)
+      await tokenRegistry.addSupportedToken(token3Address, true)
+
+      // Transfer tokens to user
+      await mockToken2.transfer(user1.address, 50)
+      await mockToken3.transfer(user1.address, 50)
+
+      // Use small amounts to stay under goal (CAMPAIGN_GOAL_AMOUNT = 5)
+      const token2Amount = 1
+      const token2SwappedAmount = token2Amount * 2 // = 2 after swap
+
+      const token3Amount = 1
+      const token3SwappedAmount = token3Amount * 2 // = 2 after swap
+
+      // Total after both swaps: 4 (under the goal of 5)
+
+      // Fund defi manager for swaps
+      await mockToken1.transfer(
+        await mockDefiManager.getAddress(),
+        token2SwappedAmount + token3SwappedAmount
+      )
+
+      // Approve tokens
+      await mockToken2
+        .connect(user1)
+        .approve(await campaign.getAddress(), token2Amount)
+      await mockToken3
+        .connect(user1)
+        .approve(await campaign.getAddress(), token3Amount)
+
+      // Contribute with Token2
+      await campaign.connect(user1).contribute(token2Address, token2Amount)
+
+      // Contribute with Token3
+      await campaign.connect(user1).contribute(token3Address, token3Amount)
+
+      // Check total contribution
+      const expectedTotalContribution =
+        BigInt(token2SwappedAmount) + BigInt(token3SwappedAmount)
+      expect(await campaign.contributions(user1.address)).to.equal(
+        expectedTotalContribution
+      )
+
+      // Verify we're still under the goal
+      expect(await campaign.totalAmountRaised()).to.equal(
+        expectedTotalContribution
+      )
+      expect(expectedTotalContribution).to.be.lessThan(
+        BigInt(CAMPAIGN_GOAL_AMOUNT)
+      )
+    })
+
+    it('Should emit correct events when contributing with non-campaign token', async function () {
+      const { campaign, mockToken1, user1, mockDefiManager } =
+        await loadFixture(deployCampaignFixture)
+
+      // Setup second token
+      const mockToken2 = await ethers.deployContract('MockERC20', [
+        'Second Token',
+        'TKN2',
+        ethers.parseUnits('100')
+      ])
+      await mockToken2.waitForDeployment()
+      const token2Address = await mockToken2.getAddress()
+
+      const tokenRegistry = await ethers.getContractAt(
+        'MockTokenRegistry',
+        await mockDefiManager.mockTokenRegistryAddress()
+      )
+      await tokenRegistry.addSupportedToken(token2Address, true)
+      await mockToken2.transfer(user1.address, 100)
+
+      // Setup for swap
+      const contributionAmount = 25
+      const expectedSwappedAmount = contributionAmount * 2
+      await mockToken1.transfer(
+        await mockDefiManager.getAddress(),
+        expectedSwappedAmount
+      )
+
+      // Approve token
+      await mockToken2
+        .connect(user1)
+        .approve(await campaign.getAddress(), contributionAmount)
+
+      // Contribute with different token
+      const tx = await campaign
+        .connect(user1)
+        .contribute(token2Address, contributionAmount)
+
+      // Check emitted events - both Contribution and TokensSwapped should be emitted
+      await expect(tx)
+        .to.emit(campaign, 'Contribution')
+        .withArgs(user1.address, expectedSwappedAmount)
+
+      await expect(tx)
+        .to.emit(campaign, 'TokensSwapped')
+        .withArgs(
+          token2Address,
+          await mockToken1.getAddress(),
+          contributionAmount,
+          expectedSwappedAmount
+        )
+    })
+
+    it('Should revert when contributing with unsupported token', async function () {
+      const { campaign, mockToken1, user1, mockDefiManager } =
+        await loadFixture(deployCampaignFixture)
+
+      const unsupportedToken = await ethers.deployContract('MockERC20', [
+        'Unsupported Token',
+        'UNSUPP',
+        ethers.parseUnits('100')
+      ])
+      await unsupportedToken.waitForDeployment()
+      const unsupportedTokenAddress = await unsupportedToken.getAddress()
+
+      await unsupportedToken.transfer(user1.address, 100)
+      await unsupportedToken
+        .connect(user1)
+        .approve(await campaign.getAddress(), 10)
+
+      await expect(
+        campaign.connect(user1).contribute(unsupportedTokenAddress, 10)
+      )
+        .to.be.revertedWithCustomError(
+          campaign,
+          'ContributionTokenNotSupported'
+        )
+        .withArgs(unsupportedTokenAddress)
     })
 
     it('Should revert when campaignGoalAmount is reached', async function () {
@@ -506,10 +876,12 @@ describe('Campaign', function () {
         .connect(user1)
         .approve(await campaign.getAddress(), CAMPAIGN_GOAL_AMOUNT * 2)
 
-      await campaign.connect(user1).contribute(CAMPAIGN_GOAL_AMOUNT)
+      await campaign
+        .connect(user1)
+        .contribute(await mockToken1.getAddress(), CAMPAIGN_GOAL_AMOUNT)
 
       await expect(
-        campaign.connect(user1).contribute(1)
+        campaign.connect(user1).contribute(await mockToken1.getAddress(), 1)
       ).to.be.revertedWithCustomError(campaign, 'CampaignGoalReached')
     })
 
@@ -524,7 +896,7 @@ describe('Campaign', function () {
       await mockToken1.connect(user1).approve(await campaign.getAddress(), 10)
 
       await expect(
-        campaign.connect(user1).contribute(1)
+        campaign.connect(user1).contribute(await mockToken1.getAddress(), 1)
       ).to.be.revertedWithCustomError(campaign, 'CampaignNotActive')
     })
 
@@ -556,7 +928,9 @@ describe('Campaign', function () {
           .connect(user1)
           .approve(await campaign.getAddress(), CAMPAIGN_GOAL_AMOUNT)
 
-        await campaign.connect(user1).contribute(CAMPAIGN_GOAL_AMOUNT)
+        await campaign
+          .connect(user1)
+          .contribute(await mockToken1.getAddress(), CAMPAIGN_GOAL_AMOUNT)
 
         await ethers.provider.send('evm_increaseTime', [
           (CAMPAIGN_DURATION + 1) * 24 * 60 * 60
@@ -596,7 +970,9 @@ describe('Campaign', function () {
           .connect(user1)
           .approve(await campaign.getAddress(), CAMPAIGN_GOAL_AMOUNT)
 
-        await campaign.connect(user1).contribute(CAMPAIGN_GOAL_AMOUNT)
+        await campaign
+          .connect(user1)
+          .contribute(await mockToken1.getAddress(), CAMPAIGN_GOAL_AMOUNT)
 
         await ethers.provider.send('evm_increaseTime', [
           (CAMPAIGN_DURATION + 1) * 24 * 60 * 60
@@ -640,7 +1016,9 @@ describe('Campaign', function () {
           .connect(user1)
           .approve(await campaign.getAddress(), CAMPAIGN_GOAL_AMOUNT)
 
-        await campaign.connect(user1).contribute(CAMPAIGN_GOAL_AMOUNT)
+        await campaign
+          .connect(user1)
+          .contribute(await mockToken1.getAddress(), CAMPAIGN_GOAL_AMOUNT)
 
         await ethers.provider.send('evm_increaseTime', [
           (CAMPAIGN_DURATION - 1) * 24 * 60 * 60
@@ -679,7 +1057,9 @@ describe('Campaign', function () {
           .connect(user1)
           .approve(await campaign.getAddress(), CAMPAIGN_GOAL_AMOUNT - 1)
 
-        await campaign.connect(user1).contribute(CAMPAIGN_GOAL_AMOUNT - 1)
+        await campaign
+          .connect(user1)
+          .contribute(await mockToken1.getAddress(), CAMPAIGN_GOAL_AMOUNT - 1)
 
         await ethers.provider.send('evm_increaseTime', [
           (CAMPAIGN_DURATION + 1) * 24 * 60 * 60
@@ -718,7 +1098,9 @@ describe('Campaign', function () {
           .connect(user1)
           .approve(await campaign.getAddress(), CAMPAIGN_GOAL_AMOUNT)
 
-        await campaign.connect(user1).contribute(CAMPAIGN_GOAL_AMOUNT)
+        await campaign
+          .connect(user1)
+          .contribute(await mockToken1.getAddress(), CAMPAIGN_GOAL_AMOUNT)
 
         await ethers.provider.send('evm_increaseTime', [
           (CAMPAIGN_DURATION + 1) * 24 * 60 * 60
@@ -762,15 +1144,13 @@ describe('Campaign', function () {
         )
 
         await mockFailingToken.waitForDeployment()
+        const mockFailingTokenAddress = await mockFailingToken.getAddress()
 
         const mockTokenRegistry = await ethers.deployContract(
           'MockTokenRegistry'
         )
         await mockTokenRegistry.waitForDeployment()
-        await mockTokenRegistry.addSupportedToken(
-          await mockFailingToken.getAddress(),
-          true
-        )
+        await mockTokenRegistry.addSupportedToken(mockFailingTokenAddress, true)
         const mockTokenRegistryAddress = await mockTokenRegistry.getAddress()
 
         const mockYieldDistributor = await ethers.deployContract(
@@ -791,7 +1171,7 @@ describe('Campaign', function () {
         const CampaignFactory = await ethers.getContractFactory('Campaign')
         const campaign = await CampaignFactory.deploy(
           owner.address,
-          await mockFailingToken.getAddress(),
+          mockFailingTokenAddress,
           CAMPAIGN_GOAL_AMOUNT,
           CAMPAIGN_DURATION,
           await mockDefiManager.getAddress()
@@ -804,7 +1184,10 @@ describe('Campaign', function () {
           .connect(user1)
           .approve(await campaign.getAddress(), CAMPAIGN_GOAL_AMOUNT)
 
-        await campaign.connect(user1).contribute(CAMPAIGN_GOAL_AMOUNT)
+        // Updated: Add the token address as the first parameter
+        await campaign
+          .connect(user1)
+          .contribute(mockFailingTokenAddress, CAMPAIGN_GOAL_AMOUNT)
 
         await ethers.provider.send('evm_increaseTime', [
           (CAMPAIGN_DURATION + 1) * 24 * 60 * 60
@@ -852,7 +1235,9 @@ describe('Campaign', function () {
           .connect(user1)
           .approve(await campaign.getAddress(), contributionAmount)
 
-        await campaign.connect(user1).contribute(contributionAmount)
+        await campaign
+          .connect(user1)
+          .contribute(await mockToken1.getAddress(), contributionAmount)
 
         const userBalanceAfterContribution = await mockToken1.balanceOf(
           user1.address
@@ -897,7 +1282,9 @@ describe('Campaign', function () {
           .connect(user1)
           .approve(await campaign.getAddress(), contributionAmount)
 
-        await campaign.connect(user1).contribute(contributionAmount)
+        await campaign
+          .connect(user1)
+          .contribute(await mockToken1.getAddress(), contributionAmount)
 
         const userBalanceAfterContribution = await mockToken1.balanceOf(
           user1.address
@@ -947,7 +1334,9 @@ describe('Campaign', function () {
           .connect(user1)
           .approve(await campaign.getAddress(), contributionAmount)
 
-        await campaign.connect(user1).contribute(contributionAmount)
+        await campaign
+          .connect(user1)
+          .contribute(await mockToken1.getAddress(), contributionAmount)
 
         const userBalanceAfterContribution = await mockToken1.balanceOf(
           user1.address
@@ -998,7 +1387,9 @@ describe('Campaign', function () {
           .connect(user1)
           .approve(await campaign.getAddress(), contributionAmount)
 
-        await campaign.connect(user1).contribute(contributionAmount)
+        await campaign
+          .connect(user1)
+          .contribute(await mockToken1.getAddress(), contributionAmount)
 
         const userBalanceAfterContribution = await mockToken1.balanceOf(
           user1.address
@@ -1102,7 +1493,9 @@ describe('Campaign', function () {
           .connect(user1)
           .approve(await campaign.getAddress(), contributionAmount)
 
-        await campaign.connect(user1).contribute(contributionAmount)
+        await campaign
+          .connect(user1)
+          .contribute(await mockFailingToken.getAddress(), contributionAmount)
 
         await ethers.provider.send('evm_increaseTime', [
           (CAMPAIGN_DURATION + 1) * 24 * 60 * 60
@@ -1136,7 +1529,9 @@ describe('Campaign', function () {
           .connect(user1)
           .approve(await campaign.getAddress(), contributionAmount)
 
-        await campaign.connect(user1).contribute(contributionAmount)
+        await campaign
+          .connect(user1)
+          .contribute(await mockToken1.getAddress(), contributionAmount)
 
         const mockDefiManagerAddress = await mockDefiManager.getAddress()
         const campaignAddress = await campaign.getAddress()
@@ -1182,7 +1577,9 @@ describe('Campaign', function () {
           .connect(user1)
           .approve(await campaign.getAddress(), contributionAmount)
 
-        await campaign.connect(user1).contribute(contributionAmount)
+        await campaign
+          .connect(user1)
+          .contribute(await mockToken1.getAddress(), contributionAmount)
 
         const mockDefiManagerAddress = await mockDefiManager.getAddress()
         const campaignAddress = await campaign.getAddress()
@@ -1215,7 +1612,7 @@ describe('Campaign', function () {
         expect(mockDefiManagerBalanceAfterYieldProtocolDeposit).to.equal(0)
       })
 
-      it('Should revert with DefiActionFailed if deposit to yield protocol fails', async function () {
+      it('Should propagate specific error when deposit to yield protocol fails', async function () {
         const { campaign, mockDefiManager, mockToken1, user1, owner } =
           await loadFixture(deployCampaignFixture)
 
@@ -1225,7 +1622,9 @@ describe('Campaign', function () {
           .connect(user1)
           .approve(await campaign.getAddress(), contributionAmount)
 
-        await campaign.connect(user1).contribute(contributionAmount)
+        await campaign
+          .connect(user1)
+          .contribute(await mockToken1.getAddress(), contributionAmount)
 
         await mockDefiManager.setDepositSuccess(false)
 
@@ -1236,7 +1635,7 @@ describe('Campaign', function () {
               await mockToken1.getAddress(),
               contributionAmount
             )
-        ).to.be.revertedWithCustomError(campaign, 'DefiActionFailed')
+        ).to.be.revertedWithCustomError(mockDefiManager, 'YieldDepositFailed')
 
         const campaignBalance = await mockToken1.balanceOf(
           await campaign.getAddress()
@@ -1265,7 +1664,9 @@ describe('Campaign', function () {
         await mockToken1
           .connect(user1)
           .approve(await campaign.getAddress(), depositAmount)
-        await campaign.connect(user1).contribute(depositAmount)
+        await campaign
+          .connect(user1)
+          .contribute(await mockToken1.getAddress(), depositAmount)
 
         await campaign.depositToYieldProtocol(
           await mockToken1.getAddress(),
@@ -1330,7 +1731,9 @@ describe('Campaign', function () {
         await mockToken1
           .connect(user1)
           .approve(await campaign.getAddress(), depositAmount)
-        await campaign.connect(user1).contribute(depositAmount)
+        await campaign
+          .connect(user1)
+          .contribute(await mockToken1.getAddress(), depositAmount)
 
         await campaign.depositToYieldProtocol(
           await mockToken1.getAddress(),
@@ -1400,7 +1803,9 @@ describe('Campaign', function () {
         await mockToken1
           .connect(user1)
           .approve(await campaign.getAddress(), depositAmount)
-        await campaign.connect(user1).contribute(depositAmount)
+        await campaign
+          .connect(user1)
+          .contribute(await mockToken1.getAddress(), depositAmount)
 
         await campaign.depositToYieldProtocol(
           await mockToken1.getAddress(),
@@ -1411,7 +1816,10 @@ describe('Campaign', function () {
 
         await expect(
           campaign.harvestYield(await mockToken1.getAddress())
-        ).to.be.revertedWithCustomError(campaign, 'DefiActionFailed')
+        ).to.be.revertedWithCustomError(
+          mockDefiManager,
+          'YieldwithdrawalFailed'
+        )
       })
     })
 
@@ -1425,7 +1833,9 @@ describe('Campaign', function () {
           await mockToken1
             .connect(user1)
             .approve(await campaign.getAddress(), depositAmount)
-          await campaign.connect(user1).contribute(depositAmount)
+          await campaign
+            .connect(user1)
+            .contribute(await mockToken1.getAddress(), depositAmount)
 
           await campaign.depositToYieldProtocol(
             await mockToken1.getAddress(),
@@ -1477,7 +1887,9 @@ describe('Campaign', function () {
           await mockToken1
             .connect(user1)
             .approve(await campaign.getAddress(), depositAmount)
-          await campaign.connect(user1).contribute(depositAmount)
+          await campaign
+            .connect(user1)
+            .contribute(await mockToken1.getAddress(), depositAmount)
 
           await campaign.depositToYieldProtocol(
             await mockToken1.getAddress(),
@@ -1523,7 +1935,9 @@ describe('Campaign', function () {
           await mockToken1
             .connect(user1)
             .approve(await campaign.getAddress(), depositAmount)
-          await campaign.connect(user1).contribute(depositAmount)
+          await campaign
+            .connect(user1)
+            .contribute(await mockToken1.getAddress(), depositAmount)
 
           await campaign.depositToYieldProtocol(
             await mockToken1.getAddress(),
@@ -1574,7 +1988,9 @@ describe('Campaign', function () {
           await mockToken1
             .connect(user1)
             .approve(await campaign.getAddress(), depositAmount)
-          await campaign.connect(user1).contribute(depositAmount)
+          await campaign
+            .connect(user1)
+            .contribute(await mockToken1.getAddress(), depositAmount)
 
           await campaign.depositToYieldProtocol(
             await mockToken1.getAddress(),
@@ -1588,11 +2004,17 @@ describe('Campaign', function () {
               await mockToken1.getAddress(),
               50
             )
-          ).to.be.revertedWithCustomError(campaign, 'DefiActionFailed')
+          ).to.be.revertedWithCustomError(
+            mockDefiManager,
+            'YieldwithdrawalFailed'
+          )
 
           await expect(
             campaign.withdrawAllFromYieldProtocol(await mockToken1.getAddress())
-          ).to.be.revertedWithCustomError(campaign, 'DefiActionFailed')
+          ).to.be.revertedWithCustomError(
+            mockDefiManager,
+            'YieldwithdrawalFailed'
+          )
 
           const remainingDepositedAmount =
             await mockDefiManager.getDepositedAmount(
@@ -1610,7 +2032,9 @@ describe('Campaign', function () {
           await mockToken1
             .connect(user1)
             .approve(await campaign.getAddress(), depositAmount)
-          await campaign.connect(user1).contribute(depositAmount)
+          await campaign
+            .connect(user1)
+            .contribute(await mockToken1.getAddress(), depositAmount)
 
           await campaign.depositToYieldProtocol(
             await mockToken1.getAddress(),
@@ -1626,12 +2050,22 @@ describe('Campaign', function () {
 
           const excessiveAmount = depositAmount * 2
 
+          // Updated to expect InsufficientDeposit error from mockDefiManager
           await expect(
             campaign.withdrawFromYieldProtocol(
               await mockToken1.getAddress(),
               excessiveAmount
             )
-          ).to.be.revertedWithCustomError(campaign, 'DefiActionFailed')
+          )
+            .to.be.revertedWithCustomError(
+              mockDefiManager,
+              'InsufficientDeposit'
+            )
+            .withArgs(
+              await mockToken1.getAddress(),
+              excessiveAmount,
+              depositAmount
+            )
 
           const afterDepositedAmount = await mockDefiManager.getDepositedAmount(
             await campaign.getAddress(),
@@ -1649,7 +2083,7 @@ describe('Campaign', function () {
             .withArgs(await mockToken1.getAddress(), depositAmount)
         })
 
-        it('Should withdraw zero if nothing is deposited', async function () {
+        it('Should revert with ZeroAmount when trying to withdraw nothing', async function () {
           const { campaign, mockDefiManager, mockToken1, owner } =
             await loadFixture(deployCampaignFixture)
 
@@ -1659,296 +2093,26 @@ describe('Campaign', function () {
           )
           expect(depositedAmount).to.equal(0)
 
+          // When withdrawing all with no deposit, expect ZeroAmount error
           await expect(
             campaign.withdrawAllFromYieldProtocol(await mockToken1.getAddress())
-          ).to.revertedWithCustomError(campaign, 'DefiActionFailed')
+          )
+            .to.be.revertedWithCustomError(mockDefiManager, 'ZeroAmount')
+            .withArgs(0)
 
+          // When trying to withdraw specific amount with no deposit, expect InsufficientDeposit
           await expect(
             campaign.withdrawFromYieldProtocol(
               await mockToken1.getAddress(),
               50
             )
-          ).to.revertedWithCustomError(campaign, 'DefiActionFailed')
-        })
-      })
-    })
-
-    describe('Token swaps', function () {
-      it('Should allow owner to swap tokens successfully', async function () {
-        const { campaign, mockDefiManager, mockToken1, owner, user1 } =
-          await loadFixture(deployCampaignFixture)
-
-        const mockToken2 = await ethers.deployContract('MockERC20', [
-          'Second Token',
-          'TKN2',
-          ethers.parseUnits('1000')
-        ])
-        await mockToken2.waitForDeployment()
-
-        const token1Address = await mockToken1.getAddress()
-        const token2Address = await mockToken2.getAddress()
-
-        const tokenRegistry = await ethers.getContractAt(
-          'MockTokenRegistry',
-          await mockDefiManager.mockTokenRegistryAddress()
-        )
-        await tokenRegistry.addSupportedToken(token2Address, true)
-
-        const swapAmount = 50
-        const expectedReturnAmount = swapAmount * 2
-        await mockToken2.transfer(
-          await mockDefiManager.getAddress(),
-          expectedReturnAmount
-        )
-
-        await mockToken1
-          .connect(user1)
-          .approve(await campaign.getAddress(), 100)
-        await campaign.connect(user1).contribute(100)
-
-        const initialToken1Balance = await mockToken1.balanceOf(
-          await campaign.getAddress()
-        )
-        const initialToken2Balance = await mockToken2.balanceOf(
-          await campaign.getAddress()
-        )
-
-        expect(initialToken1Balance).to.equal(100)
-        expect(initialToken2Balance).to.equal(0)
-
-        await expect(
-          campaign
-            .connect(owner)
-            .swapTokens(token1Address, swapAmount, token2Address)
-        )
-          .to.emit(campaign, 'TokensSwapped')
-          .withArgs(
-            token1Address,
-            token2Address,
-            swapAmount,
-            expectedReturnAmount
           )
-
-        const finalToken1Balance = await mockToken1.balanceOf(
-          await campaign.getAddress()
-        )
-        const finalToken2Balance = await mockToken2.balanceOf(
-          await campaign.getAddress()
-        )
-
-        expect(finalToken1Balance).to.equal(
-          initialToken1Balance - BigInt(swapAmount)
-        )
-        expect(finalToken2Balance).to.equal(
-          initialToken2Balance + BigInt(expectedReturnAmount)
-        )
-      })
-
-      it('Should revert if someone other than owner tries to swap tokens', async function () {
-        const { campaign, mockDefiManager, mockToken1, owner, user1 } =
-          await loadFixture(deployCampaignFixture)
-
-        const mockToken2 = await ethers.deployContract('MockERC20', [
-          'Second Token',
-          'TKN2',
-          ethers.parseUnits('1000')
-        ])
-        await mockToken2.waitForDeployment()
-
-        const token1Address = await mockToken1.getAddress()
-        const token2Address = await mockToken2.getAddress()
-
-        const tokenRegistry = await ethers.getContractAt(
-          'MockTokenRegistry',
-          await mockDefiManager.mockTokenRegistryAddress()
-        )
-        await tokenRegistry.addSupportedToken(token2Address, true)
-
-        const swapAmount = 50
-        const expectedReturnAmount = swapAmount * 2
-        await mockToken2.transfer(
-          await mockDefiManager.getAddress(),
-          expectedReturnAmount
-        )
-
-        await mockToken1
-          .connect(user1)
-          .approve(await campaign.getAddress(), 100)
-        await campaign.connect(user1).contribute(100)
-
-        const initialToken1Balance = await mockToken1.balanceOf(
-          await campaign.getAddress()
-        )
-        const initialToken2Balance = await mockToken2.balanceOf(
-          await campaign.getAddress()
-        )
-
-        expect(initialToken1Balance).to.equal(100)
-        expect(initialToken2Balance).to.equal(0)
-
-        await expect(
-          campaign
-            .connect(user1)
-            .swapTokens(token1Address, swapAmount, token2Address)
-        )
-          .to.revertedWithCustomError(campaign, 'OwnableUnauthorizedAccount')
-          .withArgs(user1.address)
-
-        const finalToken1Balance = await mockToken1.balanceOf(
-          await campaign.getAddress()
-        )
-        const finalToken2Balance = await mockToken2.balanceOf(
-          await campaign.getAddress()
-        )
-
-        expect(finalToken1Balance).to.equal(initialToken1Balance)
-        expect(finalToken2Balance).to.equal(initialToken2Balance)
-      })
-
-      it('Should revert if swap amount is 0', async function () {
-        const { campaign, mockDefiManager, mockToken1, owner, user1 } =
-          await loadFixture(deployCampaignFixture)
-
-        const mockToken2 = await ethers.deployContract('MockERC20', [
-          'Second Token',
-          'TKN2',
-          ethers.parseUnits('1000')
-        ])
-        await mockToken2.waitForDeployment()
-
-        const token1Address = await mockToken1.getAddress()
-        const token2Address = await mockToken2.getAddress()
-
-        const tokenRegistry = await ethers.getContractAt(
-          'MockTokenRegistry',
-          await mockDefiManager.mockTokenRegistryAddress()
-        )
-        await tokenRegistry.addSupportedToken(token2Address, true)
-
-        const swapAmount = 0
-        const expectedReturnAmount = swapAmount * 2
-        await mockToken2.transfer(
-          await mockDefiManager.getAddress(),
-          expectedReturnAmount
-        )
-
-        await mockToken1
-          .connect(user1)
-          .approve(await campaign.getAddress(), 100)
-        await campaign.connect(user1).contribute(100)
-
-        const initialToken1Balance = await mockToken1.balanceOf(
-          await campaign.getAddress()
-        )
-        const initialToken2Balance = await mockToken2.balanceOf(
-          await campaign.getAddress()
-        )
-
-        expect(initialToken1Balance).to.equal(100)
-        expect(initialToken2Balance).to.equal(0)
-
-        await expect(
-          campaign.swapTokens(token1Address, swapAmount, token2Address)
-        )
-          .to.revertedWithCustomError(campaign, 'InvalidSwapAmount')
-          .withArgs(swapAmount)
-
-        const finalToken1Balance = await mockToken1.balanceOf(
-          await campaign.getAddress()
-        )
-        const finalToken2Balance = await mockToken2.balanceOf(
-          await campaign.getAddress()
-        )
-
-        expect(finalToken1Balance).to.equal(initialToken1Balance)
-        expect(finalToken2Balance).to.equal(initialToken2Balance)
-      })
-
-      it('Should revert if swap amount is larger than campaign balance', async function () {
-        const { campaign, mockDefiManager, mockToken1, owner, user1 } =
-          await loadFixture(deployCampaignFixture)
-
-        const mockToken2 = await ethers.deployContract('MockERC20', [
-          'Second Token',
-          'TKN2',
-          ethers.parseUnits('1000')
-        ])
-        await mockToken2.waitForDeployment()
-
-        const token1Address = await mockToken1.getAddress()
-        const token2Address = await mockToken2.getAddress()
-
-        const tokenRegistry = await ethers.getContractAt(
-          'MockTokenRegistry',
-          await mockDefiManager.mockTokenRegistryAddress()
-        )
-        await tokenRegistry.addSupportedToken(token2Address, true)
-
-        const swapAmount = 200
-        const expectedReturnAmount = swapAmount * 2
-        await mockToken2.transfer(
-          await mockDefiManager.getAddress(),
-          expectedReturnAmount
-        )
-
-        await mockToken1
-          .connect(user1)
-          .approve(await campaign.getAddress(), 100)
-        await campaign.connect(user1).contribute(100)
-
-        const initialToken1Balance = await mockToken1.balanceOf(
-          await campaign.getAddress()
-        )
-        const initialToken2Balance = await mockToken2.balanceOf(
-          await campaign.getAddress()
-        )
-
-        expect(initialToken1Balance).to.equal(100)
-        expect(initialToken2Balance).to.equal(0)
-
-        await expect(
-          campaign.swapTokens(token1Address, swapAmount, token2Address)
-        ).to.revertedWithCustomError(campaign, 'DefiActionFailed')
-
-        const finalToken1Balance = await mockToken1.balanceOf(
-          await campaign.getAddress()
-        )
-        const finalToken2Balance = await mockToken2.balanceOf(
-          await campaign.getAddress()
-        )
-
-        expect(finalToken1Balance).to.equal(initialToken1Balance)
-        expect(finalToken2Balance).to.equal(initialToken2Balance)
-      })
-
-      it('Should revert when swapping with a non-compliant token', async function () {
-        const { campaign, mockDefiManager, mockToken1, owner } =
-          await loadFixture(deployCampaignFixture)
-
-        // Deploy the non-compliant token
-        const nonCompliantToken = await ethers.deployContract(
-          'MockNonCompliantToken'
-        )
-        await nonCompliantToken.waitForDeployment()
-
-        const nonCompliantTokenAddress = await nonCompliantToken.getAddress()
-        const token1Address = await mockToken1.getAddress()
-
-        // Try to swap from the non-compliant token to a valid token
-        await expect(
-          campaign
-            .connect(owner)
-            .swapTokens(nonCompliantTokenAddress, 50, token1Address)
-        ).to.be.reverted // This should revert, but the exact error might depend on your implementation
-
-        // Also test swapping to the non-compliant token
-        await mockToken1.transfer(await campaign.getAddress(), 100)
-
-        await expect(
-          campaign
-            .connect(owner)
-            .swapTokens(token1Address, 50, nonCompliantTokenAddress)
-        ).to.be.revertedWithCustomError(campaign, 'DefiActionFailed')
+            .to.be.revertedWithCustomError(
+              mockDefiManager,
+              'InsufficientDeposit'
+            )
+            .withArgs(await mockToken1.getAddress(), 50, 0)
+        })
       })
     })
   })
@@ -1990,7 +2154,9 @@ describe('Campaign', function () {
         await mockToken1
           .connect(user1)
           .approve(await campaign.getAddress(), CAMPAIGN_GOAL_AMOUNT)
-        await campaign.connect(user1).contribute(CAMPAIGN_GOAL_AMOUNT)
+        await campaign
+          .connect(user1)
+          .contribute(await mockToken1.getAddress(), CAMPAIGN_GOAL_AMOUNT)
 
         // Campaign should now be successful
         expect(await campaign.isCampaignSuccessful()).to.be.true
@@ -2005,7 +2171,9 @@ describe('Campaign', function () {
         await mockToken1
           .connect(user1)
           .approve(await campaign.getAddress(), partialAmount)
-        await campaign.connect(user1).contribute(partialAmount)
+        await campaign
+          .connect(user1)
+          .contribute(await mockToken1.getAddress(), partialAmount)
 
         // Campaign should not be successful
         expect(await campaign.isCampaignSuccessful()).to.be.false
@@ -2027,7 +2195,9 @@ describe('Campaign', function () {
         await mockToken1
           .connect(user1)
           .approve(await campaign.getAddress(), depositAmount)
-        await campaign.connect(user1).contribute(depositAmount)
+        await campaign
+          .connect(user1)
+          .contribute(await mockToken1.getAddress(), depositAmount)
 
         await campaign.depositToYieldProtocol(
           await mockToken1.getAddress(),

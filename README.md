@@ -1,62 +1,24 @@
-# DeFi-Enabled Crowdfunding Platform
+# DeFi-Integrated Crowdfunding Platform
 
-A decentralized crowdfunding platform that integrates with DeFi protocols to generate yield on campaign funds. Built with Solidity for the Ethereum blockchain.
+## Overview
 
-## Features
+A decentralized crowdfunding platform that combines traditional crowdfunding mechanics with DeFi yield generation capabilities. Built on Ethereum/EVM compatible networks, this platform empowers creators while generating additional value through yield strategies.
 
-- Create and manage crowdfunding campaigns
-- Accept ETH and ERC20 token contributions
-- DeFi integration with Aave for yield generation
-- Token swaps via Uniswap
-- Automated yield distribution between campaign creators and platform
-- Configurable token registry for supported assets
-- Campaign lifecycle management
-- Refund mechanism for unsuccessful campaigns
+---
 
-## Smart Contracts
+## 📋 Core Features
 
-### Core Contracts
+- **Token-based Campaigns**: Create campaigns to raise funds in any supported ERC20 token
+- **Multi-token Contributions**: Contributors can donate using any supported token
+- **DeFi Integration**: Seamlessly deposit campaign funds into Aave to generate yield
+- **Yield Sharing**: Generated yield is split between creators and platform
+- **Full Lifecycle Management**: From creation to funding to claiming/refunds
 
-1. **Campaign.sol**
-   - Individual crowdfunding campaign contract
-   - Manages campaign lifecycle, contributions, and DeFi interactions
-   - Features: 
-     - Campaign creation with customizable parameters
-     - Contribution handling
-     - DeFi yield generation through Aave
-     - Token swaps via Uniswap
-     - Claim and refund mechanisms
+---
 
-2. **CampaignFactory.sol**
-   - Factory contract for deploying new campaigns
-   - Maintains registry of all deployed campaigns
-   - Manages campaign authorization for DeFi integration
+## 🏗️ Architecture
 
-3. **DefiIntegrationManager.sol**
-   - Manages all DeFi protocol interactions
-   - Integrates with:
-     - Aave for yield generation
-     - Uniswap for token swaps
-   - Handles yield distribution
-   - Manages WETH wrapping/unwrapping
-
-### Supporting Contracts
-
-4. **TokenRegistry.sol**
-   - Manages supported tokens
-   - Configures minimum contribution amounts
-   - Handles WETH address management
-
-5. **YieldDistributor.sol**
-   - Manages yield distribution logic
-   - Configurable platform fee
-   - Treasury management
-
-6. **MockERC20.sol**
-   - Test ERC20 token implementation
-   - Used for testing and development
-
-## Architecture
+The platform consists of five main smart contracts that work together to provide a complete crowdfunding solution with DeFi capabilities.
 
 ```mermaid
 graph TD
@@ -69,127 +31,149 @@ graph TD
     D --> H[YieldDistributor]
 ```
 
-## Key Features
-
-### Campaign Management
-- Customizable campaign duration
-- Configurable funding goals
-- Campaign status tracking
-- Contribution management
-- Automated fund distribution
-
-### DeFi Integration
-- Yield generation through Aave
-- Token swaps via Uniswap
-- Configurable yield distribution
-- WETH handling for ETH/token conversions
-
-### Security Features
-- Reentrancy protection
-- Access control
-- Slippage protection for swaps
-- Error handling and input validation
-- Safe token transfers
-
-## Setup and Deployment
-
-### Prerequisites
-- Solidity ^0.8.28
-- OpenZeppelin contracts
-- Aave V3 Core contracts
-- Uniswap V3 contracts
-
-### Deployment Steps
-
-1. Deploy supporting contracts:
-   ```
-   - TokenRegistry.sol
-   - YieldDistributor.sol
-   ```
-
-2. Deploy core DeFi integration:
-   ```
-   - DefiIntegrationManager.sol
-   ```
-
-3. Deploy campaign factory:
-   ```
-   - CampaignFactory.sol
-   ```
-
-4. Configure contract connections:
-   - Set up TokenRegistry with supported tokens
-   - Configure YieldDistributor parameters
-   - Initialize DefiIntegrationManager with protocol addresses
-   - Connect CampaignFactory with DefiIntegrationManager
-
-## Usage
-
-### Creating a Campaign
+### 1. `Campaign.sol`
 
 ```solidity
-// Through CampaignFactory
-factory.deploy(
-    goalAmount,
-    duration,
-    name,
-    description
-);
+contract Campaign is Ownable, ReentrancyGuard {
+    // Core campaign properties
+    address public campaignToken;
+    uint256 public campaignGoalAmount;
+    uint256 public campaignDuration;
+    // ...
+}
 ```
 
-### Contributing to a Campaign
+Individual crowdfunding campaign contract that:
+
+- Tracks contributions from multiple users
+- Accepts contributions in any supported token
+- Manages campaign state (active, successful, failed)
+- Handles fund claiming and refunds
+- Interacts with DeFi protocols through the integration manager
+
+### 2. `CampaignFactory.sol`
 
 ```solidity
-// ETH contributions
-campaign.contribute{value: amount}();
-
-// ERC20 contributions
-token.approve(campaign, amount);
-campaign.contributeToken(token, amount);
+contract CampaignFactory {
+    address[] public deployedCampaigns;
+    mapping(address => address[]) public creatorToCampaigns;
+    // ...
+}
 ```
 
-### DeFi Operations
+Factory contract responsible for:
+
+- Creating new Campaign contracts
+- Tracking all deployed campaigns
+- Associating campaigns with their creators
+- Ensuring proper authorization in the DeFi system
+
+### 3. `DefiIntegrationManager.sol`
 
 ```solidity
-// Deposit for yield
-campaign.depositToYieldProtocol(token, amount);
-
-// Harvest yield
-campaign.harvestYield(token);
-
-// Swap tokens
-campaign.swapTokens(fromToken, amount, toToken);
+contract DefiIntegrationManager is Ownable, ReentrancyGuard {
+    IAavePool public aavePool;
+    ISwapRouter public uniswapRouter;
+    // ...
+}
 ```
 
-## Security Considerations
+Central hub for all DeFi interactions that:
 
-1. **Access Control**
-   - Owner-only administrative functions
-   - Campaign authorization checks
-   - Protected DeFi interactions
+- Manages Aave integration for yield generation
+- Handles token swaps via Uniswap
+- Controls campaign authorization
+- Coordinates yield distribution
+- Provides an upgradable interface for future DeFi protocols
 
-2. **Fund Safety**
-   - Reentrancy protection
-   - Safe token transfer handling
-   - Slippage protection in swaps
+### 4. `TokenRegistry.sol`
 
-3. **Error Handling**
-   - Comprehensive error messages
-   - Input validation
-   - Failed transaction handling
+```solidity
+contract TokenRegistry is Ownable {
+    struct TokenConfig {
+        bool isSupported;
+        uint8 decimals;
+        uint256 minimumContributionAmount;
+    }
+    // ...
+}
+```
 
-## Events
+Registry that:
 
-The system emits events for all major operations:
-- Campaign creation and updates
-- Contributions and refunds
-- DeFi operations
-- Administrative changes
+- Maintains the list of supported ERC20 tokens
+- Configures minimum contribution amounts
+- Validates token compliance and decimals
+- Controls platform token inclusion/exclusion
 
-## License
+### 5. `YieldDistributor.sol`
 
-MIT License - see the LICENSE file for details
+```solidity
+contract YieldDistributor is Ownable {
+    address public platformTreasury;
+    uint16 public platformYieldShare = 2000; // 20%
+    // ...
+}
+```
 
-## Contributing
+Manages yield distribution by:
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+- Setting platform fee percentages
+- Routing the platform's share to treasury
+- Calculating yield splits (creator vs platform)
+- Enforcing maximum platform take rate (50%)
+
+---
+
+## 🔒 Security Features
+
+- **Reentrancy Protection**: `ReentrancyGuard` on all external-facing functions
+- **Access Control**: Owner-only and authorized-only function modifiers
+- **Slippage Protection**: For token swaps with configurable tolerance
+- **Custom Error Types**: Clear, gas-efficient error handling
+- **Decimal-Aware Math**: Precision handling for different token decimals
+- **Integer Safety**: Fixed-sized types with overflow/underflow protection
+- **Address Validation**: Comprehensive zero-address checks
+
+---
+
+## 🔄 Integration Points
+
+| Protocol         | Purpose          | Integration                 |
+| ---------------- | ---------------- | --------------------------- |
+| **Aave V3**      | Yield generation | Direct pool interaction     |
+| **Uniswap V3**   | Token swapping   | Router and quoter contracts |
+| **ERC20 Tokens** | Contributions    | SafeERC20 for transfers     |
+
+---
+
+## 🔄 Workflow
+
+1. Platform admin adds supported tokens to the `TokenRegistry`
+2. Creator deploys a campaign via `CampaignFactory`
+3. Contributors fund the campaign with various tokens
+4. Creator may deposit funds to Aave for yield generation
+5. Creator can harvest yield during the campaign
+6. When campaign ends:
+   - **Success**: Creator claims all funds
+   - **Failure**: Contributors receive refunds
+7. Creator can withdraw deposited funds from yield protocols at any time
+
+---
+
+## 📦 Technical Requirements
+
+- Solidity `^0.8.20` or higher
+- OpenZeppelin Contracts for access control and security
+- Aave V3 Protocol integration
+- Uniswap V3 Protocol integration
+
+---
+
+## 🧪 Testing
+
+Comprehensive test coverage including:
+
+- Unit tests for each contract
+- Integration tests for complete workflows
+- Edge case testing for security validation
