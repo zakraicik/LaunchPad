@@ -75,7 +75,9 @@ describe('YieldDistributor', function () {
     })
 
     it('Should revert if zero address platform treasury passed to constructor', async function () {
-      const [owner, platformAdmin] = await ethers.getSigners()
+      const { owner, platformAdmin } = await loadFixture(
+        deployYieldDistributorFixture
+      )
 
       const YieldDistributorFactory = await ethers.getContractFactory(
         'YieldDistributor'

@@ -8,73 +8,108 @@ describe('Campaign', function () {
   async function deployCampaignFixture () {
     const CAMPAIGN_GOAL_AMOUNT = 5
     const CAMPAIGN_DURATION = 30
+    const GRACE_PERIOD = 7 // 7 days grace period
 
     const [owner, user1, user2, platformTreasury] = await ethers.getSigners()
 
+    // Deploy mock token
     const mockToken1 = await ethers.deployContract('MockERC20', [
       'Mock Token 1',
       'MT1',
       ethers.parseUnits('100')
     ])
-
     await mockToken1.waitForDeployment()
+    const mockToken1Address = await mockToken1.getAddress()
 
-    const mockTokenRegistry = await ethers.deployContract('MockTokenRegistry')
-    await mockTokenRegistry.waitForDeployment()
-    const mockTokenRegistryAddress = await mockTokenRegistry.getAddress()
+    const mockToken2 = await ethers.deployContract('MockERC20', [
+      'Mock Token 2',
+      'MT2',
+      ethers.parseUnits('100000')
+    ])
+    await mockToken2.waitForDeployment()
+    const mockToken2Address = await mockToken2.getAddress()
 
-    const mockERC20Address = await mockToken1.getAddress()
+    // Deploy PlatformAdmin contract
+    const platformAdmin = await ethers.deployContract('PlatformAdmin', [
+      GRACE_PERIOD,
+      owner
+    ])
+    await platformAdmin.waitForDeployment()
+    const platformAdminAddress = await platformAdmin.getAddress()
 
-    await mockTokenRegistry.addSupportedToken(mockERC20Address, true)
+    // Deploy token registry with platform admin
+    const tokenRegistry = await ethers.deployContract('TokenRegistry', [
+      owner.address,
+      platformAdminAddress
+    ])
+    await tokenRegistry.waitForDeployment()
+    const tokenRegistryAddress = await tokenRegistry.getAddress()
 
-    const mockYieldDistributor = await ethers.deployContract(
+    await tokenRegistry.addToken(mockToken1Address, 1)
+    await tokenRegistry.addToken(mockToken2Address, 1)
+
+    // Deploy yield distributor with platform admin
+    const yieldDistributor = await ethers.deployContract(
       'MockYieldDistributor',
-      [platformTreasury.address]
+      [platformTreasury.address, platformAdminAddress, owner.address]
     )
-    await mockYieldDistributor.waitForDeployment()
-    const mockYieldDistributorAddress = await mockYieldDistributor.getAddress()
+    await yieldDistributor.waitForDeployment()
+    const yieldDistributorAddress = await yieldDistributor.getAddress()
 
+    // REPLACE: Deploy MockDefiManager instead of the real DefiIntegrationManager
     const mockDefiManager = await ethers.deployContract('MockDefiManager', [
-      mockTokenRegistryAddress,
-      mockYieldDistributorAddress
+      tokenRegistryAddress,
+      yieldDistributorAddress,
+      platformAdminAddress,
+      owner.address
     ])
     await mockDefiManager.waitForDeployment()
     const mockDefiManagerAddress = await mockDefiManager.getAddress()
 
+    // Deploy campaign with platform admin
     const campaign = await ethers.deployContract('Campaign', [
-      owner,
-      mockERC20Address,
+      owner.address,
+      mockToken1Address,
       CAMPAIGN_GOAL_AMOUNT,
       CAMPAIGN_DURATION,
-      mockDefiManagerAddress
+      mockDefiManagerAddress,
+      platformAdminAddress
     ])
-
     await campaign.waitForDeployment()
 
+    // Fund the MockDefiManager with the campaign token for swaps
+    await mockToken1.transfer(mockDefiManagerAddress, ethers.parseUnits('50'))
+    await mockToken2.transfer(mockDefiManagerAddress, ethers.parseUnits('50'))
+
+    // Transfer tokens to users
     await mockToken1.transfer(user1.address, ethers.parseUnits('10'))
     await mockToken1.transfer(user2.address, ethers.parseUnits('10'))
+    await mockToken2.transfer(user1.address, ethers.parseUnits('10'))
+    await mockToken2.transfer(user2.address, ethers.parseUnits('10'))
 
     return {
       owner,
       user1,
       user2,
       platformTreasury,
+      platformAdmin,
       mockToken1,
+      mockToken2,
       campaign,
-      mockTokenRegistry,
+      tokenRegistry,
       mockDefiManager,
-      mockYieldDistributor,
+      yieldDistributor,
       CAMPAIGN_GOAL_AMOUNT,
-      CAMPAIGN_DURATION
+      CAMPAIGN_DURATION,
+      GRACE_PERIOD
     }
   }
 
   describe('Deployment', function () {
     it('should deploy all contracts successfully', async function () {
-      const { campaign, mockToken1 } = await loadFixture(deployCampaignFixture)
+      const { campaign } = await loadFixture(deployCampaignFixture)
 
       expect(await campaign.getAddress()).to.be.properAddress
-      expect(await mockToken1.getAddress()).to.be.properAddress
     })
 
     it('Should correctly set the initial state', async function () {
@@ -96,7 +131,7 @@ describe('Campaign', function () {
       }
       const currentTimestamp = latestBlock.timestamp
 
-      expect(startTime).to.be.closeTo(currentTimestamp, 5)
+      expect(startTime).to.be.closeTo(currentTimestamp, 10)
 
       const expectedEndTime =
         startTime + BigInt(CAMPAIGN_DURATION * 24 * 60 * 60)
@@ -119,179 +154,158 @@ describe('Campaign', function () {
     })
 
     it('Should revert if invalid defiManager address is passed to campaign constructor', async function () {
-      const [owner] = await ethers.getSigners()
+      // Load the fixture to get common components
+      const {
+        owner,
+        platformAdmin,
+        mockToken1,
+        CAMPAIGN_GOAL_AMOUNT,
+        CAMPAIGN_DURATION
+      } = await loadFixture(deployCampaignFixture)
 
-      const mockToken1 = await ethers.deployContract('MockERC20', [
-        'Mock Token 1',
-        'MT1',
-        ethers.parseUnits('100')
-      ])
+      const mockToken1Address = await mockToken1.getAddress()
 
-      await mockToken1.waitForDeployment()
-
-      const mockTokenRegistry = await ethers.deployContract('MockTokenRegistry')
-      await mockTokenRegistry.waitForDeployment()
-      const mockTokenRegistryAddress = await mockTokenRegistry.getAddress()
-
-      const mockERC20Address = await mockToken1.getAddress()
-
-      const CAMPAIGN_GOAL_AMOUNT = 5
-      const CAMPAIGN_DURATION = 30
-
+      // Get the Campaign contract factory
       const CampaignFactory = await ethers.getContractFactory('Campaign')
 
+      // Try to deploy with zero address for defiManager (should fail)
       await expect(
         CampaignFactory.deploy(
           owner.address,
-          mockERC20Address,
+          mockToken1Address,
           CAMPAIGN_GOAL_AMOUNT,
           CAMPAIGN_DURATION,
-          ethers.ZeroAddress
+          ethers.ZeroAddress, // Invalid defiManager address
+          await platformAdmin.getAddress()
         )
       ).to.be.revertedWithCustomError(CampaignFactory, 'InvalidAddress')
     })
 
     it('Should revert if zero address is provided as token', async function () {
-      const [owner, platformTreasury] = await ethers.getSigners()
+      // Load the fixture to get common components
+      const {
+        owner,
+        platformAdmin,
+        mockDefiManager,
+        CAMPAIGN_GOAL_AMOUNT,
+        CAMPAIGN_DURATION
+      } = await loadFixture(deployCampaignFixture)
 
-      const mockTokenRegistry = await ethers.deployContract('MockTokenRegistry')
-      await mockTokenRegistry.waitForDeployment()
-      const mockTokenRegistryAddress = await mockTokenRegistry.getAddress()
-
-      const mockYieldDistributor = await ethers.deployContract(
-        'MockYieldDistributor',
-        [platformTreasury.address]
-      )
-      await mockYieldDistributor.waitForDeployment()
-      const mockYieldDistributorAddress =
-        await mockYieldDistributor.getAddress()
-
-      const mockDefiManager = await ethers.deployContract('MockDefiManager', [
-        mockTokenRegistryAddress,
-        mockYieldDistributorAddress
-      ])
-
-      mockDefiManager.waitForDeployment()
-
-      const mockDefiManagerAddress = await mockDefiManager.getAddress()
-
-      const CAMPAIGN_GOAL_AMOUNT = 5
-      const CAMPAIGN_DURATION = 30
-
+      // Get the Campaign contract factory
       const CampaignFactory = await ethers.getContractFactory('Campaign')
 
+      // Try to deploy with zero address for token (should fail)
       await expect(
         CampaignFactory.deploy(
           owner.address,
-          ethers.ZeroAddress,
+          ethers.ZeroAddress, // Zero address for token
           CAMPAIGN_GOAL_AMOUNT,
           CAMPAIGN_DURATION,
-          mockDefiManagerAddress
+          await mockDefiManager.getAddress(),
+          await platformAdmin.getAddress()
         )
       ).to.be.revertedWithCustomError(CampaignFactory, 'InvalidAddress')
     })
 
     it('Should revert if non-supported token address is provided to campaign constructor', async function () {
-      const [owner, platformTreasury] = await ethers.getSigners()
+      // Load the fixture
+      const {
+        owner,
+        tokenRegistry,
+        mockDefiManager,
+        platformAdmin,
+        CAMPAIGN_GOAL_AMOUNT,
+        CAMPAIGN_DURATION
+      } = await loadFixture(deployCampaignFixture)
 
-      const mockTokenRegistry = await ethers.deployContract('MockTokenRegistry')
-      await mockTokenRegistry.waitForDeployment()
-      const mockTokenRegistryAddress = await mockTokenRegistry.getAddress()
-
-      const mockYieldDistributor = await ethers.deployContract(
-        'MockYieldDistributor',
-        [platformTreasury.address]
-      )
-      await mockYieldDistributor.waitForDeployment()
-      const mockYieldDistributorAddress =
-        await mockYieldDistributor.getAddress()
-
-      const mockDefiManager = await ethers.deployContract('MockDefiManager', [
-        mockTokenRegistryAddress,
-        mockYieldDistributorAddress
+      // Deploy a new token that will be marked as not supported
+      const unsupportedToken = await ethers.deployContract('MockERC20', [
+        'Unsupported Token',
+        'UNSUPP',
+        ethers.parseUnits('100')
       ])
+      await unsupportedToken.waitForDeployment()
+      const unsupportedTokenAddress = await unsupportedToken.getAddress()
 
-      mockDefiManager.waitForDeployment()
+      // Add token to registry but mark it as unsupported
+      await tokenRegistry.addToken(unsupportedTokenAddress, 0)
+      await tokenRegistry.disableTokenSupport(unsupportedTokenAddress)
 
-      const mockDefiManagerAddress = await mockDefiManager.getAddress()
-
-      const nonCompliantToken = await ethers.deployContract(
-        'MockNonCompliantToken'
-      )
-
-      await nonCompliantToken.waitForDeployment()
-
-      const nonCompliantAddress = await nonCompliantToken.getAddress()
-
-      const CAMPAIGN_GOAL_AMOUNT = 5
-      const CAMPAIGN_DURATION = 30
-
+      // Try to deploy campaign with unsupported token
       const CampaignFactory = await ethers.getContractFactory('Campaign')
-
       await expect(
         CampaignFactory.deploy(
           owner.address,
-          nonCompliantAddress,
+          unsupportedTokenAddress,
           CAMPAIGN_GOAL_AMOUNT,
           CAMPAIGN_DURATION,
-          mockDefiManagerAddress
+          await mockDefiManager.getAddress(),
+          await platformAdmin.getAddress()
         )
       )
         .to.be.revertedWithCustomError(
           CampaignFactory,
           'ContributionTokenNotSupported'
         )
+        .withArgs(unsupportedTokenAddress)
+    })
+
+    it('Should revert if token address not in registry is provided to campaign constructor', async function () {
+      // Load the fixture
+      const {
+        owner,
+        tokenRegistry,
+        mockDefiManager,
+        platformAdmin,
+        CAMPAIGN_GOAL_AMOUNT,
+        CAMPAIGN_DURATION
+      } = await loadFixture(deployCampaignFixture)
+
+      // Deploy a non-compliant token
+      const nonCompliantToken = await ethers.deployContract(
+        'MockNonCompliantToken'
+      )
+      await nonCompliantToken.waitForDeployment()
+      const nonCompliantAddress = await nonCompliantToken.getAddress()
+
+      // Try to deploy campaign with non-registered token
+      const CampaignFactory = await ethers.getContractFactory('Campaign')
+      await expect(
+        CampaignFactory.deploy(
+          owner.address,
+          nonCompliantAddress,
+          CAMPAIGN_GOAL_AMOUNT,
+          CAMPAIGN_DURATION,
+          await mockDefiManager.getAddress(),
+          await platformAdmin.getAddress()
+        )
+      )
+        .to.be.revertedWithCustomError(tokenRegistry, 'TokenNotInRegistry')
         .withArgs(nonCompliantAddress)
     })
 
     it('Should revert if invalid goal amount is provided to campaign constructor', async function () {
-      const [owner, platformTreasury] = await ethers.getSigners()
+      // Load the fixture
+      const {
+        owner,
+        mockToken1,
+        mockDefiManager,
+        platformAdmin,
+        CAMPAIGN_DURATION
+      } = await loadFixture(deployCampaignFixture)
 
-      const mockTokenRegistry = await ethers.deployContract('MockTokenRegistry')
-      await mockTokenRegistry.waitForDeployment()
-      const mockTokenRegistryAddress = await mockTokenRegistry.getAddress()
-
-      const mockYieldDistributor = await ethers.deployContract(
-        'MockYieldDistributor',
-        [platformTreasury.address]
-      )
-      await mockYieldDistributor.waitForDeployment()
-      const mockYieldDistributorAddress =
-        await mockYieldDistributor.getAddress()
-
-      const mockDefiManager = await ethers.deployContract('MockDefiManager', [
-        mockTokenRegistryAddress,
-        mockYieldDistributorAddress
-      ])
-
-      mockDefiManager.waitForDeployment()
-
-      const mockDefiManagerAddress = await mockDefiManager.getAddress()
-
-      const mockToken1 = await ethers.deployContract('MockERC20', [
-        'Mock Token 1',
-        'MT1',
-        ethers.parseUnits('100')
-      ])
-
-      await mockToken1.waitForDeployment()
-
-      const mockERC20Address = await mockToken1.getAddress()
-
-      await mockTokenRegistry.addSupportedToken(mockERC20Address, true)
-
+      // Try to deploy campaign with zero goal amount
       const CAMPAIGN_GOAL_AMOUNT = 0
-      const CAMPAIGN_DURATION = 30
-
       const CampaignFactory = await ethers.getContractFactory('Campaign')
 
       await expect(
         CampaignFactory.deploy(
           owner.address,
-          mockERC20Address,
+          await mockToken1.getAddress(),
           CAMPAIGN_GOAL_AMOUNT,
           CAMPAIGN_DURATION,
-          mockDefiManagerAddress
+          await mockDefiManager.getAddress(),
+          await platformAdmin.getAddress()
         )
       )
         .to.be.revertedWithCustomError(CampaignFactory, 'InvalidGoalAmount')
@@ -299,52 +313,27 @@ describe('Campaign', function () {
     })
 
     it('Should revert if invalid campaign duration is provided to campaign constructor', async function () {
-      const [owner, platformTreasury] = await ethers.getSigners()
+      // Load the fixture
+      const {
+        owner,
+        mockToken1,
+        mockDefiManager,
+        platformAdmin,
+        CAMPAIGN_GOAL_AMOUNT
+      } = await loadFixture(deployCampaignFixture)
 
-      const mockTokenRegistry = await ethers.deployContract('MockTokenRegistry')
-      await mockTokenRegistry.waitForDeployment()
-      const mockTokenRegistryAddress = await mockTokenRegistry.getAddress()
-
-      const mockYieldDistributor = await ethers.deployContract(
-        'MockYieldDistributor',
-        [platformTreasury.address]
-      )
-      await mockYieldDistributor.waitForDeployment()
-      const mockYieldDistributorAddress =
-        await mockYieldDistributor.getAddress()
-
-      const mockDefiManager = await ethers.deployContract('MockDefiManager', [
-        mockTokenRegistryAddress,
-        mockYieldDistributorAddress
-      ])
-
-      await mockDefiManager.waitForDeployment()
-      const mockDefiManagerAddress = await mockDefiManager.getAddress()
-
-      const mockToken1 = await ethers.deployContract('MockERC20', [
-        'Mock Token 1',
-        'MT1',
-        ethers.parseUnits('100')
-      ])
-
-      await mockToken1.waitForDeployment()
-
-      const mockERC20Address = await mockToken1.getAddress()
-
-      await mockTokenRegistry.addSupportedToken(mockERC20Address, true)
-
-      const CAMPAIGN_GOAL_AMOUNT = 5
+      // Try to deploy campaign with zero duration
       const CAMPAIGN_DURATION = 0
-
       const CampaignFactory = await ethers.getContractFactory('Campaign')
 
       await expect(
         CampaignFactory.deploy(
           owner.address,
-          mockERC20Address,
+          await mockToken1.getAddress(),
           CAMPAIGN_GOAL_AMOUNT,
           CAMPAIGN_DURATION,
-          mockDefiManagerAddress
+          await mockDefiManager.getAddress(),
+          await platformAdmin.getAddress()
         )
       )
         .to.be.revertedWithCustomError(
@@ -393,7 +382,7 @@ describe('Campaign', function () {
     })
 
     it('Should allow user to contribute with a different token which gets swapped to campaign token', async function () {
-      const { campaign, mockToken1, user1, mockDefiManager } =
+      const { campaign, mockToken1, user1, tokenRegistry, mockDefiManager } =
         await loadFixture(deployCampaignFixture)
 
       const mockToken2 = await ethers.deployContract('MockERC20', [
@@ -403,12 +392,7 @@ describe('Campaign', function () {
       ])
       await mockToken2.waitForDeployment()
       const token2Address = await mockToken2.getAddress()
-
-      const tokenRegistry = await ethers.getContractAt(
-        'MockTokenRegistry',
-        await mockDefiManager.mockTokenRegistryAddress()
-      )
-      await tokenRegistry.addSupportedToken(token2Address, true)
+      await tokenRegistry.addToken(token2Address, 1)
 
       await mockToken2.transfer(user1.address, ethers.parseUnits('10'))
 
@@ -532,23 +516,12 @@ describe('Campaign', function () {
         mockToken1,
         user1,
         mockDefiManager,
-        CAMPAIGN_GOAL_AMOUNT
+        CAMPAIGN_GOAL_AMOUNT,
+        tokenRegistry,
+        mockToken2
       } = await loadFixture(deployCampaignFixture)
 
-      // Setup second token
-      const mockToken2 = await ethers.deployContract('MockERC20', [
-        'Second Token',
-        'TKN2',
-        ethers.parseUnits('100')
-      ])
-      await mockToken2.waitForDeployment()
-      const token2Address = await mockToken2.getAddress()
-
-      const tokenRegistry = await ethers.getContractAt(
-        'MockTokenRegistry',
-        await mockDefiManager.mockTokenRegistryAddress()
-      )
-      await tokenRegistry.addSupportedToken(token2Address, true)
+      const mockToken2Address = await mockToken2.getAddress()
       await mockToken2.transfer(user1.address, 100)
 
       // Calculate amounts to stay under the campaign goal
@@ -579,7 +552,7 @@ describe('Campaign', function () {
       // Second contribution with different token
       await campaign
         .connect(user1)
-        .contribute(token2Address, token2ContributionAmount)
+        .contribute(mockToken2Address, token2ContributionAmount)
 
       // Total contribution should be original amount + swapped amount
       const expectedTotalContribution =
@@ -670,24 +643,11 @@ describe('Campaign', function () {
     })
 
     it('Should handle swap failure during contribution', async function () {
-      const { campaign, mockToken1, user1, mockDefiManager } =
+      const { campaign, mockToken1, user1, mockDefiManager, mockToken2 } =
         await loadFixture(deployCampaignFixture)
 
-      // Setup second token
-      const mockToken2 = await ethers.deployContract('MockERC20', [
-        'Second Token',
-        'TKN2',
-        ethers.parseUnits('100')
-      ])
-      await mockToken2.waitForDeployment()
-      const token2Address = await mockToken2.getAddress()
-
-      const tokenRegistry = await ethers.getContractAt(
-        'MockTokenRegistry',
-        await mockDefiManager.mockTokenRegistryAddress()
-      )
-      await tokenRegistry.addSupportedToken(token2Address, true)
       await mockToken2.transfer(user1.address, 50)
+      const mockToken2Address = await mockToken2.getAddress()
 
       // Set swap to fail
       await mockDefiManager.setSwapSuccess(false)
@@ -697,7 +657,7 @@ describe('Campaign', function () {
 
       // Attempt to contribute with token that requires swap
       await expect(
-        campaign.connect(user1).contribute(token2Address, 20)
+        campaign.connect(user1).contribute(mockToken2Address, 20)
       ).to.be.revertedWithCustomError(mockDefiManager, 'SwapFailed')
 
       // Check that no contribution was recorded
@@ -711,17 +671,12 @@ describe('Campaign', function () {
         mockToken1,
         user1,
         mockDefiManager,
-        CAMPAIGN_GOAL_AMOUNT
+        CAMPAIGN_GOAL_AMOUNT,
+        mockToken2,
+        tokenRegistry
       } = await loadFixture(deployCampaignFixture)
 
-      // Setup second token
-      const mockToken2 = await ethers.deployContract('MockERC20', [
-        'Second Token',
-        'TKN2',
-        ethers.parseUnits('100')
-      ])
-      await mockToken2.waitForDeployment()
-      const token2Address = await mockToken2.getAddress()
+      const mockToken2Address = await mockToken2.getAddress()
 
       // Setup third token with different exchange rate
       const mockToken3 = await ethers.deployContract('MockERC20', [
@@ -730,14 +685,9 @@ describe('Campaign', function () {
         ethers.parseUnits('100')
       ])
       await mockToken3.waitForDeployment()
-      const token3Address = await mockToken3.getAddress()
+      const mockToken3Address = await mockToken3.getAddress()
 
-      const tokenRegistry = await ethers.getContractAt(
-        'MockTokenRegistry',
-        await mockDefiManager.mockTokenRegistryAddress()
-      )
-      await tokenRegistry.addSupportedToken(token2Address, true)
-      await tokenRegistry.addSupportedToken(token3Address, true)
+      await tokenRegistry.addToken(mockToken3Address, 1)
 
       // Transfer tokens to user
       await mockToken2.transfer(user1.address, 50)
@@ -767,10 +717,10 @@ describe('Campaign', function () {
         .approve(await campaign.getAddress(), token3Amount)
 
       // Contribute with Token2
-      await campaign.connect(user1).contribute(token2Address, token2Amount)
+      await campaign.connect(user1).contribute(mockToken2Address, token2Amount)
 
       // Contribute with Token3
-      await campaign.connect(user1).contribute(token3Address, token3Amount)
+      await campaign.connect(user1).contribute(mockToken3Address, token3Amount)
 
       // Check total contribution
       const expectedTotalContribution =
@@ -789,23 +739,11 @@ describe('Campaign', function () {
     })
 
     it('Should emit correct events when contributing with non-campaign token', async function () {
-      const { campaign, mockToken1, user1, mockDefiManager } =
+      const { campaign, mockToken1, user1, mockDefiManager, mockToken2 } =
         await loadFixture(deployCampaignFixture)
 
-      // Setup second token
-      const mockToken2 = await ethers.deployContract('MockERC20', [
-        'Second Token',
-        'TKN2',
-        ethers.parseUnits('100')
-      ])
-      await mockToken2.waitForDeployment()
-      const token2Address = await mockToken2.getAddress()
+      const mockToken2Address = await mockToken2.getAddress()
 
-      const tokenRegistry = await ethers.getContractAt(
-        'MockTokenRegistry',
-        await mockDefiManager.mockTokenRegistryAddress()
-      )
-      await tokenRegistry.addSupportedToken(token2Address, true)
       await mockToken2.transfer(user1.address, 100)
 
       // Setup for swap
@@ -824,7 +762,7 @@ describe('Campaign', function () {
       // Contribute with different token
       const tx = await campaign
         .connect(user1)
-        .contribute(token2Address, contributionAmount)
+        .contribute(mockToken2Address, contributionAmount)
 
       // Check emitted events - both Contribution and TokensSwapped should be emitted
       await expect(tx)
@@ -834,7 +772,7 @@ describe('Campaign', function () {
       await expect(tx)
         .to.emit(campaign, 'TokensSwapped')
         .withArgs(
-          token2Address,
+          mockToken2Address,
           await mockToken1.getAddress(),
           contributionAmount,
           expectedSwappedAmount
@@ -842,30 +780,23 @@ describe('Campaign', function () {
     })
 
     it('Should revert when contributing with unsupported token', async function () {
-      const { campaign, mockToken1, user1, mockDefiManager } =
-        await loadFixture(deployCampaignFixture)
-
-      const unsupportedToken = await ethers.deployContract('MockERC20', [
-        'Unsupported Token',
-        'UNSUPP',
-        ethers.parseUnits('100')
-      ])
-      await unsupportedToken.waitForDeployment()
-      const unsupportedTokenAddress = await unsupportedToken.getAddress()
-
-      await unsupportedToken.transfer(user1.address, 100)
-      await unsupportedToken
-        .connect(user1)
-        .approve(await campaign.getAddress(), 10)
-
-      await expect(
-        campaign.connect(user1).contribute(unsupportedTokenAddress, 10)
+      const { campaign, mockToken1, user1, tokenRegistry } = await loadFixture(
+        deployCampaignFixture
       )
+
+      await tokenRegistry.disableTokenSupport(mockToken1)
+
+      await mockToken1.transfer(user1.address, 100)
+      const mockToken1Address = await mockToken1.getAddress()
+
+      await mockToken1.connect(user1).approve(await campaign.getAddress(), 10)
+
+      await expect(campaign.connect(user1).contribute(mockToken1, 10))
         .to.be.revertedWithCustomError(
           campaign,
           'ContributionTokenNotSupported'
         )
-        .withArgs(unsupportedTokenAddress)
+        .withArgs(mockToken1Address)
     })
 
     it('Should revert when campaignGoalAmount is reached', async function () {
@@ -1133,67 +1064,57 @@ describe('Campaign', function () {
       })
 
       it('Should revert when token transfer fails during claim', async function () {
-        const [owner, user1, platformTreasury] = await ethers.getSigners()
+        // Load the fixture
+        const {
+          owner,
+          user1,
+          platformAdmin,
+          platformTreasury,
+          tokenRegistry,
+          mockDefiManager,
+          CAMPAIGN_GOAL_AMOUNT,
+          CAMPAIGN_DURATION
+        } = await loadFixture(deployCampaignFixture)
 
-        const CAMPAIGN_GOAL_AMOUNT = 5
-        const CAMPAIGN_DURATION = 30
-
+        // Deploy a failing token for this test
         const mockFailingToken = await ethers.deployContract(
           'MockFailingERC20',
           ['Failing Token', 'FAIL', ethers.parseUnits('100')]
         )
-
         await mockFailingToken.waitForDeployment()
         const mockFailingTokenAddress = await mockFailingToken.getAddress()
 
-        const mockTokenRegistry = await ethers.deployContract(
-          'MockTokenRegistry'
-        )
-        await mockTokenRegistry.waitForDeployment()
-        await mockTokenRegistry.addSupportedToken(mockFailingTokenAddress, true)
-        const mockTokenRegistryAddress = await mockTokenRegistry.getAddress()
+        // Add token to registry
+        await tokenRegistry.addToken(mockFailingTokenAddress, 1)
 
-        const mockYieldDistributor = await ethers.deployContract(
-          'MockYieldDistributor',
-          [platformTreasury.address]
-        )
-        await mockYieldDistributor.waitForDeployment()
-        const mockYieldDistributorAddress =
-          await mockYieldDistributor.getAddress()
-
-        const mockDefiManager = await ethers.deployContract('MockDefiManager', [
-          mockTokenRegistryAddress,
-          mockYieldDistributorAddress
-        ])
-
-        await mockDefiManager.waitForDeployment()
-
+        // Deploy campaign with failing token
         const CampaignFactory = await ethers.getContractFactory('Campaign')
         const campaign = await CampaignFactory.deploy(
           owner.address,
           mockFailingTokenAddress,
           CAMPAIGN_GOAL_AMOUNT,
           CAMPAIGN_DURATION,
-          await mockDefiManager.getAddress()
+          await mockDefiManager.getAddress(),
+          await platformAdmin.getAddress()
         )
         await campaign.waitForDeployment()
 
+        // Setup: Transfer tokens, approve, and contribute
         await mockFailingToken.transfer(user1.address, CAMPAIGN_GOAL_AMOUNT)
-
         await mockFailingToken
           .connect(user1)
           .approve(await campaign.getAddress(), CAMPAIGN_GOAL_AMOUNT)
-
-        // Updated: Add the token address as the first parameter
         await campaign
           .connect(user1)
           .contribute(mockFailingTokenAddress, CAMPAIGN_GOAL_AMOUNT)
 
+        // Advance time past campaign end
         await ethers.provider.send('evm_increaseTime', [
           (CAMPAIGN_DURATION + 1) * 24 * 60 * 60
         ])
         await ethers.provider.send('evm_mine')
 
+        // Track balances before claim
         const campaignBalanceBefore = await mockFailingToken.balanceOf(
           await campaign.getAddress()
         )
@@ -1201,18 +1122,19 @@ describe('Campaign', function () {
           owner.address
         )
 
+        // Configure token to fail transfers
         await mockFailingToken.setTransferShouldFail(true)
 
+        // Attempt to claim funds (should fail)
         await expect(
           campaign.connect(owner).claimFunds()
         ).to.be.revertedWithCustomError(campaign, 'SafeERC20FailedOperation')
 
+        // Verify state remains unchanged
         expect(await campaign.isClaimed()).to.equal(false)
-
         expect(
           await mockFailingToken.balanceOf(await campaign.getAddress())
         ).to.equal(campaignBalanceBefore)
-
         expect(await mockFailingToken.balanceOf(owner.address)).to.equal(
           ownerBalanceBefore
         )
@@ -1438,76 +1360,66 @@ describe('Campaign', function () {
       })
 
       it('Should revert when token transfer fails during refund', async function () {
-        const [owner, user1, platformTreasury] = await ethers.getSigners()
+        const {
+          owner,
+          user1,
+          platformAdmin,
+          tokenRegistry,
+          mockDefiManager,
+          CAMPAIGN_DURATION
+        } = await loadFixture(deployCampaignFixture)
 
-        const CAMPAIGN_GOAL_AMOUNT = 5
-        const CAMPAIGN_DURATION = 30
-
+        // Deploy a special failing token for this test
         const mockFailingToken = await ethers.deployContract(
           'MockFailingERC20',
           ['Failing Token', 'FAIL', ethers.parseUnits('100')]
         )
-
         await mockFailingToken.waitForDeployment()
+        const mockFailingTokenAddress = await mockFailingToken.getAddress()
 
-        const mockTokenRegistry = await ethers.deployContract(
-          'MockTokenRegistry'
-        )
-        await mockTokenRegistry.waitForDeployment()
-        await mockTokenRegistry.addSupportedToken(
-          await mockFailingToken.getAddress(),
-          true
-        )
+        // Add the failing token to the registry
+        await tokenRegistry.addToken(mockFailingTokenAddress, 1)
 
-        const mockTokenRegistryAddress = await mockTokenRegistry.getAddress()
-
-        const mockYieldDistributor = await ethers.deployContract(
-          'MockYieldDistributor',
-          [platformTreasury.address]
-        )
-        await mockYieldDistributor.waitForDeployment()
-        const mockYieldDistributorAddress =
-          await mockYieldDistributor.getAddress()
-
-        const mockDefiManager = await ethers.deployContract('MockDefiManager', [
-          mockTokenRegistryAddress,
-          mockYieldDistributorAddress
-        ])
-
-        await mockDefiManager.waitForDeployment()
-
-        const CampaignFactory = await ethers.getContractFactory('Campaign')
-        const campaign = await CampaignFactory.deploy(
+        // Create a campaign that uses the failing token
+        const CAMPAIGN_GOAL_AMOUNT = 5
+        const campaign = await ethers.deployContract('Campaign', [
           owner.address,
-          await mockFailingToken.getAddress(),
+          mockFailingTokenAddress,
           CAMPAIGN_GOAL_AMOUNT,
           CAMPAIGN_DURATION,
-          await mockDefiManager.getAddress()
-        )
+          await mockDefiManager.getAddress(),
+          await platformAdmin.getAddress()
+        ])
         await campaign.waitForDeployment()
 
-        await mockFailingToken.transfer(user1.address, CAMPAIGN_GOAL_AMOUNT - 1)
+        // Set up contribution that's below the goal
         const contributionAmount = CAMPAIGN_GOAL_AMOUNT - 1
+        await mockFailingToken.transfer(user1.address, contributionAmount)
 
+        // User approves and contributes to the campaign
         await mockFailingToken
           .connect(user1)
           .approve(await campaign.getAddress(), contributionAmount)
 
         await campaign
           .connect(user1)
-          .contribute(await mockFailingToken.getAddress(), contributionAmount)
+          .contribute(mockFailingTokenAddress, contributionAmount)
 
+        // Move time past campaign end date
         await ethers.provider.send('evm_increaseTime', [
           (CAMPAIGN_DURATION + 1) * 24 * 60 * 60
         ])
         await ethers.provider.send('evm_mine')
 
+        // Configure the token to fail on transfers
         await mockFailingToken.setTransferShouldFail(true)
 
+        // The refund call should fail with SafeERC20 error
         await expect(
           campaign.connect(user1).requestRefund()
         ).to.be.revertedWithCustomError(campaign, 'SafeERC20FailedOperation')
 
+        // Contribution record should still be intact
         expect(await campaign.contributions(user1.address)).to.equal(
           contributionAmount
         )
@@ -1571,8 +1483,6 @@ describe('Campaign', function () {
 
         const contributionAmount = 2
 
-        const contributionAmountBigInt = BigInt(contributionAmount)
-
         await mockToken1
           .connect(user1)
           .approve(await campaign.getAddress(), contributionAmount)
@@ -1593,7 +1503,10 @@ describe('Campaign', function () {
         await expect(
           campaign
             .connect(user1)
-            .depositToYieldProtocol(mockToken1, contributionAmount)
+            .depositToYieldProtocol(
+              await mockToken1.getAddress(),
+              contributionAmount
+            )
         )
           .to.revertedWithCustomError(campaign, 'OwnableUnauthorizedAccount')
           .withArgs(user1.address)
@@ -1608,8 +1521,9 @@ describe('Campaign', function () {
           campaignBalanceBeforeYieldProtocolDeposit
         )
 
-        //From the POV of the campaign, the transfer ends here
-        expect(mockDefiManagerBalanceAfterYieldProtocolDeposit).to.equal(0)
+        expect(mockDefiManagerBalanceAfterYieldProtocolDeposit).to.equal(
+          mockDefiManagerBalanceBeforeYieldProtocolDeposit
+        )
       })
 
       it('Should propagate specific error when deposit to yield protocol fails', async function () {
@@ -1627,6 +1541,14 @@ describe('Campaign', function () {
           .contribute(await mockToken1.getAddress(), contributionAmount)
 
         await mockDefiManager.setDepositSuccess(false)
+        const mockDefiManagerAddress = await mockDefiManager.getAddress()
+        const campaignAddress = await campaign.getAddress()
+
+        const campaignBalanceBeforeYieldProtocolDeposit =
+          await mockToken1.balanceOf(campaignAddress)
+
+        const mockDefiManagerBalanceBeforeYieldProtocolDeposit =
+          await mockToken1.balanceOf(mockDefiManagerAddress)
 
         await expect(
           campaign
@@ -1637,15 +1559,19 @@ describe('Campaign', function () {
             )
         ).to.be.revertedWithCustomError(mockDefiManager, 'YieldDepositFailed')
 
-        const campaignBalance = await mockToken1.balanceOf(
-          await campaign.getAddress()
-        )
-        expect(campaignBalance).to.equal(BigInt(contributionAmount))
+        const campaignBalanceAfterYieldProtocolDeposit =
+          await mockToken1.balanceOf(campaignAddress)
 
-        const defiManagerBalance = await mockToken1.balanceOf(
-          await mockDefiManager.getAddress()
+        const mockDefiManagerBalanceAfterYieldProtocolDeposit =
+          await mockToken1.balanceOf(mockDefiManagerAddress)
+
+        expect(campaignBalanceAfterYieldProtocolDeposit).to.equal(
+          campaignBalanceBeforeYieldProtocolDeposit
         )
-        expect(defiManagerBalance).to.equal(0)
+
+        expect(mockDefiManagerBalanceAfterYieldProtocolDeposit).to.equal(
+          mockDefiManagerBalanceBeforeYieldProtocolDeposit
+        )
       })
     })
 
@@ -1655,7 +1581,7 @@ describe('Campaign', function () {
           campaign,
           mockDefiManager,
           mockToken1,
-          mockYieldDistributor,
+          yieldDistributor,
           user1,
           platformTreasury
         } = await loadFixture(deployCampaignFixture)
@@ -1679,7 +1605,7 @@ describe('Campaign', function () {
           (BigInt(depositAmount) * BigInt(yieldRate)) / BigInt(10000)
 
         const [expectedCreatorYield, expectedPlatformYield] =
-          await mockYieldDistributor.calculateYieldShares(totalYield)
+          await yieldDistributor.calculateYieldShares(totalYield)
 
         await mockToken1.mint(await mockDefiManager.getAddress(), totalYield)
 
