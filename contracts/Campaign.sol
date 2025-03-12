@@ -7,6 +7,7 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
 import "./interfaces/IDefiIntegrationManager.sol";
+import "./interfaces/IPlatformAdmin.sol";
 
 contract Campaign is Ownable, ReentrancyGuard {
     using SafeERC20 for IERC20;
@@ -21,6 +22,7 @@ contract Campaign is Ownable, ReentrancyGuard {
     bytes32 public campaignId;
 
     IDefiIntegrationManager public immutable defiManager;
+    IPlatformAdmin public immutable platformAdmin;
 
     mapping(address => uint256) public contributions;
     mapping(address => bool) public hasBeenRefunded;
@@ -54,18 +56,23 @@ contract Campaign is Ownable, ReentrancyGuard {
     error FundsAlreadyClaimed();
     error ClaimTransferFailed();
     error InvalidSwapAmount(uint256);
+    error NotAuthorizedAdmin(address);
 
     constructor(
         address _owner,
         address _campaignToken,
         uint256 _campaignGoalAmount,
         uint256 _campaignDuration,
-        address _defiManager
+        address _defiManager,
+        address _platformAdmin
     ) Ownable(_owner) {
         if (_campaignToken == address(0)) revert InvalidAddress();
         if (_defiManager == address(0)) revert InvalidAddress();
+        if (_platformAdmin == address(0)) revert InvalidAddress();
 
         defiManager = IDefiIntegrationManager(_defiManager);
+        platformAdmin = IPlatformAdmin(_platformAdmin);
+
         ITokenRegistry tokenRegistry = defiManager.tokenRegistry();
 
         if (!tokenRegistry.isTokenSupported(_campaignToken)) {
@@ -79,12 +86,12 @@ contract Campaign is Ownable, ReentrancyGuard {
 
         campaignToken = _campaignToken;
         campaignGoalAmount = _campaignGoalAmount;
-        campaignDuration = uint64(_campaignDuration); // Explicit casting
+        campaignDuration = uint64(_campaignDuration);
 
-        campaignStartTime = uint64(block.timestamp); // Explicit casting
+        campaignStartTime = uint64(block.timestamp);
         campaignEndTime = uint64(
             campaignStartTime + (_campaignDuration * 1 days)
-        ); // Explicit casting
+        );
 
         campaignId = keccak256(
             abi.encodePacked(
@@ -96,6 +103,14 @@ contract Campaign is Ownable, ReentrancyGuard {
                 block.number
             )
         );
+    }
+
+    modifier onlyPlatformAdminAfterGrace() {
+        if (!platformAdmin.platformAdmins(msg.sender))
+            revert NotAuthorizedAdmin(msg.sender);
+        if (!platformAdmin.isGracePeriodOver(address(this)))
+            revert CampaignStillActive();
+        _;
     }
 
     receive() external payable {

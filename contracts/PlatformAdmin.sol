@@ -4,10 +4,10 @@ pragma solidity ^0.8.28;
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
-import "./interfaces/Icampaign.sol";
+import "./interfaces/ICampaign.sol";
 
 contract PlatformAdmin is Ownable, ReentrancyGuard {
-    uint256 public gracePeriod;
+    uint256 public gracePeriod; // Grace period in days
 
     mapping(address => bool) public platformAdmins;
 
@@ -65,7 +65,8 @@ contract PlatformAdmin is Ownable, ReentrancyGuard {
         if (campaign.isCampaignActive()) {
             return false;
         } else {
-            return true;
+            return (block.timestamp >=
+                campaign.campaignEndTime() + (gracePeriod * 1 days));
         }
     }
 }
