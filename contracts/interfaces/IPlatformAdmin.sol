@@ -16,5 +16,7 @@ interface IPlatformAdmin {
 
     function updateGracePeriod(uint256 _gracePeriod) external;
 
-    function isGracePeriodOver(address _campaign) external view returns (bool);
+    function isGracePeriodOver(
+        address _campaign
+    ) external view returns (bool, uint256);
 }

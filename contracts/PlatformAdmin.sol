@@ -59,14 +59,34 @@ contract PlatformAdmin is Ownable, ReentrancyGuard {
         emit GracePeriodUpdated(oldPeriod, _gracePeriod);
     }
 
-    function isGracePeriodOver(address _campaign) external view returns (bool) {
+    function isGracePeriodOver(
+        address _campaign
+    ) external view returns (bool, uint256) {
         ICampaign campaign = ICampaign(_campaign);
 
         if (campaign.isCampaignActive()) {
-            return false;
+            uint256 campaignTimeRemaining = 0;
+            if (campaign.campaignEndTime() > block.timestamp) {
+                campaignTimeRemaining =
+                    campaign.campaignEndTime() -
+                    block.timestamp;
+            }
+
+            uint256 totalTimeRemaining = campaignTimeRemaining +
+                (gracePeriod * 1 days);
+
+            return (false, totalTimeRemaining);
         } else {
-            return (block.timestamp >=
-                campaign.campaignEndTime() + (gracePeriod * 1 days));
+            uint256 gracePeriodEnd = campaign.campaignEndTime() +
+                (gracePeriod * 1 days);
+            bool isOver = block.timestamp >= gracePeriodEnd;
+
+            if (isOver) {
+                return (true, 0);
+            } else {
+                uint256 timeRemaining = gracePeriodEnd - block.timestamp;
+                return (false, timeRemaining);
+            }
         }
     }
 }

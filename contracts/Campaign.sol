@@ -57,6 +57,7 @@ contract Campaign is Ownable, ReentrancyGuard {
     error ClaimTransferFailed();
     error InvalidSwapAmount(uint256);
     error NotAuthorizedAdmin(address);
+    error GracePeriodNotOver(uint256 timeRemaining);
 
     constructor(
         address _owner,
@@ -108,8 +109,11 @@ contract Campaign is Ownable, ReentrancyGuard {
     modifier onlyPlatformAdminAfterGrace() {
         if (!platformAdmin.platformAdmins(msg.sender))
             revert NotAuthorizedAdmin(msg.sender);
-        if (!platformAdmin.isGracePeriodOver(address(this)))
-            revert CampaignStillActive();
+
+        (bool isGraceOver, uint256 timeRemaining) = platformAdmin
+            .isGracePeriodOver(address(this));
+        if (!isGraceOver) revert GracePeriodNotOver(timeRemaining);
+
         _;
     }
 
