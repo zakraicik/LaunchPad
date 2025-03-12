@@ -8,6 +8,14 @@ describe('TokenRegistry', function () {
   async function deployTokenRegistryFixture () {
     const [owner, user1, user2] = await ethers.getSigners()
 
+    const GRACE_PERIOD = 7 // 7 days
+    const platformAdmin = await ethers.deployContract('PlatformAdmin', [
+      GRACE_PERIOD,
+      owner
+    ])
+    await platformAdmin.waitForDeployment()
+    const platformAdminAddress = await platformAdmin.getAddress()
+
     const mockToken1 = await ethers.deployContract('MockERC20', [
       'Mock Token 1',
       'MT1',
@@ -21,7 +29,8 @@ describe('TokenRegistry', function () {
     ])
 
     const tokenRegistry = await ethers.deployContract('TokenRegistry', [
-      owner.address
+      owner.address,
+      platformAdminAddress
     ])
 
     await mockToken1.waitForDeployment()
@@ -34,19 +43,18 @@ describe('TokenRegistry', function () {
       mockToken2,
       owner,
       user1,
-      user2
+      user2,
+      platformAdmin,
+      platformAdminAddress,
+      GRACE_PERIOD
     }
   }
 
   describe('Deployment', function () {
     it('Should deploy all contracts successfully.', async function () {
-      const { tokenRegistry, mockToken1, mockToken2 } = await loadFixture(
-        deployTokenRegistryFixture
-      )
+      const { tokenRegistry } = await loadFixture(deployTokenRegistryFixture)
 
       expect(await tokenRegistry.getAddress()).to.be.properAddress
-      expect(await mockToken1.getAddress()).to.be.properAddress
-      expect(await mockToken2.getAddress()).to.be.properAddress
     })
 
     it('Should correctly set owner and initial state.', async function () {
@@ -137,7 +145,7 @@ describe('TokenRegistry', function () {
     })
 
     it('Should revert when trying to add token already in registry.', async function () {
-      const { tokenRegistry, mockToken1, user1 } = await loadFixture(
+      const { tokenRegistry, mockToken1 } = await loadFixture(
         deployTokenRegistryFixture
       )
 
@@ -155,9 +163,7 @@ describe('TokenRegistry', function () {
     })
 
     it('Should revert when trying to add token with 0 address', async function () {
-      const { tokenRegistry, mockToken1, user1 } = await loadFixture(
-        deployTokenRegistryFixture
-      )
+      const { tokenRegistry } = await loadFixture(deployTokenRegistryFixture)
 
       await expect(tokenRegistry.addToken(ethers.ZeroAddress, 0))
         .to.be.revertedWithCustomError(tokenRegistry, 'InvalidToken')
@@ -175,9 +181,7 @@ describe('TokenRegistry', function () {
     })
 
     it('Should revert when trying to add a non-ERC20 compliant contract', async function () {
-      const { tokenRegistry, owner } = await loadFixture(
-        deployTokenRegistryFixture
-      )
+      const { tokenRegistry } = await loadFixture(deployTokenRegistryFixture)
 
       const nonCompliantToken = await ethers.deployContract(
         'MockNonCompliantToken'
@@ -199,10 +203,7 @@ describe('TokenRegistry', function () {
       const mockToken1Address = await mockToken1.getAddress()
 
       await expect(tokenRegistry.connect(user1).addToken(mockToken1Address, 0))
-        .to.be.revertedWithCustomError(
-          tokenRegistry,
-          'OwnableUnauthorizedAccount'
-        )
+        .to.be.revertedWithCustomError(tokenRegistry, 'NotAuthorizedAdmin')
         .withArgs(user1.address)
 
       expect(await tokenRegistry.getAllSupportedTokens()).to.have.lengthOf(0)
@@ -291,10 +292,7 @@ describe('TokenRegistry', function () {
       await tokenRegistry.addToken(mockToken1Address, 0)
 
       await expect(tokenRegistry.connect(user1).removeToken(mockToken1Address))
-        .to.be.revertedWithCustomError(
-          tokenRegistry,
-          'OwnableUnauthorizedAccount'
-        )
+        .to.be.revertedWithCustomError(tokenRegistry, 'NotAuthorizedAdmin')
         .withArgs(user1.address)
     })
 
@@ -416,10 +414,7 @@ describe('TokenRegistry', function () {
       await expect(
         tokenRegistry.connect(user1).enableTokenSupport(mockToken1Address)
       )
-        .to.be.revertedWithCustomError(
-          tokenRegistry,
-          'OwnableUnauthorizedAccount'
-        )
+        .to.be.revertedWithCustomError(tokenRegistry, 'NotAuthorizedAdmin')
         .withArgs(user1.address)
       expect(await tokenRegistry.isTokenSupported(mockToken1Address)).to.be
         .false
@@ -499,10 +494,7 @@ describe('TokenRegistry', function () {
       await expect(
         tokenRegistry.connect(user1).disableTokenSupport(mockToken1Address)
       )
-        .to.be.revertedWithCustomError(
-          tokenRegistry,
-          'OwnableUnauthorizedAccount'
-        )
+        .to.be.revertedWithCustomError(tokenRegistry, 'NotAuthorizedAdmin')
         .withArgs(user1.address)
 
       expect(await tokenRegistry.isTokenSupported(mockToken1Address)).to.be.true
@@ -585,10 +577,7 @@ describe('TokenRegistry', function () {
           .connect(user1)
           .updateTokenMinimumContribution(mockToken1Address, newMinContribution)
       )
-        .to.be.revertedWithCustomError(
-          tokenRegistry,
-          'OwnableUnauthorizedAccount'
-        )
+        .to.be.revertedWithCustomError(tokenRegistry, 'NotAuthorizedAdmin')
         .withArgs(user1.address)
 
       const updatedConfig = await tokenRegistry.tokenConfigs(mockToken1Address)
