@@ -10,8 +10,13 @@ import "./interfaces/IYieldDistributor.sol";
 import "./interfaces/IAavePool.sol";
 import "./interfaces/ISwapRouter.sol";
 import "./interfaces/IQuoter.sol";
+import "./abstracts/PlatformAdminAccessControl.sol";
 
-contract DefiIntegrationManager is Ownable, ReentrancyGuard {
+contract DefiIntegrationManager is
+    Ownable,
+    ReentrancyGuard,
+    PlatformAdminAccessControl
+{
     using SafeERC20 for IERC20;
 
     IAavePool public aavePool;
@@ -90,8 +95,9 @@ contract DefiIntegrationManager is Ownable, ReentrancyGuard {
         address _tokenRegistry,
         address _campaignFactory,
         address _yieldDistributor,
+        address _platformAdmin,
         address _owner
-    ) Ownable(_owner) {
+    ) Ownable(_owner) PlatformAdminAccessControl(_platformAdmin) {
         if (_aavePool == address(0)) {
             revert InvalidConstructorInput(0, _aavePool);
         }
@@ -138,7 +144,9 @@ contract DefiIntegrationManager is Ownable, ReentrancyGuard {
         _;
     }
 
-    function setCampaignFactory(address _campaignFactory) external onlyOwner {
+    function setCampaignFactory(
+        address _campaignFactory
+    ) external onlyPlatformAdmin {
         if (_campaignFactory == address(0)) {
             revert InvalidAddress();
         }
@@ -149,7 +157,9 @@ contract DefiIntegrationManager is Ownable, ReentrancyGuard {
         emit CampaignFactoryUpdated(oldFactory, _campaignFactory);
     }
 
-    function setTokenRegistry(address _tokenRegistry) external onlyOwner {
+    function setTokenRegistry(
+        address _tokenRegistry
+    ) external onlyPlatformAdmin {
         if (_tokenRegistry == address(0)) {
             revert InvalidAddress();
         }
@@ -160,7 +170,9 @@ contract DefiIntegrationManager is Ownable, ReentrancyGuard {
         emit TokenRegistryUpdated(oldRegistry, _tokenRegistry);
     }
 
-    function setYieldDistributor(address _yieldDistributor) external onlyOwner {
+    function setYieldDistributor(
+        address _yieldDistributor
+    ) external onlyPlatformAdmin {
         if (_yieldDistributor == address(0)) {
             revert InvalidAddress();
         }
@@ -171,7 +183,7 @@ contract DefiIntegrationManager is Ownable, ReentrancyGuard {
         emit YieldDistributorUpdated(oldDistributor, _yieldDistributor);
     }
 
-    function setAavePool(address _aavePool) external onlyOwner {
+    function setAavePool(address _aavePool) external onlyPlatformAdmin {
         if (_aavePool == address(0)) {
             revert InvalidAddress();
         }
@@ -181,7 +193,9 @@ contract DefiIntegrationManager is Ownable, ReentrancyGuard {
         emit AavePoolUpdated(oldAavePool, _aavePool);
     }
 
-    function setUniswapRouter(address _uniswapRouter) external onlyOwner {
+    function setUniswapRouter(
+        address _uniswapRouter
+    ) external onlyPlatformAdmin {
         if (_uniswapRouter == address(0)) {
             revert InvalidAddress();
         }
@@ -191,7 +205,9 @@ contract DefiIntegrationManager is Ownable, ReentrancyGuard {
         emit UniswapRouterUpdated(oldUniswapRouter, _uniswapRouter);
     }
 
-    function setUniswapQuoter(address _uniswapQuoter) external onlyOwner {
+    function setUniswapQuoter(
+        address _uniswapQuoter
+    ) external onlyPlatformAdmin {
         if (_uniswapQuoter == address(0)) {
             revert InvalidAddress();
         }
@@ -206,7 +222,7 @@ contract DefiIntegrationManager is Ownable, ReentrancyGuard {
         emit CampaignAuthorized(_campaign);
     }
 
-    function unauthorizeCampaign(address _campaign) external onlyOwner {
+    function unauthorizeCampaign(address _campaign) external onlyPlatformAdmin {
         authorizedCampaigns[_campaign] = false;
         emit CampaignUnauthorized(_campaign);
     }

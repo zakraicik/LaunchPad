@@ -1,8 +1,9 @@
 //SPDX-License-Identifier: MIT
 pragma solidity ^0.8.28;
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
+import "./abstracts/PlatformAdminAccessControl.sol";
 
-contract YieldDistributor is Ownable {
+contract YieldDistributor is Ownable, PlatformAdminAccessControl {
     address public platformTreasury;
     uint16 public platformYieldShare = 2000;
     uint16 public constant maximumYieldShare = 5000;
@@ -22,7 +23,11 @@ contract YieldDistributor is Ownable {
         uint256 platformShare
     );
 
-    constructor(address _platformTreasury, address _owner) Ownable(_owner) {
+    constructor(
+        address _platformTreasury,
+        address _platformAdmin,
+        address _owner
+    ) Ownable(_owner) PlatformAdminAccessControl(_platformAdmin) {
         if (_platformTreasury == address(0)) {
             revert InvalidAddress();
         }
@@ -32,7 +37,7 @@ contract YieldDistributor is Ownable {
 
     function updatePlatformTreasury(
         address _platformTreasury
-    ) external onlyOwner {
+    ) external onlyPlatformAdmin {
         if (_platformTreasury == address(0)) {
             revert InvalidAddress();
         }
@@ -45,24 +50,22 @@ contract YieldDistributor is Ownable {
 
     function updatePlatformYieldShare(
         uint256 _platformYieldShare
-    ) external onlyOwner {
-        // Cast to uint16 since that's our storage type
+    ) external onlyPlatformAdmin {
         uint16 newShare = uint16(_platformYieldShare);
 
         if (newShare > maximumYieldShare) {
             revert ShareExceedsMaximum(newShare);
         }
 
-        uint256 oldshare = platformYieldShare;
+        uint256 oldShare = platformYieldShare;
         platformYieldShare = newShare;
 
-        emit PlatformYieldShareUpdated(oldshare, newShare);
+        emit PlatformYieldShareUpdated(oldShare, newShare);
     }
 
     function calculateYieldShares(
         uint256 totalYield
     ) external view returns (uint256 creatorShare, uint256 platformShare) {
-        // Simplified overflow check
         if (
             totalYield > 0 &&
             platformYieldShare > 0 &&
@@ -72,7 +75,6 @@ contract YieldDistributor is Ownable {
         }
 
         platformShare = (totalYield * platformYieldShare) / 10000;
-        // Use unchecked for this subtraction since overflow is impossible
         unchecked {
             creatorShare = totalYield - platformShare;
         }

@@ -7,9 +7,9 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
 import "./interfaces/IDefiIntegrationManager.sol";
-import "./interfaces/IPlatformAdmin.sol";
+import "./abstracts/PlatformAdminAccessControl.sol";
 
-contract Campaign is Ownable, ReentrancyGuard {
+contract Campaign is Ownable, ReentrancyGuard, PlatformAdminAccessControl {
     using SafeERC20 for IERC20;
 
     address public campaignToken;
@@ -22,7 +22,6 @@ contract Campaign is Ownable, ReentrancyGuard {
     bytes32 public campaignId;
 
     IDefiIntegrationManager public immutable defiManager;
-    IPlatformAdmin public immutable platformAdmin;
 
     mapping(address => uint256) public contributions;
     mapping(address => bool) public hasBeenRefunded;
@@ -56,8 +55,6 @@ contract Campaign is Ownable, ReentrancyGuard {
     error FundsAlreadyClaimed();
     error ClaimTransferFailed();
     error InvalidSwapAmount(uint256);
-    error NotAuthorizedAdmin(address);
-    error GracePeriodNotOver(uint256 timeRemaining);
 
     constructor(
         address _owner,
@@ -66,13 +63,11 @@ contract Campaign is Ownable, ReentrancyGuard {
         uint256 _campaignDuration,
         address _defiManager,
         address _platformAdmin
-    ) Ownable(_owner) {
+    ) Ownable(_owner) PlatformAdminAccessControl(_platformAdmin) {
         if (_campaignToken == address(0)) revert InvalidAddress();
         if (_defiManager == address(0)) revert InvalidAddress();
-        if (_platformAdmin == address(0)) revert InvalidAddress();
 
         defiManager = IDefiIntegrationManager(_defiManager);
-        platformAdmin = IPlatformAdmin(_platformAdmin);
 
         ITokenRegistry tokenRegistry = defiManager.tokenRegistry();
 
@@ -104,17 +99,6 @@ contract Campaign is Ownable, ReentrancyGuard {
                 block.number
             )
         );
-    }
-
-    modifier onlyPlatformAdminAfterGrace() {
-        if (!platformAdmin.platformAdmins(msg.sender))
-            revert NotAuthorizedAdmin(msg.sender);
-
-        (bool isGraceOver, uint256 timeRemaining) = platformAdmin
-            .isGracePeriodOver(address(this));
-        if (!isGraceOver) revert GracePeriodNotOver(timeRemaining);
-
-        _;
     }
 
     receive() external payable {

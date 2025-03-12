@@ -2,11 +2,13 @@
 pragma solidity ^0.8.28;
 import "./Campaign.sol";
 import "./interfaces/IDefiIntegrationManager.sol";
+import "./interfaces/IPlatformAdmin.sol";
 
 contract CampaignFactory {
     address[] public deployedCampaigns;
     mapping(address => address[]) public creatorToCampaigns;
     IDefiIntegrationManager public defiManager;
+    IPlatformAdmin public platformAdmin;
 
     event CampaignCreated(
         address indexed campaignAddress,
@@ -19,11 +21,16 @@ contract CampaignFactory {
     error InvalidCampaignDuration(uint256);
     error ContributionTokenNotSupported(address);
 
-    constructor(address _defiManager) {
+    constructor(address _defiManager, address _platformAdmin) {
         if (_defiManager == address(0)) {
             revert InvalidAddress();
         }
+
+        if (_platformAdmin == address(0)) {
+            revert InvalidAddress();
+        }
         defiManager = IDefiIntegrationManager(_defiManager);
+        platformAdmin = IPlatformAdmin(_platformAdmin);
     }
 
     function deploy(
@@ -31,7 +38,6 @@ contract CampaignFactory {
         uint256 _campaignGoalAmount,
         uint16 _campaignDuration
     ) external returns (address) {
-        // Function body remains unchanged
         if (_campaignToken == address(0)) {
             revert InvalidAddress();
         }
@@ -54,7 +60,8 @@ contract CampaignFactory {
             _campaignToken,
             _campaignGoalAmount,
             _campaignDuration,
-            address(defiManager)
+            address(defiManager),
+            address(platformAdmin)
         );
 
         address campaignAddress = address(newCampaign);
