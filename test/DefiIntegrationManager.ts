@@ -6,6 +6,11 @@ const { loadFixture } = require('@nomicfoundation/hardhat-network-helpers')
 
 describe('DefiIntegrationManager', function () {
   async function deployDefiManagerFixture () {
+    const CAMPAIGN_GOAL_AMOUNT = 5
+    const CAMPAIGN_DURATION = 30
+
+    const GRACE_PERIOD = 7 // 7 days grace period
+
     const [owner, user1, user2, platformTreasury] = await ethers.getSigners()
 
     const mockToken1 = await ethers.deployContract('MockERC20', [
@@ -22,18 +27,32 @@ describe('DefiIntegrationManager', function () {
     ])
     await mockToken2.waitForDeployment()
 
-    const mockTokenRegistry = await ethers.deployContract('MockTokenRegistry')
-    await mockTokenRegistry.waitForDeployment()
-    const mockTokenRegistryAddress = await mockTokenRegistry.getAddress()
+    const platformAdmin = await ethers.deployContract('PlatformAdmin', [
+      GRACE_PERIOD,
+      owner
+    ])
+    await platformAdmin.waitForDeployment()
+    const platformAdminAddress = await platformAdmin.getAddress()
 
-    await mockTokenRegistry.addSupportedToken(
-      await mockToken1.getAddress(),
-      true
-    )
-    await mockTokenRegistry.addSupportedToken(
-      await mockToken2.getAddress(),
-      true
-    )
+    const tokenRegistry = await ethers.deployContract('TokenRegistry', [
+      owner.address,
+      platformAdminAddress
+    ])
+    await tokenRegistry.waitForDeployment()
+    const tokenRegistryAddress = await tokenRegistry.getAddress()
+
+    await tokenRegistry.addToken(await mockToken1.getAddress(), 1)
+    await tokenRegistry.addToken(await mockToken2.getAddress(), 1)
+
+    // Deploy yield distributor with platform admin
+    const yieldDistributor = await ethers.deployContract('YieldDistributor', [
+      platformTreasury.address,
+      platformAdminAddress,
+      owner.address
+    ])
+    await yieldDistributor.waitForDeployment()
+    const yieldDistributorAddress = await yieldDistributor.getAddress()
+
     const mockAToken1 = await ethers.deployContract('MockAToken', [
       'aMock Token 1',
       'aMT1',
@@ -52,6 +71,7 @@ describe('DefiIntegrationManager', function () {
       await mockAToken1.getAddress()
     ])
     await mockAavePool.waitForDeployment()
+    const mockAavePoolAddress = await mockAavePool.getAddress()
 
     await mockAavePool.setAToken(
       await mockToken1.getAddress(),
@@ -71,72 +91,32 @@ describe('DefiIntegrationManager', function () {
       ethers.parseUnits('1', 27)
     )
 
-    const mockUniswapQuoter = await ethers.deployContract('MockUniswapQuoter')
-    await mockUniswapQuoter.waitForDeployment()
-
     const mockUniswapRouter = await ethers.deployContract('MockUniswapRouter')
     await mockUniswapRouter.waitForDeployment()
 
-    const mockYieldDistributor = await ethers.deployContract(
-      'MockYieldDistributor',
-      [platformTreasury.address]
-    )
-    await mockYieldDistributor.waitForDeployment()
-    const mockYieldDistributorAddress = await mockYieldDistributor.getAddress()
-
-    const tempCampaignFactory = await ethers.deployContract(
-      'MockCampaignFactory',
-      [
-        ethers.ZeroAddress // Temporary address, will update later
-      ]
-    )
-    await tempCampaignFactory.waitForDeployment()
+    const mockUniswapQuoter = await ethers.deployContract('MockUniswapQuoter')
+    await mockUniswapQuoter.waitForDeployment()
 
     // 9. Now deploy the DefiIntegrationManager with all dependencies
     const defiManager = await ethers.deployContract('DefiIntegrationManager', [
       await mockAavePool.getAddress(),
       await mockUniswapRouter.getAddress(),
       await mockUniswapQuoter.getAddress(),
-      mockTokenRegistryAddress,
-      await tempCampaignFactory.getAddress(),
-      mockYieldDistributorAddress,
+      tokenRegistryAddress,
+      yieldDistributorAddress,
+      platformAdminAddress,
       owner.address
     ])
     await defiManager.waitForDeployment()
 
-    // 10. Deploy the real CampaignFactory with the correct DefiManager address
-    const campaignFactory = await ethers.deployContract('MockCampaignFactory', [
-      await defiManager.getAddress()
-    ])
-    await campaignFactory.waitForDeployment()
-
-    // 11. Update the DefiManager to use the real CampaignFactory
-    await defiManager.setCampaignFactory(await campaignFactory.getAddress())
-
-    // 12. Deploy a mock campaign for testing
     const mockCampaign = await ethers.deployContract('MockCampaign', [
       owner.address,
       await mockToken1.getAddress(),
-      ethers.parseUnits('1000'),
-      30, // 30 days duration
+      CAMPAIGN_GOAL_AMOUNT,
+      CAMPAIGN_DURATION,
       await defiManager.getAddress()
     ])
     await mockCampaign.waitForDeployment()
-
-    // 13. Authorize the campaign through the factory
-    await campaignFactory.registerExistingCampaign(
-      await mockCampaign.getAddress()
-    )
-
-    // 14. Send some tokens to the campaign for testing
-    await mockToken1.transfer(
-      await mockCampaign.getAddress(),
-      ethers.parseUnits('500')
-    )
-    await mockToken2.transfer(
-      await mockCampaign.getAddress(),
-      ethers.parseUnits('500')
-    )
 
     return {
       owner,
@@ -150,24 +130,27 @@ describe('DefiIntegrationManager', function () {
       mockAavePool,
       mockUniswapRouter,
       mockUniswapQuoter,
-      mockTokenRegistry,
-      mockYieldDistributor,
-      campaignFactory,
+      tokenRegistry,
+      yieldDistributor,
       mockCampaign,
-      defiManager
+      defiManager,
+      platformAdmin,
+      CAMPAIGN_GOAL_AMOUNT,
+      CAMPAIGN_DURATION
     }
   }
 
   describe('Deployment', function () {
     it('Should correctly deploy all defimanager', async function () {
       const {
-        defiManager,
         mockAavePool,
         mockUniswapRouter,
         mockUniswapQuoter,
-        mockTokenRegistry,
-        campaignFactory,
-        mockYieldDistributor
+        tokenRegistry,
+        yieldDistributor,
+        platformAdmin,
+        owner,
+        defiManager
       } = await loadFixture(deployDefiManagerFixture)
 
       expect(await defiManager.getAddress()).to.be.properAddress
@@ -176,8 +159,8 @@ describe('DefiIntegrationManager', function () {
       const uniswapRouterAddress = await defiManager.uniswapRouter()
       const uniswapQuoterAddress = await defiManager.uniswapQuoter()
       const tokenRegistryAddress = await defiManager.tokenRegistry()
-      const campaignFactoryAddress = await defiManager.campaignFactory()
       const yieldDistributorAddress = await defiManager.yieldDistributor()
+      const platformAdminAddress = await defiManager.platformAdmin()
 
       expect(await mockAavePool.getAddress()).to.equal(aavePoolAddress)
       expect(await mockUniswapRouter.getAddress()).to.equal(
@@ -186,59 +169,31 @@ describe('DefiIntegrationManager', function () {
       expect(await mockUniswapQuoter.getAddress()).to.equal(
         uniswapQuoterAddress
       )
-      expect(await mockTokenRegistry.getAddress()).to.equal(
-        tokenRegistryAddress
-      )
-      expect(await campaignFactory.getAddress()).to.equal(
-        campaignFactoryAddress
-      )
-      expect(await mockYieldDistributor.getAddress()).to.equal(
+      expect(await tokenRegistry.getAddress()).to.equal(tokenRegistryAddress)
+      expect(await yieldDistributor.getAddress()).to.equal(
         yieldDistributorAddress
       )
+      expect(await platformAdmin.getAddress()).to.equal(platformAdminAddress)
     })
 
     it('Should revert on any incorrect constructor inputs', async function () {
-      const [owner, user1, platformTreasury] = await ethers.getSigners()
-
-      // Deploy mock dependencies
-      const mockAToken = await ethers.deployContract('MockAToken', [
-        'aMock Token',
-        'aMT',
-        ethers.ZeroAddress
-      ])
-      await mockAToken.waitForDeployment()
-
-      const mockAavePool = await ethers.deployContract('MockAavePool', [
-        await mockAToken.getAddress()
-      ])
-      const mockUniswapRouter = await ethers.deployContract('MockUniswapRouter')
-      const mockUniswapQuoter = await ethers.deployContract('MockUniswapQuoter')
-      const mockTokenRegistry = await ethers.deployContract('MockTokenRegistry')
-      const mockCampaignFactory = await ethers.deployContract(
-        'MockCampaignFactory',
-        [ethers.ZeroAddress]
-      )
-      const mockYieldDistributor = await ethers.deployContract(
-        'MockYieldDistributor',
-        [platformTreasury.address]
-      )
-
-      await Promise.all([
-        mockAavePool.waitForDeployment(),
-        mockUniswapRouter.waitForDeployment(),
-        mockUniswapQuoter.waitForDeployment(),
-        mockTokenRegistry.waitForDeployment(),
-        mockCampaignFactory.waitForDeployment(),
-        mockYieldDistributor.waitForDeployment()
-      ])
+      const {
+        mockAavePool,
+        mockUniswapRouter,
+        mockUniswapQuoter,
+        owner,
+        tokenRegistry,
+        yieldDistributor,
+        platformAdmin
+      } = await loadFixture(deployDefiManagerFixture)
 
       // Store addresses
       const aavePoolAddress = await mockAavePool.getAddress()
       const uniswapRouterAddress = await mockUniswapRouter.getAddress()
       const uniswapQuoterAddress = await mockUniswapQuoter.getAddress()
-      const tokenRegistryAddress = await mockTokenRegistry.getAddress()
-      const campaignFactoryAddress = await mockCampaignFactory.getAddress()
-      const yieldDistributorAddress = await mockYieldDistributor.getAddress()
+      const tokenRegistryAddress = await tokenRegistry.getAddress()
+      const yieldDistributorAddress = await yieldDistributor.getAddress()
+      const platformAdminAddress = await platformAdmin.getAddress()
 
       // Get contract factory
       const DefiManager = await ethers.getContractFactory(
@@ -252,11 +207,13 @@ describe('DefiIntegrationManager', function () {
           uniswapRouterAddress,
           uniswapQuoterAddress,
           tokenRegistryAddress,
-          campaignFactoryAddress,
           yieldDistributorAddress,
+          platformAdminAddress,
           owner.address
         )
-      ).to.be.revertedWithCustomError(DefiManager, 'InvalidConstructorInput')
+      )
+        .to.be.revertedWithCustomError(DefiManager, 'InvalidConstructorInput')
+        .withArgs(0, ethers.ZeroAddress)
 
       // Test zero address for uniswapRouter (index 1)
       await expect(
@@ -265,11 +222,13 @@ describe('DefiIntegrationManager', function () {
           ethers.ZeroAddress,
           uniswapQuoterAddress,
           tokenRegistryAddress,
-          campaignFactoryAddress,
           yieldDistributorAddress,
+          platformAdminAddress,
           owner.address
         )
-      ).to.be.revertedWithCustomError(DefiManager, 'InvalidConstructorInput')
+      )
+        .to.be.revertedWithCustomError(DefiManager, 'InvalidConstructorInput')
+        .withArgs(1, ethers.ZeroAddress)
 
       // Test zero address for uniswapQuoter (index 2)
       await expect(
@@ -278,255 +237,51 @@ describe('DefiIntegrationManager', function () {
           uniswapRouterAddress,
           ethers.ZeroAddress,
           tokenRegistryAddress,
-          campaignFactoryAddress,
           yieldDistributorAddress,
+          platformAdminAddress,
           owner.address
         )
-      ).to.be.revertedWithCustomError(DefiManager, 'InvalidConstructorInput')
+      )
+        .to.be.revertedWithCustomError(DefiManager, 'InvalidConstructorInput')
+        .withArgs(2, ethers.ZeroAddress)
 
-      // Test zero address for tokenRegistry (index 3)
       await expect(
         DefiManager.deploy(
           aavePoolAddress,
           uniswapRouterAddress,
           uniswapQuoterAddress,
           ethers.ZeroAddress,
-          campaignFactoryAddress,
           yieldDistributorAddress,
+          platformAdminAddress,
           owner.address
         )
-      ).to.be.revertedWithCustomError(DefiManager, 'InvalidConstructorInput')
+      )
+        .to.be.revertedWithCustomError(DefiManager, 'InvalidConstructorInput')
+        .withArgs(3, ethers.ZeroAddress)
 
-      // Test zero address for campaignFactory (index 4)
-      await expect(
-        DefiManager.deploy(
-          aavePoolAddress,
-          uniswapRouterAddress,
-          uniswapQuoterAddress,
-          tokenRegistryAddress,
-          ethers.ZeroAddress,
-          yieldDistributorAddress,
-          owner.address
-        )
-      ).to.be.revertedWithCustomError(DefiManager, 'InvalidConstructorInput')
-
-      // Test zero address for yieldDistributor (index 5)
       await expect(
         DefiManager.deploy(
           aavePoolAddress,
           uniswapRouterAddress,
           uniswapQuoterAddress,
           tokenRegistryAddress,
-          campaignFactoryAddress,
           ethers.ZeroAddress,
+          platformAdminAddress,
           owner.address
         )
-      ).to.be.revertedWithCustomError(DefiManager, 'InvalidConstructorInput')
-    })
-  })
-
-  describe('Authorizing Campaigns', function () {
-    it('Should allow campaign faactory to authorize new campaigns', async function () {
-      const { defiManager, owner, mockToken1 } = await loadFixture(
-        deployDefiManagerFixture
       )
-
-      const campaignFactoryAddress = await defiManager.campaignFactory()
-
-      await ethers.provider.send('hardhat_setBalance', [
-        campaignFactoryAddress,
-        '0x56BC75E2D63100000'
-      ])
-
-      await ethers.provider.send('hardhat_impersonateAccount', [
-        campaignFactoryAddress
-      ])
-      const campaignFactorySigner = await ethers.provider.getSigner(
-        campaignFactoryAddress
-      )
-
-      const mockCampaign = await ethers.deployContract('MockCampaign', [
-        owner.address,
-        await mockToken1.getAddress(),
-        ethers.parseUnits('1000'),
-        30,
-        await defiManager.getAddress()
-      ])
-      await mockCampaign.waitForDeployment()
-
-      const campaignAddress = await mockCampaign.getAddress()
-
-      await expect(
-        defiManager
-          .connect(campaignFactorySigner)
-          .authorizeCampaign(campaignAddress)
-      )
-        .to.emit(defiManager, 'CampaignAuthorized')
-        .withArgs(campaignAddress)
-
-      expect(await defiManager.authorizedCampaigns(campaignAddress)).to.equal(
-        true
-      )
-
-      expect(await defiManager.isCampaignAuthorized(campaignAddress)).to.equal(
-        true
-      )
-    })
-    it('Should revert when address besides campaign factory calls authorizeCampaign()', async function () {
-      const { defiManager, owner, mockToken1 } = await loadFixture(
-        deployDefiManagerFixture
-      )
-
-      const mockCampaign = await ethers.deployContract('MockCampaign', [
-        owner.address,
-        await mockToken1.getAddress(),
-        ethers.parseUnits('1000'),
-        30,
-        await defiManager.getAddress()
-      ])
-      await mockCampaign.waitForDeployment()
-
-      const campaignAddress = await mockCampaign.getAddress()
-
-      expect(await defiManager.authorizedCampaigns(campaignAddress)).to.equal(
-        false
-      )
-
-      await expect(defiManager.authorizeCampaign(campaignAddress))
-        .to.revertedWithCustomError(defiManager, 'notCampaignFactory')
-        .withArgs(owner.address)
-
-      expect(await defiManager.isCampaignAuthorized(campaignAddress)).to.equal(
-        false
-      )
-    })
-
-    it('Should allow owner to deauthorize campaigns', async function () {
-      const { defiManager, owner, mockToken1 } = await loadFixture(
-        deployDefiManagerFixture
-      )
-
-      const campaignFactoryAddress = await defiManager.campaignFactory()
-
-      await ethers.provider.send('hardhat_setBalance', [
-        campaignFactoryAddress,
-        '0x56BC75E2D63100000'
-      ])
-
-      await ethers.provider.send('hardhat_impersonateAccount', [
-        campaignFactoryAddress
-      ])
-      const campaignFactorySigner = await ethers.provider.getSigner(
-        campaignFactoryAddress
-      )
-
-      const mockCampaign = await ethers.deployContract('MockCampaign', [
-        owner.address,
-        await mockToken1.getAddress(),
-        ethers.parseUnits('1000'),
-        30,
-        await defiManager.getAddress()
-      ])
-      await mockCampaign.waitForDeployment()
-
-      const campaignAddress = await mockCampaign.getAddress()
-
-      await defiManager
-        .connect(campaignFactorySigner)
-        .authorizeCampaign(campaignAddress)
-
-      await expect(defiManager.unauthorizeCampaign(campaignAddress))
-        .to.emit(defiManager, 'CampaignUnauthorized')
-        .withArgs(campaignAddress)
-
-      expect(await defiManager.authorizedCampaigns(campaignAddress)).to.equal(
-        false
-      )
-    })
-
-    it('Should revert if anyone other than owner tries to deauthorize a campaign', async function () {
-      const { defiManager, owner, user1, mockToken1 } = await loadFixture(
-        deployDefiManagerFixture
-      )
-
-      const campaignFactoryAddress = await defiManager.campaignFactory()
-
-      await ethers.provider.send('hardhat_setBalance', [
-        campaignFactoryAddress,
-        '0x56BC75E2D63100000'
-      ])
-
-      await ethers.provider.send('hardhat_impersonateAccount', [
-        campaignFactoryAddress
-      ])
-      const campaignFactorySigner = await ethers.provider.getSigner(
-        campaignFactoryAddress
-      )
-
-      const mockCampaign = await ethers.deployContract('MockCampaign', [
-        owner.address,
-        await mockToken1.getAddress(),
-        ethers.parseUnits('1000'),
-        30,
-        await defiManager.getAddress()
-      ])
-      await mockCampaign.waitForDeployment()
-
-      const campaignAddress = await mockCampaign.getAddress()
-
-      await defiManager
-        .connect(campaignFactorySigner)
-        .authorizeCampaign(campaignAddress)
-
-      await expect(
-        defiManager.connect(user1).unauthorizeCampaign(campaignAddress)
-      )
-        .to.be.revertedWithCustomError(
-          defiManager,
-          'OwnableUnauthorizedAccount'
-        )
-        .withArgs(user1.address)
-
-      expect(await defiManager.authorizedCampaigns(campaignAddress)).to.equal(
-        true
-      )
+        .to.be.revertedWithCustomError(DefiManager, 'InvalidConstructorInput')
+        .withArgs(4, ethers.ZeroAddress)
     })
   })
 
   describe('Yield Distributor Integration', function () {
     describe('Depositing to yield protocol', function () {
       it('Should successfully deposit tokens to the yield protocol', async function () {
-        const { defiManager, mockToken1, mockAavePool, mockAToken1, owner } =
+        const { defiManager, mockToken1, mockAToken1, mockCampaign } =
           await loadFixture(deployDefiManagerFixture)
 
-        const campaignFactoryAddress = await defiManager.campaignFactory()
-
-        await ethers.provider.send('hardhat_setBalance', [
-          campaignFactoryAddress,
-          '0x56BC75E2D63100000'
-        ])
-
-        await ethers.provider.send('hardhat_impersonateAccount', [
-          campaignFactoryAddress
-        ])
-        const campaignFactorySigner = await ethers.provider.getSigner(
-          campaignFactoryAddress
-        )
-
-        const mockCampaign = await ethers.deployContract('MockCampaign', [
-          owner.address,
-          await mockToken1.getAddress(),
-          ethers.parseUnits('1000'),
-          30,
-          await defiManager.getAddress()
-        ])
-        await mockCampaign.waitForDeployment()
-
         const campaignAddress = await mockCampaign.getAddress()
-
-        await defiManager
-          .connect(campaignFactorySigner)
-          .authorizeCampaign(campaignAddress)
 
         const tokenAddress = await mockToken1.getAddress()
         const depositAmount = ethers.parseUnits('100')
@@ -550,71 +305,13 @@ describe('DefiIntegrationManager', function () {
         ).to.equal(depositAmount)
       })
 
-      it('Should revert when a non-authorized campaign tries to deposit', async function () {
-        const { defiManager, mockToken1, owner } = await loadFixture(
-          deployDefiManagerFixture
-        )
-
-        // Create an unauthorized campaign
-        const mockCampaign = await ethers.deployContract('MockCampaign', [
-          owner.address,
-          await mockToken1.getAddress(),
-          ethers.parseUnits('1000'),
-          30,
-          await defiManager.getAddress()
-        ])
-        await mockCampaign.waitForDeployment()
-
-        // Attempt to deposit
-        const tokenAddress = await mockToken1.getAddress()
-        const depositAmount = ethers.parseUnits('100')
-
-        // Transfer tokens to campaign
-        await mockToken1.transfer(
-          await mockCampaign.getAddress(),
-          depositAmount
-        )
-
-        await expect(
-          mockCampaign.depositToYield(tokenAddress, depositAmount)
-        ).to.be.revertedWithCustomError(defiManager, 'UnauthorizedAddress')
-      })
-
       it('Should revert when trying to deposit zero amount', async function () {
-        const { defiManager, mockToken1, owner } = await loadFixture(
+        const { defiManager, mockToken1, mockCampaign } = await loadFixture(
           deployDefiManagerFixture
         )
 
-        const campaignFactoryAddress = await defiManager.campaignFactory()
-
-        await ethers.provider.send('hardhat_setBalance', [
-          campaignFactoryAddress,
-          '0x56BC75E2D63100000'
-        ])
-
-        await ethers.provider.send('hardhat_impersonateAccount', [
-          campaignFactoryAddress
-        ])
-        const campaignFactorySigner = await ethers.provider.getSigner(
-          campaignFactoryAddress
-        )
-
-        // Authorize a mock campaign
-        const mockCampaign = await ethers.deployContract('MockCampaign', [
-          owner.address,
-          await mockToken1.getAddress(),
-          ethers.parseUnits('1000'),
-          30,
-          await defiManager.getAddress()
-        ])
-        await mockCampaign.waitForDeployment()
         const campaignAddress = await mockCampaign.getAddress()
 
-        await defiManager
-          .connect(campaignFactorySigner)
-          .authorizeCampaign(campaignAddress)
-
-        // Attempt to deposit zero amount
         const tokenAddress = await mockToken1.getAddress()
         const zeroAmount = 0
 
@@ -624,39 +321,12 @@ describe('DefiIntegrationManager', function () {
       })
 
       it('Should revert when trying to deposit an unsupported token', async function () {
-        const { defiManager, mockToken1, owner, mockTokenRegistry } =
-          await loadFixture(deployDefiManagerFixture)
-
-        const campaignFactoryAddress = await defiManager.campaignFactory()
-
-        await ethers.provider.send('hardhat_setBalance', [
-          campaignFactoryAddress,
-          '0x56BC75E2D63100000'
-        ])
-
-        await ethers.provider.send('hardhat_impersonateAccount', [
-          campaignFactoryAddress
-        ])
-        const campaignFactorySigner = await ethers.provider.getSigner(
-          campaignFactoryAddress
+        const { defiManager, tokenRegistry, mockCampaign } = await loadFixture(
+          deployDefiManagerFixture
         )
 
-        // Authorize a mock campaign
-        const mockCampaign = await ethers.deployContract('MockCampaign', [
-          owner.address,
-          await mockToken1.getAddress(),
-          ethers.parseUnits('1000'),
-          30,
-          await defiManager.getAddress()
-        ])
-        await mockCampaign.waitForDeployment()
         const campaignAddress = await mockCampaign.getAddress()
 
-        await defiManager
-          .connect(campaignFactorySigner)
-          .authorizeCampaign(campaignAddress)
-
-        // Deploy an unsupported token with initial supply
         const initialSupply = ethers.parseUnits('1000')
         const unsupportedToken = await ethers.deployContract('MockERC20', [
           'Unsupported',
@@ -665,6 +335,9 @@ describe('DefiIntegrationManager', function () {
         ])
         await unsupportedToken.waitForDeployment()
         const unsupportedTokenAddress = await unsupportedToken.getAddress()
+
+        await tokenRegistry.addToken(unsupportedTokenAddress, 1)
+        await tokenRegistry.disableTokenSupport(unsupportedTokenAddress)
 
         // Transfer tokens to campaign
         const depositAmount = ethers.parseUnits('100')
@@ -679,37 +352,12 @@ describe('DefiIntegrationManager', function () {
       })
 
       it('Should revert when Aave supply fails', async function () {
-        const { defiManager, mockToken1, owner, mockAavePool } =
+        const { defiManager, mockToken1, mockCampaign, mockAavePool } =
           await loadFixture(deployDefiManagerFixture)
 
-        const campaignFactoryAddress = await defiManager.campaignFactory()
-
-        await ethers.provider.send('hardhat_setBalance', [
-          campaignFactoryAddress,
-          '0x56BC75E2D63100000'
-        ])
-
-        await ethers.provider.send('hardhat_impersonateAccount', [
-          campaignFactoryAddress
-        ])
-        const campaignFactorySigner = await ethers.provider.getSigner(
-          campaignFactoryAddress
-        )
-
         // Authorize a mock campaign
-        const mockCampaign = await ethers.deployContract('MockCampaign', [
-          owner.address,
-          await mockToken1.getAddress(),
-          ethers.parseUnits('1000'),
-          30,
-          await defiManager.getAddress()
-        ])
-        await mockCampaign.waitForDeployment()
-        const campaignAddress = await mockCampaign.getAddress()
 
-        await defiManager
-          .connect(campaignFactorySigner)
-          .authorizeCampaign(campaignAddress)
+        const campaignAddress = await mockCampaign.getAddress()
 
         // Set up token
         const tokenAddress = await mockToken1.getAddress()
@@ -728,40 +376,12 @@ describe('DefiIntegrationManager', function () {
       })
 
       it('Should correctly add to existing deposits when depositing more of the same token', async function () {
-        const { defiManager, mockToken1, owner } = await loadFixture(
+        const { defiManager, mockToken1, mockCampaign } = await loadFixture(
           deployDefiManagerFixture
         )
 
-        const campaignFactoryAddress = await defiManager.campaignFactory()
-
-        await ethers.provider.send('hardhat_setBalance', [
-          campaignFactoryAddress,
-          '0x56BC75E2D63100000'
-        ])
-
-        await ethers.provider.send('hardhat_impersonateAccount', [
-          campaignFactoryAddress
-        ])
-        const campaignFactorySigner = await ethers.provider.getSigner(
-          campaignFactoryAddress
-        )
-
-        // Authorize a mock campaign
-        const mockCampaign = await ethers.deployContract('MockCampaign', [
-          owner.address,
-          await mockToken1.getAddress(),
-          ethers.parseUnits('1000'),
-          30,
-          await defiManager.getAddress()
-        ])
-        await mockCampaign.waitForDeployment()
         const campaignAddress = await mockCampaign.getAddress()
 
-        await defiManager
-          .connect(campaignFactorySigner)
-          .authorizeCampaign(campaignAddress)
-
-        // Set up token
         const tokenAddress = await mockToken1.getAddress()
         const depositAmount1 = ethers.parseUnits('50')
         const depositAmount2 = ethers.parseUnits('75')
@@ -793,37 +413,11 @@ describe('DefiIntegrationManager', function () {
 
     describe('Withdrawing to yield protocol', function () {
       it('Should successfully withdraw tokens from the yield protocol', async function () {
-        const { defiManager, mockToken1, mockAavePool, mockAToken1, owner } =
-          await loadFixture(deployDefiManagerFixture)
-
-        const campaignFactoryAddress = await defiManager.campaignFactory()
-
-        await ethers.provider.send('hardhat_setBalance', [
-          campaignFactoryAddress,
-          '0x56BC75E2D63100000'
-        ])
-
-        await ethers.provider.send('hardhat_impersonateAccount', [
-          campaignFactoryAddress
-        ])
-        const campaignFactorySigner = await ethers.provider.getSigner(
-          campaignFactoryAddress
+        const { defiManager, mockToken1, mockCampaign } = await loadFixture(
+          deployDefiManagerFixture
         )
 
-        const mockCampaign = await ethers.deployContract('MockCampaign', [
-          owner.address,
-          await mockToken1.getAddress(),
-          ethers.parseUnits('1000'),
-          30,
-          await defiManager.getAddress()
-        ])
-        await mockCampaign.waitForDeployment()
-
         const campaignAddress = await mockCampaign.getAddress()
-
-        await defiManager
-          .connect(campaignFactorySigner)
-          .authorizeCampaign(campaignAddress)
 
         // Set up token
         const tokenAddress = await mockToken1.getAddress()
@@ -857,64 +451,13 @@ describe('DefiIntegrationManager', function () {
         )
       })
 
-      it('Should revert when a non-authorized campaign tries to withdraw', async function () {
-        const { defiManager, mockToken1, owner } = await loadFixture(
-          deployDefiManagerFixture
-        )
-
-        // Create an unauthorized campaign
-        const mockCampaign = await ethers.deployContract('MockCampaign', [
-          owner.address,
-          await mockToken1.getAddress(),
-          ethers.parseUnits('1000'),
-          30,
-          await defiManager.getAddress()
-        ])
-        await mockCampaign.waitForDeployment()
-
-        // Attempt to withdraw
-        const tokenAddress = await mockToken1.getAddress()
-        const withdrawAmount = ethers.parseUnits('100')
-
-        await expect(
-          mockCampaign.withdrawFromYield(tokenAddress, withdrawAmount)
-        ).to.be.revertedWithCustomError(defiManager, 'UnauthorizedAddress')
-      })
       it('Should revert when trying to withdraw zero amount', async function () {
-        const { defiManager, mockToken1, owner } = await loadFixture(
+        const { defiManager, mockToken1, mockCampaign } = await loadFixture(
           deployDefiManagerFixture
         )
 
-        const campaignFactoryAddress = await defiManager.campaignFactory()
-
-        await ethers.provider.send('hardhat_setBalance', [
-          campaignFactoryAddress,
-          '0x56BC75E2D63100000'
-        ])
-
-        await ethers.provider.send('hardhat_impersonateAccount', [
-          campaignFactoryAddress
-        ])
-        const campaignFactorySigner = await ethers.provider.getSigner(
-          campaignFactoryAddress
-        )
-
-        // Authorize a mock campaign
-        const mockCampaign = await ethers.deployContract('MockCampaign', [
-          owner.address,
-          await mockToken1.getAddress(),
-          ethers.parseUnits('1000'),
-          30,
-          await defiManager.getAddress()
-        ])
-        await mockCampaign.waitForDeployment()
         const campaignAddress = await mockCampaign.getAddress()
 
-        await defiManager
-          .connect(campaignFactorySigner)
-          .authorizeCampaign(campaignAddress)
-
-        // Attempt to withdraw zero amount
         const tokenAddress = await mockToken1.getAddress()
         const zeroAmount = 0
 
@@ -924,38 +467,11 @@ describe('DefiIntegrationManager', function () {
       })
 
       it('Should revert when trying to withdraw more than deposited', async function () {
-        const { defiManager, mockToken1, owner } = await loadFixture(
+        const { defiManager, mockToken1, mockCampaign } = await loadFixture(
           deployDefiManagerFixture
         )
 
-        const campaignFactoryAddress = await defiManager.campaignFactory()
-
-        await ethers.provider.send('hardhat_setBalance', [
-          campaignFactoryAddress,
-          '0x56BC75E2D63100000'
-        ])
-
-        await ethers.provider.send('hardhat_impersonateAccount', [
-          campaignFactoryAddress
-        ])
-        const campaignFactorySigner = await ethers.provider.getSigner(
-          campaignFactoryAddress
-        )
-
-        // Authorize a mock campaign
-        const mockCampaign = await ethers.deployContract('MockCampaign', [
-          owner.address,
-          await mockToken1.getAddress(),
-          ethers.parseUnits('1000'),
-          30,
-          await defiManager.getAddress()
-        ])
-        await mockCampaign.waitForDeployment()
         const campaignAddress = await mockCampaign.getAddress()
-
-        await defiManager
-          .connect(campaignFactorySigner)
-          .authorizeCampaign(campaignAddress)
 
         // Set up token
         const tokenAddress = await mockToken1.getAddress()
@@ -977,37 +493,10 @@ describe('DefiIntegrationManager', function () {
       })
 
       it('Should revert when Aave withdrawal fails', async function () {
-        const { defiManager, mockToken1, mockAavePool, owner } =
+        const { defiManager, mockToken1, mockAavePool, mockCampaign } =
           await loadFixture(deployDefiManagerFixture)
 
-        const campaignFactoryAddress = await defiManager.campaignFactory()
-
-        await ethers.provider.send('hardhat_setBalance', [
-          campaignFactoryAddress,
-          '0x56BC75E2D63100000'
-        ])
-
-        await ethers.provider.send('hardhat_impersonateAccount', [
-          campaignFactoryAddress
-        ])
-        const campaignFactorySigner = await ethers.provider.getSigner(
-          campaignFactoryAddress
-        )
-
-        // Authorize a mock campaign
-        const mockCampaign = await ethers.deployContract('MockCampaign', [
-          owner.address,
-          await mockToken1.getAddress(),
-          ethers.parseUnits('1000'),
-          30,
-          await defiManager.getAddress()
-        ])
-        await mockCampaign.waitForDeployment()
         const campaignAddress = await mockCampaign.getAddress()
-
-        await defiManager
-          .connect(campaignFactorySigner)
-          .authorizeCampaign(campaignAddress)
 
         // Set up token
         const tokenAddress = await mockToken1.getAddress()
@@ -1032,37 +521,10 @@ describe('DefiIntegrationManager', function () {
       })
 
       it('Should revert when withdrawal amount does not match expected amount', async function () {
-        const { defiManager, mockToken1, mockAavePool, owner } =
+        const { defiManager, mockToken1, mockAavePool, mockCampaign } =
           await loadFixture(deployDefiManagerFixture)
 
-        const campaignFactoryAddress = await defiManager.campaignFactory()
-
-        await ethers.provider.send('hardhat_setBalance', [
-          campaignFactoryAddress,
-          '0x56BC75E2D63100000'
-        ])
-
-        await ethers.provider.send('hardhat_impersonateAccount', [
-          campaignFactoryAddress
-        ])
-        const campaignFactorySigner = await ethers.provider.getSigner(
-          campaignFactoryAddress
-        )
-
-        // Authorize a mock campaign
-        const mockCampaign = await ethers.deployContract('MockCampaign', [
-          owner.address,
-          await mockToken1.getAddress(),
-          ethers.parseUnits('1000'),
-          30,
-          await defiManager.getAddress()
-        ])
-        await mockCampaign.waitForDeployment()
         const campaignAddress = await mockCampaign.getAddress()
-
-        await defiManager
-          .connect(campaignFactorySigner)
-          .authorizeCampaign(campaignAddress)
 
         // Set up token
         const tokenAddress = await mockToken1.getAddress()
@@ -1093,37 +555,11 @@ describe('DefiIntegrationManager', function () {
       })
 
       it('Should successfully withdraw all tokens from the yield protocol', async function () {
-        const { defiManager, mockToken1, mockAavePool, owner } =
-          await loadFixture(deployDefiManagerFixture)
-
-        const campaignFactoryAddress = await defiManager.campaignFactory()
-
-        await ethers.provider.send('hardhat_setBalance', [
-          campaignFactoryAddress,
-          '0x56BC75E2D63100000'
-        ])
-
-        await ethers.provider.send('hardhat_impersonateAccount', [
-          campaignFactoryAddress
-        ])
-        const campaignFactorySigner = await ethers.provider.getSigner(
-          campaignFactoryAddress
+        const { defiManager, mockToken1, mockCampaign } = await loadFixture(
+          deployDefiManagerFixture
         )
 
-        const mockCampaign = await ethers.deployContract('MockCampaign', [
-          owner.address,
-          await mockToken1.getAddress(),
-          ethers.parseUnits('1000'),
-          30,
-          await defiManager.getAddress()
-        ])
-        await mockCampaign.waitForDeployment()
-
         const campaignAddress = await mockCampaign.getAddress()
-
-        await defiManager
-          .connect(campaignFactorySigner)
-          .authorizeCampaign(campaignAddress)
 
         // Set up token
         const tokenAddress = await mockToken1.getAddress()
@@ -1154,62 +590,12 @@ describe('DefiIntegrationManager', function () {
         )
       })
 
-      it('Should revert when a non-authorized campaign tries to withdraw all', async function () {
-        const { defiManager, mockToken1, owner } = await loadFixture(
-          deployDefiManagerFixture
-        )
-
-        // Create an unauthorized campaign
-        const mockCampaign = await ethers.deployContract('MockCampaign', [
-          owner.address,
-          await mockToken1.getAddress(),
-          ethers.parseUnits('1000'),
-          30,
-          await defiManager.getAddress()
-        ])
-        await mockCampaign.waitForDeployment()
-
-        // Attempt to withdraw
-        const tokenAddress = await mockToken1.getAddress()
-
-        await expect(
-          mockCampaign.withdrawAllFromYield(tokenAddress)
-        ).to.be.revertedWithCustomError(defiManager, 'UnauthorizedAddress')
-      })
-
       it('Should revert when trying to withdraw all with zero deposit', async function () {
-        const { defiManager, mockToken1, owner } = await loadFixture(
+        const { defiManager, mockToken1, mockCampaign } = await loadFixture(
           deployDefiManagerFixture
         )
 
-        const campaignFactoryAddress = await defiManager.campaignFactory()
-
-        await ethers.provider.send('hardhat_setBalance', [
-          campaignFactoryAddress,
-          '0x56BC75E2D63100000'
-        ])
-
-        await ethers.provider.send('hardhat_impersonateAccount', [
-          campaignFactoryAddress
-        ])
-        const campaignFactorySigner = await ethers.provider.getSigner(
-          campaignFactoryAddress
-        )
-
-        // Authorize a mock campaign
-        const mockCampaign = await ethers.deployContract('MockCampaign', [
-          owner.address,
-          await mockToken1.getAddress(),
-          ethers.parseUnits('1000'),
-          30,
-          await defiManager.getAddress()
-        ])
-        await mockCampaign.waitForDeployment()
         const campaignAddress = await mockCampaign.getAddress()
-
-        await defiManager
-          .connect(campaignFactorySigner)
-          .authorizeCampaign(campaignAddress)
 
         // Attempt to withdraw with no deposit
         const tokenAddress = await mockToken1.getAddress()
@@ -1220,37 +606,10 @@ describe('DefiIntegrationManager', function () {
       })
 
       it('Should revert when Aave withdrawal fails for withdrawAll', async function () {
-        const { defiManager, mockToken1, mockAavePool, owner } =
+        const { defiManager, mockToken1, mockAavePool, mockCampaign } =
           await loadFixture(deployDefiManagerFixture)
 
-        const campaignFactoryAddress = await defiManager.campaignFactory()
-
-        await ethers.provider.send('hardhat_setBalance', [
-          campaignFactoryAddress,
-          '0x56BC75E2D63100000'
-        ])
-
-        await ethers.provider.send('hardhat_impersonateAccount', [
-          campaignFactoryAddress
-        ])
-        const campaignFactorySigner = await ethers.provider.getSigner(
-          campaignFactoryAddress
-        )
-
-        // Authorize a mock campaign
-        const mockCampaign = await ethers.deployContract('MockCampaign', [
-          owner.address,
-          await mockToken1.getAddress(),
-          ethers.parseUnits('1000'),
-          30,
-          await defiManager.getAddress()
-        ])
-        await mockCampaign.waitForDeployment()
         const campaignAddress = await mockCampaign.getAddress()
-
-        await defiManager
-          .connect(campaignFactorySigner)
-          .authorizeCampaign(campaignAddress)
 
         // Set up token
         const tokenAddress = await mockToken1.getAddress()
@@ -1272,37 +631,10 @@ describe('DefiIntegrationManager', function () {
       })
 
       it('Should revert when withdrawal amount does not match expected amount for withdrawAll', async function () {
-        const { defiManager, mockToken1, mockAavePool, owner } =
+        const { defiManager, mockToken1, mockAavePool, mockCampaign } =
           await loadFixture(deployDefiManagerFixture)
 
-        const campaignFactoryAddress = await defiManager.campaignFactory()
-
-        await ethers.provider.send('hardhat_setBalance', [
-          campaignFactoryAddress,
-          '0x56BC75E2D63100000'
-        ])
-
-        await ethers.provider.send('hardhat_impersonateAccount', [
-          campaignFactoryAddress
-        ])
-        const campaignFactorySigner = await ethers.provider.getSigner(
-          campaignFactoryAddress
-        )
-
-        // Authorize a mock campaign
-        const mockCampaign = await ethers.deployContract('MockCampaign', [
-          owner.address,
-          await mockToken1.getAddress(),
-          ethers.parseUnits('1000'),
-          30,
-          await defiManager.getAddress()
-        ])
-        await mockCampaign.waitForDeployment()
         const campaignAddress = await mockCampaign.getAddress()
-
-        await defiManager
-          .connect(campaignFactorySigner)
-          .authorizeCampaign(campaignAddress)
 
         // Set up token
         const tokenAddress = await mockToken1.getAddress()
@@ -1335,41 +667,13 @@ describe('DefiIntegrationManager', function () {
         const {
           defiManager,
           mockToken1,
-          mockAavePool,
           mockAToken1,
-          mockYieldDistributor,
-          owner,
+          yieldDistributor,
+          mockCampaign,
           platformTreasury
         } = await loadFixture(deployDefiManagerFixture)
 
-        const campaignFactoryAddress = await defiManager.campaignFactory()
-
-        await ethers.provider.send('hardhat_setBalance', [
-          campaignFactoryAddress,
-          '0x56BC75E2D63100000'
-        ])
-
-        await ethers.provider.send('hardhat_impersonateAccount', [
-          campaignFactoryAddress
-        ])
-        const campaignFactorySigner = await ethers.provider.getSigner(
-          campaignFactoryAddress
-        )
-
-        // Authorize a mock campaign
-        const mockCampaign = await ethers.deployContract('MockCampaign', [
-          owner.address,
-          await mockToken1.getAddress(),
-          ethers.parseUnits('1000'),
-          30,
-          await defiManager.getAddress()
-        ])
-        await mockCampaign.waitForDeployment()
         const campaignAddress = await mockCampaign.getAddress()
-
-        await defiManager
-          .connect(campaignFactorySigner)
-          .authorizeCampaign(campaignAddress)
 
         // Set up token
         const tokenAddress = await mockToken1.getAddress()
@@ -1378,7 +682,7 @@ describe('DefiIntegrationManager', function () {
 
         // Calculate expected shares
         const platformSharePercentage =
-          await mockYieldDistributor.getPlatformYieldShare()
+          await yieldDistributor.getPlatformYieldShare()
         const platformShare =
           (yieldAmount * BigInt(platformSharePercentage)) / 10000n
         const creatorShare = yieldAmount - platformShare
@@ -1436,62 +740,12 @@ describe('DefiIntegrationManager', function () {
         ).to.equal(depositAmount)
       })
 
-      it('Should revert when a non-authorized campaign tries to harvest yield', async function () {
-        const { defiManager, mockToken1, owner } = await loadFixture(
-          deployDefiManagerFixture
-        )
-
-        // Create an unauthorized campaign
-        const mockCampaign = await ethers.deployContract('MockCampaign', [
-          owner.address,
-          await mockToken1.getAddress(),
-          ethers.parseUnits('1000'),
-          30,
-          await defiManager.getAddress()
-        ])
-        await mockCampaign.waitForDeployment()
-
-        // Attempt to harvest
-        const tokenAddress = await mockToken1.getAddress()
-
-        await expect(
-          mockCampaign.harvestYield(tokenAddress)
-        ).to.be.revertedWithCustomError(defiManager, 'UnauthorizedAddress')
-      })
-
       it('Should revert when trying to harvest with no deposits', async function () {
-        const { defiManager, mockToken1, owner } = await loadFixture(
+        const { defiManager, mockToken1, mockCampaign } = await loadFixture(
           deployDefiManagerFixture
         )
 
-        const campaignFactoryAddress = await defiManager.campaignFactory()
-
-        await ethers.provider.send('hardhat_setBalance', [
-          campaignFactoryAddress,
-          '0x56BC75E2D63100000'
-        ])
-
-        await ethers.provider.send('hardhat_impersonateAccount', [
-          campaignFactoryAddress
-        ])
-        const campaignFactorySigner = await ethers.provider.getSigner(
-          campaignFactoryAddress
-        )
-
-        // Authorize a mock campaign
-        const mockCampaign = await ethers.deployContract('MockCampaign', [
-          owner.address,
-          await mockToken1.getAddress(),
-          ethers.parseUnits('1000'),
-          30,
-          await defiManager.getAddress()
-        ])
-        await mockCampaign.waitForDeployment()
         const campaignAddress = await mockCampaign.getAddress()
-
-        await defiManager
-          .connect(campaignFactorySigner)
-          .authorizeCampaign(campaignAddress)
 
         // Attempt to harvest with no deposit
         const tokenAddress = await mockToken1.getAddress()
@@ -1502,37 +756,10 @@ describe('DefiIntegrationManager', function () {
       })
 
       it('Should revert when there is no yield to harvest', async function () {
-        const { defiManager, mockToken1, mockAToken1, owner } =
+        const { defiManager, mockToken1, mockAToken1, mockCampaign } =
           await loadFixture(deployDefiManagerFixture)
 
-        const campaignFactoryAddress = await defiManager.campaignFactory()
-
-        await ethers.provider.send('hardhat_setBalance', [
-          campaignFactoryAddress,
-          '0x56BC75E2D63100000'
-        ])
-
-        await ethers.provider.send('hardhat_impersonateAccount', [
-          campaignFactoryAddress
-        ])
-        const campaignFactorySigner = await ethers.provider.getSigner(
-          campaignFactoryAddress
-        )
-
-        // Authorize a mock campaign
-        const mockCampaign = await ethers.deployContract('MockCampaign', [
-          owner.address,
-          await mockToken1.getAddress(),
-          ethers.parseUnits('1000'),
-          30,
-          await defiManager.getAddress()
-        ])
-        await mockCampaign.waitForDeployment()
         const campaignAddress = await mockCampaign.getAddress()
-
-        await defiManager
-          .connect(campaignFactorySigner)
-          .authorizeCampaign(campaignAddress)
 
         // Set up token
         const tokenAddress = await mockToken1.getAddress()
@@ -1568,37 +795,15 @@ describe('DefiIntegrationManager', function () {
       })
 
       it('Should revert when getReserveData fails', async function () {
-        const { defiManager, mockToken1, mockAavePool, mockAToken1, owner } =
-          await loadFixture(deployDefiManagerFixture)
+        const {
+          defiManager,
+          mockToken1,
+          mockAavePool,
+          mockAToken1,
+          mockCampaign
+        } = await loadFixture(deployDefiManagerFixture)
 
-        const campaignFactoryAddress = await defiManager.campaignFactory()
-
-        await ethers.provider.send('hardhat_setBalance', [
-          campaignFactoryAddress,
-          '0x56BC75E2D63100000'
-        ])
-
-        await ethers.provider.send('hardhat_impersonateAccount', [
-          campaignFactoryAddress
-        ])
-        const campaignFactorySigner = await ethers.provider.getSigner(
-          campaignFactoryAddress
-        )
-
-        // Authorize a mock campaign
-        const mockCampaign = await ethers.deployContract('MockCampaign', [
-          owner.address,
-          await mockToken1.getAddress(),
-          ethers.parseUnits('1000'),
-          30,
-          await defiManager.getAddress()
-        ])
-        await mockCampaign.waitForDeployment()
         const campaignAddress = await mockCampaign.getAddress()
-
-        await defiManager
-          .connect(campaignFactorySigner)
-          .authorizeCampaign(campaignAddress)
 
         // Set up token
         const tokenAddress = await mockToken1.getAddress()
@@ -1628,37 +833,10 @@ describe('DefiIntegrationManager', function () {
       })
 
       it('Should revert when aTokenAddress is zero', async function () {
-        const { defiManager, mockToken1, mockAavePool, mockAToken1, owner } =
+        const { defiManager, mockToken1, mockAavePool, mockCampaign } =
           await loadFixture(deployDefiManagerFixture)
 
-        const campaignFactoryAddress = await defiManager.campaignFactory()
-
-        await ethers.provider.send('hardhat_setBalance', [
-          campaignFactoryAddress,
-          '0x56BC75E2D63100000'
-        ])
-
-        await ethers.provider.send('hardhat_impersonateAccount', [
-          campaignFactoryAddress
-        ])
-        const campaignFactorySigner = await ethers.provider.getSigner(
-          campaignFactoryAddress
-        )
-
-        // Authorize a mock campaign
-        const mockCampaign = await ethers.deployContract('MockCampaign', [
-          owner.address,
-          await mockToken1.getAddress(),
-          ethers.parseUnits('1000'),
-          30,
-          await defiManager.getAddress()
-        ])
-        await mockCampaign.waitForDeployment()
         const campaignAddress = await mockCampaign.getAddress()
-
-        await defiManager
-          .connect(campaignFactorySigner)
-          .authorizeCampaign(campaignAddress)
 
         // Set up token
         const tokenAddress = await mockToken1.getAddress()
@@ -1680,37 +858,15 @@ describe('DefiIntegrationManager', function () {
       })
 
       it('Should revert when Aave withdrawal fails during harvest', async function () {
-        const { defiManager, mockToken1, mockAavePool, mockAToken1, owner } =
-          await loadFixture(deployDefiManagerFixture)
+        const {
+          defiManager,
+          mockToken1,
+          mockAavePool,
+          mockAToken1,
+          mockCampaign
+        } = await loadFixture(deployDefiManagerFixture)
 
-        const campaignFactoryAddress = await defiManager.campaignFactory()
-
-        await ethers.provider.send('hardhat_setBalance', [
-          campaignFactoryAddress,
-          '0x56BC75E2D63100000'
-        ])
-
-        await ethers.provider.send('hardhat_impersonateAccount', [
-          campaignFactoryAddress
-        ])
-        const campaignFactorySigner = await ethers.provider.getSigner(
-          campaignFactoryAddress
-        )
-
-        // Authorize a mock campaign
-        const mockCampaign = await ethers.deployContract('MockCampaign', [
-          owner.address,
-          await mockToken1.getAddress(),
-          ethers.parseUnits('1000'),
-          30,
-          await defiManager.getAddress()
-        ])
-        await mockCampaign.waitForDeployment()
         const campaignAddress = await mockCampaign.getAddress()
-
-        await defiManager
-          .connect(campaignFactorySigner)
-          .authorizeCampaign(campaignAddress)
 
         // Set up token
         const tokenAddress = await mockToken1.getAddress()
@@ -1740,37 +896,15 @@ describe('DefiIntegrationManager', function () {
       })
 
       it('Should revert when withdrawal amount mismatch during harvest', async function () {
-        const { defiManager, mockToken1, mockAavePool, mockAToken1, owner } =
-          await loadFixture(deployDefiManagerFixture)
+        const {
+          defiManager,
+          mockToken1,
+          mockAavePool,
+          mockAToken1,
+          mockCampaign
+        } = await loadFixture(deployDefiManagerFixture)
 
-        const campaignFactoryAddress = await defiManager.campaignFactory()
-
-        await ethers.provider.send('hardhat_setBalance', [
-          campaignFactoryAddress,
-          '0x56BC75E2D63100000'
-        ])
-
-        await ethers.provider.send('hardhat_impersonateAccount', [
-          campaignFactoryAddress
-        ])
-        const campaignFactorySigner = await ethers.provider.getSigner(
-          campaignFactoryAddress
-        )
-
-        // Authorize a mock campaign
-        const mockCampaign = await ethers.deployContract('MockCampaign', [
-          owner.address,
-          await mockToken1.getAddress(),
-          ethers.parseUnits('1000'),
-          30,
-          await defiManager.getAddress()
-        ])
-        await mockCampaign.waitForDeployment()
         const campaignAddress = await mockCampaign.getAddress()
-
-        await defiManager
-          .connect(campaignFactorySigner)
-          .authorizeCampaign(campaignAddress)
 
         // Set up token
         const tokenAddress = await mockToken1.getAddress()
@@ -2049,50 +1183,16 @@ describe('DefiIntegrationManager', function () {
           mockToken1,
           mockToken2,
           mockUniswapRouter,
-          mockTokenRegistry,
-          owner
+          mockCampaign
         } = await loadFixture(deployDefiManagerFixture)
-
-        const campaignFactoryAddress = await defiManager.campaignFactory()
-
-        await ethers.provider.send('hardhat_setBalance', [
-          campaignFactoryAddress,
-          '0x56BC75E2D63100000'
-        ])
-
-        await ethers.provider.send('hardhat_impersonateAccount', [
-          campaignFactoryAddress
-        ])
-        const campaignFactorySigner = await ethers.provider.getSigner(
-          campaignFactoryAddress
-        )
-
-        // Create a mock campaign to serve as a caller
-        const mockCampaign = await ethers.deployContract('MockCampaign', [
-          owner.address,
-          await mockToken1.getAddress(),
-          ethers.parseUnits('1000'),
-          30,
-          await defiManager.getAddress()
-        ])
-        await mockCampaign.waitForDeployment()
 
         // Get the campaign address which will be used as the caller
         const campaignAddress = await mockCampaign.getAddress()
-
-        // Authorize the campaign
-        await defiManager
-          .connect(campaignFactorySigner)
-          .authorizeCampaign(campaignAddress)
 
         // Set up tokens
         const fromTokenAddress = await mockToken1.getAddress()
         const toTokenAddress = await mockToken2.getAddress()
         const swapAmount = ethers.parseUnits('100')
-
-        // Setup token registry to support both tokens
-        await mockTokenRegistry.addSupportedToken(fromTokenAddress, true)
-        await mockTokenRegistry.addSupportedToken(toTokenAddress, true)
 
         // Transfer tokens to campaign (which will approve and transfer to defi manager)
         await mockToken1.transfer(campaignAddress, swapAmount)
@@ -2147,102 +1247,16 @@ describe('DefiIntegrationManager', function () {
         )
       })
 
-      it('Should revert when a non-authorized campaign tries to swap', async function () {
-        const { defiManager, mockToken1, mockToken2, owner } =
+      it('Should revert when swapping zero amount', async function () {
+        const { defiManager, mockToken1, mockToken2, mockCampaign } =
           await loadFixture(deployDefiManagerFixture)
 
-        // Create an unauthorized campaign
-        const mockCampaign = await ethers.deployContract('MockCampaign', [
-          owner.address,
-          await mockToken1.getAddress(),
-          ethers.parseUnits('1000'),
-          30,
-          await defiManager.getAddress()
-        ])
-        await mockCampaign.waitForDeployment()
         const campaignAddress = await mockCampaign.getAddress()
-
-        const fromTokenAddress = await mockToken1.getAddress()
-        const toTokenAddress = await mockToken2.getAddress()
-        const swapAmount = ethers.parseUnits('100')
-
-        // Transfer tokens to campaign
-        await mockToken1.transfer(campaignAddress, swapAmount)
-
-        // First impersonate the account
-        await ethers.provider.send('hardhat_impersonateAccount', [
-          campaignAddress
-        ])
-
-        // Then set the balance
-        await ethers.provider.send('hardhat_setBalance', [
-          campaignAddress,
-          '0x56BC75E2D63100000' // 100 ETH
-        ])
-
-        // Then get the signer
-        const campaignSigner = await ethers.provider.getSigner(campaignAddress)
-
-        // Approve the DefiIntegrationManager to spend tokens
-        await mockToken1
-          .connect(campaignSigner)
-          .approve(await defiManager.getAddress(), swapAmount)
-
-        // Direct call should fail because campaign is not authorized
-        await expect(
-          defiManager
-            .connect(campaignSigner)
-            .swapTokenForTarget(fromTokenAddress, swapAmount, toTokenAddress)
-        ).to.be.revertedWithCustomError(defiManager, 'UnauthorizedAddress')
-      })
-
-      it('Should revert when swapping zero amount', async function () {
-        const {
-          defiManager,
-          mockToken1,
-          mockToken2,
-          mockTokenRegistry,
-          owner
-        } = await loadFixture(deployDefiManagerFixture)
-
-        const campaignFactoryAddress = await defiManager.campaignFactory()
-
-        await ethers.provider.send('hardhat_setBalance', [
-          campaignFactoryAddress,
-          '0x56BC75E2D63100000'
-        ])
-
-        await ethers.provider.send('hardhat_impersonateAccount', [
-          campaignFactoryAddress
-        ])
-        const campaignFactorySigner = await ethers.provider.getSigner(
-          campaignFactoryAddress
-        )
-
-        // Create a mock campaign
-        const mockCampaign = await ethers.deployContract('MockCampaign', [
-          owner.address,
-          await mockToken1.getAddress(),
-          ethers.parseUnits('1000'),
-          30,
-          await defiManager.getAddress()
-        ])
-        await mockCampaign.waitForDeployment()
-        const campaignAddress = await mockCampaign.getAddress()
-
-        // Authorize the campaign
-        await defiManager
-          .connect(campaignFactorySigner)
-          .authorizeCampaign(campaignAddress)
 
         // Set up tokens
         const fromTokenAddress = await mockToken1.getAddress()
         const toTokenAddress = await mockToken2.getAddress()
         const zeroAmount = 0
-
-        // Setup token registry to support both tokens
-        await mockTokenRegistry.addSupportedToken(fromTokenAddress, true)
-        await mockTokenRegistry.addSupportedToken(toTokenAddress, true)
 
         // First impersonate the account
         await ethers.provider.send('hardhat_impersonateAccount', [
@@ -2273,39 +1287,11 @@ describe('DefiIntegrationManager', function () {
           defiManager,
           mockToken1,
           mockToken2,
-          mockTokenRegistry,
-          owner
+          tokenRegistry,
+          mockCampaign
         } = await loadFixture(deployDefiManagerFixture)
 
-        const campaignFactoryAddress = await defiManager.campaignFactory()
-
-        await ethers.provider.send('hardhat_setBalance', [
-          campaignFactoryAddress,
-          '0x56BC75E2D63100000'
-        ])
-
-        await ethers.provider.send('hardhat_impersonateAccount', [
-          campaignFactoryAddress
-        ])
-        const campaignFactorySigner = await ethers.provider.getSigner(
-          campaignFactoryAddress
-        )
-
-        // Create mock campaign
-        const mockCampaign = await ethers.deployContract('MockCampaign', [
-          owner.address,
-          await mockToken1.getAddress(),
-          ethers.parseUnits('1000'),
-          30,
-          await defiManager.getAddress()
-        ])
-        await mockCampaign.waitForDeployment()
         const campaignAddress = await mockCampaign.getAddress()
-
-        // Authorize the campaign
-        await defiManager
-          .connect(campaignFactorySigner)
-          .authorizeCampaign(campaignAddress)
 
         // Set up tokens
         const fromTokenAddress = await mockToken1.getAddress()
@@ -2313,8 +1299,7 @@ describe('DefiIntegrationManager', function () {
         const swapAmount = ethers.parseUnits('100')
 
         // Setup token registry to only support toToken
-        await mockTokenRegistry.addSupportedToken(fromTokenAddress, false)
-        await mockTokenRegistry.addSupportedToken(toTokenAddress, true)
+        await tokenRegistry.disableTokenSupport(fromTokenAddress)
 
         // Transfer tokens to campaign
         await mockToken1.transfer(campaignAddress, swapAmount)
@@ -2352,39 +1337,11 @@ describe('DefiIntegrationManager', function () {
           defiManager,
           mockToken1,
           mockToken2,
-          mockTokenRegistry,
-          owner
+          tokenRegistry,
+          mockCampaign
         } = await loadFixture(deployDefiManagerFixture)
 
-        const campaignFactoryAddress = await defiManager.campaignFactory()
-
-        await ethers.provider.send('hardhat_setBalance', [
-          campaignFactoryAddress,
-          '0x56BC75E2D63100000'
-        ])
-
-        await ethers.provider.send('hardhat_impersonateAccount', [
-          campaignFactoryAddress
-        ])
-        const campaignFactorySigner = await ethers.provider.getSigner(
-          campaignFactoryAddress
-        )
-
-        // Create mock campaign
-        const mockCampaign = await ethers.deployContract('MockCampaign', [
-          owner.address,
-          await mockToken1.getAddress(),
-          ethers.parseUnits('1000'),
-          30,
-          await defiManager.getAddress()
-        ])
-        await mockCampaign.waitForDeployment()
         const campaignAddress = await mockCampaign.getAddress()
-
-        // Authorize the campaign
-        await defiManager
-          .connect(campaignFactorySigner)
-          .authorizeCampaign(campaignAddress)
 
         // Set up tokens
         const fromTokenAddress = await mockToken1.getAddress()
@@ -2392,8 +1349,7 @@ describe('DefiIntegrationManager', function () {
         const swapAmount = ethers.parseUnits('100')
 
         // Setup token registry to only support fromToken
-        await mockTokenRegistry.addSupportedToken(fromTokenAddress, true)
-        await mockTokenRegistry.addSupportedToken(toTokenAddress, false)
+        await tokenRegistry.disableTokenSupport(toTokenAddress)
 
         // Transfer tokens to campaign
         await mockToken1.transfer(campaignAddress, swapAmount)
@@ -2427,45 +1383,14 @@ describe('DefiIntegrationManager', function () {
       })
 
       it('Should revert when tokens are the same', async function () {
-        const { defiManager, mockToken1, mockTokenRegistry, owner } =
+        const { defiManager, mockToken1, mockTokenRegistry, mockCampaign } =
           await loadFixture(deployDefiManagerFixture)
 
-        const campaignFactoryAddress = await defiManager.campaignFactory()
-
-        await ethers.provider.send('hardhat_setBalance', [
-          campaignFactoryAddress,
-          '0x56BC75E2D63100000'
-        ])
-
-        await ethers.provider.send('hardhat_impersonateAccount', [
-          campaignFactoryAddress
-        ])
-        const campaignFactorySigner = await ethers.provider.getSigner(
-          campaignFactoryAddress
-        )
-
-        // Create mock campaign
-        const mockCampaign = await ethers.deployContract('MockCampaign', [
-          owner.address,
-          await mockToken1.getAddress(),
-          ethers.parseUnits('1000'),
-          30,
-          await defiManager.getAddress()
-        ])
-        await mockCampaign.waitForDeployment()
         const campaignAddress = await mockCampaign.getAddress()
-
-        // Authorize the campaign
-        await defiManager
-          .connect(campaignFactorySigner)
-          .authorizeCampaign(campaignAddress)
 
         // Set up tokens - same token for from and to
         const tokenAddress = await mockToken1.getAddress()
         const swapAmount = ethers.parseUnits('100')
-
-        // Setup token registry to support the token
-        await mockTokenRegistry.addSupportedToken(tokenAddress, true)
 
         // Transfer tokens to campaign
         await mockToken1.transfer(campaignAddress, swapAmount)
@@ -2503,49 +1428,17 @@ describe('DefiIntegrationManager', function () {
           defiManager,
           mockToken1,
           mockToken2,
-          mockTokenRegistry,
+
           mockUniswapQuoter,
-          owner
+          mockCampaign
         } = await loadFixture(deployDefiManagerFixture)
 
-        const campaignFactoryAddress = await defiManager.campaignFactory()
-
-        await ethers.provider.send('hardhat_setBalance', [
-          campaignFactoryAddress,
-          '0x56BC75E2D63100000'
-        ])
-
-        await ethers.provider.send('hardhat_impersonateAccount', [
-          campaignFactoryAddress
-        ])
-        const campaignFactorySigner = await ethers.provider.getSigner(
-          campaignFactoryAddress
-        )
-
-        // Create mock campaign
-        const mockCampaign = await ethers.deployContract('MockCampaign', [
-          owner.address,
-          await mockToken1.getAddress(),
-          ethers.parseUnits('1000'),
-          30,
-          await defiManager.getAddress()
-        ])
-        await mockCampaign.waitForDeployment()
         const campaignAddress = await mockCampaign.getAddress()
-
-        // Authorize the campaign
-        await defiManager
-          .connect(campaignFactorySigner)
-          .authorizeCampaign(campaignAddress)
 
         // Set up tokens
         const fromTokenAddress = await mockToken1.getAddress()
         const toTokenAddress = await mockToken2.getAddress()
         const swapAmount = ethers.parseUnits('100')
-
-        // Setup token registry to support both tokens
-        await mockTokenRegistry.addSupportedToken(fromTokenAddress, true)
-        await mockTokenRegistry.addSupportedToken(toTokenAddress, true)
 
         // Set up the quoter to fail for this pair
         await mockUniswapQuoter.setFailForSpecificPair(
@@ -2590,47 +1483,15 @@ describe('DefiIntegrationManager', function () {
           mockToken2,
           mockTokenRegistry,
           mockUniswapRouter,
-          owner
+          mockCampaign
         } = await loadFixture(deployDefiManagerFixture)
 
-        const campaignFactoryAddress = await defiManager.campaignFactory()
-
-        await ethers.provider.send('hardhat_setBalance', [
-          campaignFactoryAddress,
-          '0x56BC75E2D63100000'
-        ])
-
-        await ethers.provider.send('hardhat_impersonateAccount', [
-          campaignFactoryAddress
-        ])
-        const campaignFactorySigner = await ethers.provider.getSigner(
-          campaignFactoryAddress
-        )
-
-        // Create mock campaign
-        const mockCampaign = await ethers.deployContract('MockCampaign', [
-          owner.address,
-          await mockToken1.getAddress(),
-          ethers.parseUnits('1000'),
-          30,
-          await defiManager.getAddress()
-        ])
-        await mockCampaign.waitForDeployment()
         const campaignAddress = await mockCampaign.getAddress()
-
-        // Authorize the campaign
-        await defiManager
-          .connect(campaignFactorySigner)
-          .authorizeCampaign(campaignAddress)
 
         // Set up tokens
         const fromTokenAddress = await mockToken1.getAddress()
         const toTokenAddress = await mockToken2.getAddress()
         const swapAmount = ethers.parseUnits('100')
-
-        // Setup token registry to support both tokens
-        await mockTokenRegistry.addSupportedToken(fromTokenAddress, true)
-        await mockTokenRegistry.addSupportedToken(toTokenAddress, true)
 
         // Configure the Uniswap router to fail
         await mockUniswapRouter.setShouldFailSwap(true)
@@ -2671,49 +1532,17 @@ describe('DefiIntegrationManager', function () {
           defiManager,
           mockToken1,
           mockToken2,
-          mockTokenRegistry,
+
           mockUniswapRouter,
-          owner
+          mockCampaign
         } = await loadFixture(deployDefiManagerFixture)
 
-        const campaignFactoryAddress = await defiManager.campaignFactory()
-
-        await ethers.provider.send('hardhat_setBalance', [
-          campaignFactoryAddress,
-          '0x56BC75E2D63100000'
-        ])
-
-        await ethers.provider.send('hardhat_impersonateAccount', [
-          campaignFactoryAddress
-        ])
-        const campaignFactorySigner = await ethers.provider.getSigner(
-          campaignFactoryAddress
-        )
-
-        // Create mock campaign
-        const mockCampaign = await ethers.deployContract('MockCampaign', [
-          owner.address,
-          await mockToken1.getAddress(),
-          ethers.parseUnits('1000'),
-          30,
-          await defiManager.getAddress()
-        ])
-        await mockCampaign.waitForDeployment()
         const campaignAddress = await mockCampaign.getAddress()
-
-        // Authorize the campaign
-        await defiManager
-          .connect(campaignFactorySigner)
-          .authorizeCampaign(campaignAddress)
 
         // Set up tokens
         const fromTokenAddress = await mockToken1.getAddress()
         const toTokenAddress = await mockToken2.getAddress()
         const swapAmount = ethers.parseUnits('100')
-
-        // Setup token registry to support both tokens
-        await mockTokenRegistry.addSupportedToken(fromTokenAddress, true)
-        await mockTokenRegistry.addSupportedToken(toTokenAddress, true)
 
         // Configure the router to return less than minimum
         await mockUniswapRouter.setShouldReturnLessThanMinimum(true)
@@ -2766,127 +1595,57 @@ describe('DefiIntegrationManager', function () {
   })
 
   describe('Setter functions', function () {
-    describe('setCampaignFactory()', function () {
-      it('Should correctly set the campaign factory', async function () {
-        const { defiManager } = await loadFixture(deployDefiManagerFixture)
-
-        const campaignFactoryBefore = await defiManager.campaignFactory()
-
-        const campaignFactory = await ethers.deployContract(
-          'MockCampaignFactory',
-          [await defiManager.getAddress()]
-        )
-        await campaignFactory.waitForDeployment()
-
-        const campaignFactoryAfter = await campaignFactory.getAddress()
-
-        await expect(defiManager.setCampaignFactory(campaignFactoryAfter))
-          .to.emit(defiManager, 'CampaignFactoryUpdated')
-          .withArgs(campaignFactoryBefore, campaignFactoryAfter)
-
-        expect(await defiManager.campaignFactory()).to.equal(
-          campaignFactoryAfter
-        )
-      })
-
-      it('Should revert if non-owner tries to set campaign factory', async function () {
-        const { defiManager, user1 } = await loadFixture(
-          deployDefiManagerFixture
-        )
-
-        const campaignFactoryBefore = await defiManager.campaignFactory()
-
-        const campaignFactory = await ethers.deployContract(
-          'MockCampaignFactory',
-          [await defiManager.getAddress()]
-        )
-        await campaignFactory.waitForDeployment()
-
-        const campaignFactoryAfter = await campaignFactory.getAddress()
-
-        await expect(
-          defiManager.connect(user1).setCampaignFactory(campaignFactoryAfter)
-        )
-          .to.be.revertedWithCustomError(
-            defiManager,
-            'OwnableUnauthorizedAccount'
-          )
-          .withArgs(user1.address)
-
-        expect(await defiManager.campaignFactory()).to.equal(
-          campaignFactoryBefore
-        )
-      })
-
-      it('Should revert if invalid address passed to setCampaignFactory()', async function () {
-        const { defiManager, user1 } = await loadFixture(
-          deployDefiManagerFixture
-        )
-
-        const campaignFactoryBefore = await defiManager.campaignFactory()
-
-        await expect(
-          defiManager.setCampaignFactory(ethers.ZeroAddress)
-        ).to.be.revertedWithCustomError(defiManager, 'InvalidAddress')
-
-        expect(await defiManager.campaignFactory()).to.equal(
-          campaignFactoryBefore
-        )
-      })
-    })
-
     describe('setTokenRegistry()', function () {
       it('Should correctly set the token registry', async function () {
-        const { defiManager } = await loadFixture(deployDefiManagerFixture)
-
-        const mockTokenRegistryBefore = await defiManager.tokenRegistry()
-
-        const mockTokenRegistry = await ethers.deployContract(
-          'MockTokenRegistry'
+        const { defiManager, owner, platformAdmin } = await loadFixture(
+          deployDefiManagerFixture
         )
-        await mockTokenRegistry.waitForDeployment()
 
-        const mockTokenRegistryAfter = await mockTokenRegistry.getAddress()
+        const tokenRegistryBefore = await defiManager.tokenRegistry()
+        const platformAdminAddress = await platformAdmin.getAddress()
 
-        await expect(defiManager.setTokenRegistry(mockTokenRegistryAfter))
+        const tokenRegistryNew = await ethers.deployContract('TokenRegistry', [
+          owner.address,
+          platformAdminAddress
+        ])
+        await tokenRegistryNew.waitForDeployment()
+        const tokenRegistryNewAddress = await tokenRegistryNew.getAddress()
+
+        await expect(defiManager.setTokenRegistry(tokenRegistryNewAddress))
           .to.emit(defiManager, 'TokenRegistryUpdated')
-          .withArgs(mockTokenRegistryBefore, mockTokenRegistryAfter)
+          .withArgs(tokenRegistryBefore, tokenRegistryNewAddress)
 
         expect(await defiManager.tokenRegistry()).to.equal(
-          mockTokenRegistryAfter
+          tokenRegistryNewAddress
         )
 
         expect(await defiManager.getTokenRegistry()).to.equal(
-          mockTokenRegistryAfter
+          tokenRegistryNewAddress
         )
       })
 
       it('Should revert if non-owner tries to set token registry', async function () {
-        const { defiManager, user1 } = await loadFixture(
+        const { defiManager, owner, platformAdmin, user1 } = await loadFixture(
           deployDefiManagerFixture
         )
 
-        const mockTokenRegistryBefore = await defiManager.tokenRegistry()
+        const tokenRegistryBefore = await defiManager.tokenRegistry()
+        const platformAdminAddress = await platformAdmin.getAddress()
 
-        const mockTokenRegistry = await ethers.deployContract(
-          'MockTokenRegistry'
-        )
-        await mockTokenRegistry.waitForDeployment()
-
-        const mockTokenRegistryAfter = await mockTokenRegistry.getAddress()
+        const tokenRegistryNew = await ethers.deployContract('TokenRegistry', [
+          owner.address,
+          platformAdminAddress
+        ])
+        await tokenRegistryNew.waitForDeployment()
+        const tokenRegistryNewAddress = await tokenRegistryNew.getAddress()
 
         await expect(
-          defiManager.connect(user1).setTokenRegistry(mockTokenRegistryAfter)
+          defiManager.connect(user1).setTokenRegistry(tokenRegistryNewAddress)
         )
-          .to.be.revertedWithCustomError(
-            defiManager,
-            'OwnableUnauthorizedAccount'
-          )
+          .to.be.revertedWithCustomError(defiManager, 'NotAuthorizedAdmin')
           .withArgs(user1.address)
 
-        expect(await defiManager.tokenRegistry()).to.equal(
-          mockTokenRegistryBefore
-        )
+        expect(await defiManager.tokenRegistry()).to.equal(tokenRegistryBefore)
       })
 
       it('Should revert if invalid address passed to setTokenRegistry()', async function () {
@@ -2894,73 +1653,63 @@ describe('DefiIntegrationManager', function () {
           deployDefiManagerFixture
         )
 
-        const mockTokenRegistryBefore = await defiManager.tokenRegistry()
+        const tokenRegistryBefore = await defiManager.tokenRegistry()
 
         await expect(
           defiManager.setTokenRegistry(ethers.ZeroAddress)
         ).to.be.revertedWithCustomError(defiManager, 'InvalidAddress')
 
-        expect(await defiManager.tokenRegistry()).to.equal(
-          mockTokenRegistryBefore
-        )
+        expect(await defiManager.tokenRegistry()).to.equal(tokenRegistryBefore)
       })
     })
 
     describe('setYieldDistributor()', function () {
       it('Should correctly set the yield distributor', async function () {
-        const { defiManager, platformTreasury } = await loadFixture(
-          deployDefiManagerFixture
+        const { defiManager, platformTreasury, platformAdmin, owner } =
+          await loadFixture(deployDefiManagerFixture)
+
+        const yieldDistributorBefore = await defiManager.yieldDistributor()
+        const platformAdminAddress = await platformAdmin.getAddress()
+
+        const yieldDistributorAfter = await ethers.deployContract(
+          'YieldDistributor',
+          [platformTreasury.address, platformAdminAddress, owner.address]
         )
+        await yieldDistributorAfter.waitForDeployment()
+        const yieldDistributorAfterAddress =
+          await yieldDistributorAfter.getAddress()
 
-        const mockYieldDistributorBefore = await defiManager.yieldDistributor()
-
-        const mockYieldDistributor = await ethers.deployContract(
-          'MockYieldDistributor',
-          [platformTreasury.address]
+        await expect(
+          defiManager.setYieldDistributor(yieldDistributorAfterAddress)
         )
-        await mockYieldDistributor.waitForDeployment()
-
-        const mockYieldDistributorAfter =
-          await mockYieldDistributor.getAddress()
-
-        await expect(defiManager.setYieldDistributor(mockYieldDistributorAfter))
           .to.emit(defiManager, 'YieldDistributorUpdated')
-          .withArgs(mockYieldDistributorBefore, mockYieldDistributorAfter)
+          .withArgs(yieldDistributorBefore, yieldDistributorAfterAddress)
 
         expect(await defiManager.yieldDistributor()).to.equal(
-          mockYieldDistributorAfter
+          yieldDistributorAfterAddress
         )
       })
 
       it('Should revert if non-owner tries to set yieldDistributor', async function () {
-        const { defiManager, user1, platformTreasury } = await loadFixture(
-          deployDefiManagerFixture
+        const { defiManager, platformTreasury, platformAdmin, owner, user1 } =
+          await loadFixture(deployDefiManagerFixture)
+
+        const yieldDistributorBefore = await defiManager.yieldDistributor()
+        const platformAdminAddress = await platformAdmin.getAddress()
+
+        const yieldDistributorAfter = await ethers.deployContract(
+          'YieldDistributor',
+          [platformTreasury.address, platformAdminAddress, owner.address]
         )
-
-        const mockYieldDistributorBefore = await defiManager.yieldDistributor()
-
-        const mockYieldDistributor = await ethers.deployContract(
-          'MockYieldDistributor',
-          [platformTreasury.address]
-        )
-        await mockYieldDistributor.waitForDeployment()
-
-        const mockYieldDistributorAfter =
-          await mockYieldDistributor.getAddress()
 
         await expect(
-          defiManager
-            .connect(user1)
-            .setYieldDistributor(mockYieldDistributorAfter)
+          defiManager.connect(user1).setYieldDistributor(yieldDistributorAfter)
         )
-          .to.be.revertedWithCustomError(
-            defiManager,
-            'OwnableUnauthorizedAccount'
-          )
+          .to.be.revertedWithCustomError(defiManager, 'NotAuthorizedAdmin')
           .withArgs(user1.address)
 
         expect(await defiManager.yieldDistributor()).to.equal(
-          mockYieldDistributorBefore
+          yieldDistributorBefore
         )
       })
 
@@ -2969,14 +1718,14 @@ describe('DefiIntegrationManager', function () {
           deployDefiManagerFixture
         )
 
-        const mockYieldDistributorBefore = await defiManager.yieldDistributor()
+        const yieldDistributorBefore = await defiManager.yieldDistributor()
 
         await expect(
           defiManager.setYieldDistributor(ethers.ZeroAddress)
         ).to.be.revertedWithCustomError(defiManager, 'InvalidAddress')
 
         expect(await defiManager.yieldDistributor()).to.equal(
-          mockYieldDistributorBefore
+          yieldDistributorBefore
         )
       })
     })
@@ -3018,10 +1767,7 @@ describe('DefiIntegrationManager', function () {
         const mockAavePoolAfter = await mockAavePool.getAddress()
 
         await expect(defiManager.connect(user1).setAavePool(mockAavePoolAfter))
-          .to.be.revertedWithCustomError(
-            defiManager,
-            'OwnableUnauthorizedAccount'
-          )
+          .to.be.revertedWithCustomError(defiManager, 'NotAuthorizedAdmin')
           .withArgs(user1.address)
 
         expect(await defiManager.aavePool()).to.equal(mockAavePoolBefore)
@@ -3081,10 +1827,7 @@ describe('DefiIntegrationManager', function () {
         await expect(
           defiManager.connect(user1).setUniswapRouter(mockUniswapRouterAfter)
         )
-          .to.be.revertedWithCustomError(
-            defiManager,
-            'OwnableUnauthorizedAccount'
-          )
+          .to.be.revertedWithCustomError(defiManager, 'NotAuthorizedAdmin')
           .withArgs(user1.address)
 
         expect(await defiManager.uniswapRouter()).to.equal(
@@ -3148,10 +1891,7 @@ describe('DefiIntegrationManager', function () {
         await expect(
           defiManager.connect(user1).setUniswapQuoter(mockUniswapQuoterAfter)
         )
-          .to.be.revertedWithCustomError(
-            defiManager,
-            'OwnableUnauthorizedAccount'
-          )
+          .to.be.revertedWithCustomError(defiManager, 'NotAuthorizedAdmin')
           .withArgs(user1.address)
 
         expect(await defiManager.uniswapQuoter()).to.equal(
