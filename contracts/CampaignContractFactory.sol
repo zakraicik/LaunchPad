@@ -68,8 +68,6 @@ contract CampaignFactory {
         deployedCampaigns.push(campaignAddress);
         creatorToCampaigns[msg.sender].push(campaignAddress);
 
-        defiManager.authorizeCampaign(campaignAddress);
-
         bytes32 campaignId = newCampaign.campaignId();
         emit CampaignCreated(campaignAddress, msg.sender, campaignId);
 

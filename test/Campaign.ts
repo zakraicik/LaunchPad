@@ -49,10 +49,11 @@ describe('Campaign', function () {
     await tokenRegistry.addToken(mockToken2Address, 1)
 
     // Deploy yield distributor with platform admin
-    const yieldDistributor = await ethers.deployContract(
-      'MockYieldDistributor',
-      [platformTreasury.address, platformAdminAddress, owner.address]
-    )
+    const yieldDistributor = await ethers.deployContract('YieldDistributor', [
+      platformTreasury.address,
+      platformAdminAddress,
+      owner.address
+    ])
     await yieldDistributor.waitForDeployment()
     const yieldDistributorAddress = await yieldDistributor.getAddress()
 

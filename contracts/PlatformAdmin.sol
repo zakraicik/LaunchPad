@@ -15,7 +15,7 @@ contract PlatformAdmin is Ownable, ReentrancyGuard {
     event AdminRemoved(address indexed admin);
     event GracePeriodUpdated(uint256 oldPeriod, uint256 newPeriod);
 
-    error NotAuthorizedAdmin();
+    error NotAuthorizedAdmin(address);
     error InvalidAddress();
     error InvalidGracePeriod();
     error AdminDoesNotExist();
@@ -31,7 +31,7 @@ contract PlatformAdmin is Ownable, ReentrancyGuard {
     }
 
     modifier onlyPlatformAdmin() {
-        if (!platformAdmins[msg.sender]) revert NotAuthorizedAdmin();
+        if (!platformAdmins[msg.sender]) revert NotAuthorizedAdmin(msg.sender);
         _;
     }
 
