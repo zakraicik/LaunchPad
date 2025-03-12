@@ -221,9 +221,23 @@ contract Campaign is Ownable, ReentrancyGuard {
         emit YieldHarvested(token, _creatorYield);
     }
 
+    function harvestYieldAdmin(
+        address token
+    ) external onlyPlatformAdminAfterGrace nonReentrant {
+        (uint256 _creatorYield, ) = defiManager.harvestYield(token);
+        emit YieldHarvested(token, _creatorYield);
+    }
+
     function withdrawAllFromYieldProtocol(
         address token
     ) external onlyOwner nonReentrant {
+        uint256 withdrawn = defiManager.withdrawAllFromYieldProtocol(token);
+        emit WithdrawnFromYield(token, withdrawn);
+    }
+
+    function withdrawAllFromYieldProtocolAdmin(
+        address token
+    ) external onlyPlatformAdminAfterGrace nonReentrant {
         uint256 withdrawn = defiManager.withdrawAllFromYieldProtocol(token);
         emit WithdrawnFromYield(token, withdrawn);
     }
@@ -232,6 +246,17 @@ contract Campaign is Ownable, ReentrancyGuard {
         address token,
         uint256 amount
     ) external onlyOwner nonReentrant {
+        uint256 withdrawn = defiManager.withdrawFromYieldProtocol(
+            token,
+            amount
+        );
+        emit WithdrawnFromYield(token, withdrawn);
+    }
+
+    function withdrawFromYieldProtocolAdmin(
+        address token,
+        uint256 amount
+    ) external onlyPlatformAdminAfterGrace nonReentrant {
         uint256 withdrawn = defiManager.withdrawFromYieldProtocol(
             token,
             amount
