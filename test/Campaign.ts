@@ -10,7 +10,8 @@ describe('Campaign', function () {
     const CAMPAIGN_DURATION = 30
     const GRACE_PERIOD = 7 // 7 days grace period
 
-    const [owner, user1, user2, platformTreasury] = await ethers.getSigners()
+    const [owner, user1, user2, platformTreasury, otherAdmin] =
+      await ethers.getSigners()
 
     // Deploy mock token
     const mockToken1 = await ethers.deployContract('MockERC20', [
@@ -35,6 +36,9 @@ describe('Campaign', function () {
       owner
     ])
     await platformAdmin.waitForDeployment()
+
+    await platformAdmin.addPlatformAdmin(await otherAdmin.getAddress())
+
     const platformAdminAddress = await platformAdmin.getAddress()
 
     // Deploy token registry with platform admin
@@ -102,7 +106,8 @@ describe('Campaign', function () {
       yieldDistributor,
       CAMPAIGN_GOAL_AMOUNT,
       CAMPAIGN_DURATION,
-      GRACE_PERIOD
+      GRACE_PERIOD,
+      otherAdmin
     }
   }
 
@@ -1751,295 +1756,974 @@ describe('Campaign', function () {
     })
 
     describe('Withdrawing from yield protocols', function () {
-      describe('Withdrawing from yield protocols', function () {
-        it('Should allow owner to withdraw a specific amount from yield protocol', async function () {
-          const { campaign, mockDefiManager, mockToken1, user1, owner } =
-            await loadFixture(deployCampaignFixture)
+      it('Should allow owner to withdraw a specific amount from yield protocol', async function () {
+        const { campaign, mockDefiManager, mockToken1, user1, owner } =
+          await loadFixture(deployCampaignFixture)
 
-          const depositAmount = 100
-          await mockToken1
-            .connect(user1)
-            .approve(await campaign.getAddress(), depositAmount)
-          await campaign
-            .connect(user1)
-            .contribute(await mockToken1.getAddress(), depositAmount)
+        const depositAmount = 100
+        await mockToken1
+          .connect(user1)
+          .approve(await campaign.getAddress(), depositAmount)
+        await campaign
+          .connect(user1)
+          .contribute(await mockToken1.getAddress(), depositAmount)
 
-          await campaign.depositToYieldProtocol(
+        await campaign.depositToYieldProtocol(
+          await mockToken1.getAddress(),
+          depositAmount
+        )
+
+        const depositedAmount = await mockDefiManager.getDepositedAmount(
+          await campaign.getAddress(),
+          await mockToken1.getAddress()
+        )
+        expect(depositedAmount).to.equal(BigInt(depositAmount))
+
+        const withdrawAmount = depositAmount / 2
+        const campaignBalanceBefore = await mockToken1.balanceOf(
+          await campaign.getAddress()
+        )
+
+        await expect(
+          campaign.withdrawFromYieldProtocol(
             await mockToken1.getAddress(),
-            depositAmount
+            withdrawAmount
           )
+        )
+          .to.emit(campaign, 'WithdrawnFromYield')
+          .withArgs(await mockToken1.getAddress(), withdrawAmount)
 
-          const depositedAmount = await mockDefiManager.getDepositedAmount(
+        const campaignBalanceAfter = await mockToken1.balanceOf(
+          await campaign.getAddress()
+        )
+        expect(campaignBalanceAfter - campaignBalanceBefore).to.equal(
+          BigInt(withdrawAmount)
+        )
+
+        const remainingDepositedAmount =
+          await mockDefiManager.getDepositedAmount(
             await campaign.getAddress(),
             await mockToken1.getAddress()
           )
-          expect(depositedAmount).to.equal(BigInt(depositAmount))
+        expect(remainingDepositedAmount).to.equal(
+          BigInt(depositAmount - withdrawAmount)
+        )
+      })
 
-          const withdrawAmount = depositAmount / 2
-          const campaignBalanceBefore = await mockToken1.balanceOf(
-            await campaign.getAddress()
+      it('Should allow owner to withdraw all funds from yield protocol', async function () {
+        const { campaign, mockDefiManager, mockToken1, user1, owner } =
+          await loadFixture(deployCampaignFixture)
+
+        const depositAmount = 100
+        await mockToken1
+          .connect(user1)
+          .approve(await campaign.getAddress(), depositAmount)
+        await campaign
+          .connect(user1)
+          .contribute(await mockToken1.getAddress(), depositAmount)
+
+        await campaign.depositToYieldProtocol(
+          await mockToken1.getAddress(),
+          depositAmount
+        )
+
+        const depositedAmount = await mockDefiManager.getDepositedAmount(
+          await campaign.getAddress(),
+          await mockToken1.getAddress()
+        )
+        expect(depositedAmount).to.equal(BigInt(depositAmount))
+
+        const campaignBalanceBefore = await mockToken1.balanceOf(
+          await campaign.getAddress()
+        )
+
+        await expect(
+          campaign.withdrawAllFromYieldProtocol(await mockToken1.getAddress())
+        )
+          .to.emit(campaign, 'WithdrawnFromYield')
+          .withArgs(await mockToken1.getAddress(), depositAmount)
+
+        const campaignBalanceAfter = await mockToken1.balanceOf(
+          await campaign.getAddress()
+        )
+        expect(campaignBalanceAfter - campaignBalanceBefore).to.equal(
+          BigInt(depositAmount)
+        )
+
+        const remainingDepositedAmount =
+          await mockDefiManager.getDepositedAmount(
+            await campaign.getAddress(),
+            await mockToken1.getAddress()
+          )
+        expect(remainingDepositedAmount).to.equal(0)
+      })
+
+      it('Should revert when non-owner tries to withdraw from yield protocol', async function () {
+        const { campaign, mockDefiManager, mockToken1, user1, user2 } =
+          await loadFixture(deployCampaignFixture)
+
+        const depositAmount = 100
+        await mockToken1
+          .connect(user1)
+          .approve(await campaign.getAddress(), depositAmount)
+        await campaign
+          .connect(user1)
+          .contribute(await mockToken1.getAddress(), depositAmount)
+
+        await campaign.depositToYieldProtocol(
+          await mockToken1.getAddress(),
+          depositAmount
+        )
+
+        const depositedAmount = await mockDefiManager.getDepositedAmount(
+          await campaign.getAddress(),
+          await mockToken1.getAddress()
+        )
+        expect(depositedAmount).to.equal(BigInt(depositAmount))
+
+        await expect(
+          campaign
+            .connect(user2)
+            .withdrawFromYieldProtocol(await mockToken1.getAddress(), 50)
+        )
+          .to.be.revertedWithCustomError(campaign, 'OwnableUnauthorizedAccount')
+          .withArgs(user2.address)
+
+        await expect(
+          campaign
+            .connect(user2)
+            .withdrawAllFromYieldProtocol(await mockToken1.getAddress())
+        )
+          .to.be.revertedWithCustomError(campaign, 'OwnableUnauthorizedAccount')
+          .withArgs(user2.address)
+
+        const remainingDepositedAmount =
+          await mockDefiManager.getDepositedAmount(
+            await campaign.getAddress(),
+            await mockToken1.getAddress()
+          )
+        expect(remainingDepositedAmount).to.equal(BigInt(depositAmount))
+      })
+
+      it('Should revert when withdrawal from yield protocol fails', async function () {
+        const { campaign, mockDefiManager, mockToken1, user1, owner } =
+          await loadFixture(deployCampaignFixture)
+
+        const depositAmount = 100
+        await mockToken1
+          .connect(user1)
+          .approve(await campaign.getAddress(), depositAmount)
+        await campaign
+          .connect(user1)
+          .contribute(await mockToken1.getAddress(), depositAmount)
+
+        await campaign.depositToYieldProtocol(
+          await mockToken1.getAddress(),
+          depositAmount
+        )
+
+        await mockDefiManager.setWithdrawSuccess(false)
+
+        await expect(
+          campaign.withdrawFromYieldProtocol(await mockToken1.getAddress(), 50)
+        ).to.be.revertedWithCustomError(
+          mockDefiManager,
+          'YieldwithdrawalFailed'
+        )
+
+        await expect(
+          campaign.withdrawAllFromYieldProtocol(await mockToken1.getAddress())
+        ).to.be.revertedWithCustomError(
+          mockDefiManager,
+          'YieldwithdrawalFailed'
+        )
+
+        const remainingDepositedAmount =
+          await mockDefiManager.getDepositedAmount(
+            await campaign.getAddress(),
+            await mockToken1.getAddress()
+          )
+        expect(remainingDepositedAmount).to.equal(BigInt(depositAmount))
+      })
+
+      it('Should revert when attempting to withdraw more than deposited amount', async function () {
+        const { campaign, mockDefiManager, mockToken1, user1, owner } =
+          await loadFixture(deployCampaignFixture)
+
+        const depositAmount = 100
+        await mockToken1
+          .connect(user1)
+          .approve(await campaign.getAddress(), depositAmount)
+        await campaign
+          .connect(user1)
+          .contribute(await mockToken1.getAddress(), depositAmount)
+
+        await campaign.depositToYieldProtocol(
+          await mockToken1.getAddress(),
+          depositAmount
+        )
+
+        const initialDepositedAmount = await mockDefiManager.getDepositedAmount(
+          await campaign.getAddress(),
+          await mockToken1.getAddress()
+        )
+        expect(initialDepositedAmount).to.equal(BigInt(depositAmount))
+
+        const excessiveAmount = depositAmount * 2
+
+        // Updated to expect InsufficientDeposit error from mockDefiManager
+        await expect(
+          campaign.withdrawFromYieldProtocol(
+            await mockToken1.getAddress(),
+            excessiveAmount
+          )
+        )
+          .to.be.revertedWithCustomError(mockDefiManager, 'InsufficientDeposit')
+          .withArgs(
+            await mockToken1.getAddress(),
+            excessiveAmount,
+            depositAmount
           )
 
-          await expect(
-            campaign.withdrawFromYieldProtocol(
+        const afterDepositedAmount = await mockDefiManager.getDepositedAmount(
+          await campaign.getAddress(),
+          await mockToken1.getAddress()
+        )
+        expect(afterDepositedAmount).to.equal(initialDepositedAmount)
+
+        await expect(
+          campaign.withdrawFromYieldProtocol(
+            await mockToken1.getAddress(),
+            depositAmount
+          )
+        )
+          .to.emit(campaign, 'WithdrawnFromYield')
+          .withArgs(await mockToken1.getAddress(), depositAmount)
+      })
+
+      it('Should revert with ZeroAmount when trying to withdraw nothing', async function () {
+        const { campaign, mockDefiManager, mockToken1, owner } =
+          await loadFixture(deployCampaignFixture)
+
+        const depositedAmount = await mockDefiManager.getDepositedAmount(
+          await campaign.getAddress(),
+          await mockToken1.getAddress()
+        )
+        expect(depositedAmount).to.equal(0)
+
+        // When withdrawing all with no deposit, expect ZeroAmount error
+        await expect(
+          campaign.withdrawAllFromYieldProtocol(await mockToken1.getAddress())
+        )
+          .to.be.revertedWithCustomError(mockDefiManager, 'ZeroAmount')
+          .withArgs(0)
+
+        // When trying to withdraw specific amount with no deposit, expect InsufficientDeposit
+        await expect(
+          campaign.withdrawFromYieldProtocol(await mockToken1.getAddress(), 50)
+        )
+          .to.be.revertedWithCustomError(mockDefiManager, 'InsufficientDeposit')
+          .withArgs(await mockToken1.getAddress(), 50, 0)
+      })
+    })
+  })
+
+  describe('Admin Functions', function () {
+    describe('withdrawAllFromYieldProtocolAdmin()', function () {
+      it('Should allow admin to withdraw all yield after grace period has passed', async function () {
+        const {
+          campaign,
+          mockDefiManager,
+          mockToken1,
+          user1,
+          otherAdmin,
+          GRACE_PERIOD
+        } = await loadFixture(deployCampaignFixture)
+
+        const depositAmount = 100
+        await mockToken1
+          .connect(user1)
+          .approve(await campaign.getAddress(), depositAmount)
+        await campaign
+          .connect(user1)
+          .contribute(await mockToken1.getAddress(), depositAmount)
+
+        await campaign.depositToYieldProtocol(
+          await mockToken1.getAddress(),
+          depositAmount
+        )
+
+        const depositedAmount = await mockDefiManager.getDepositedAmount(
+          await campaign.getAddress(),
+          await mockToken1.getAddress()
+        )
+        expect(depositedAmount).to.equal(BigInt(depositAmount))
+
+        const campaignEndTime = await campaign.campaignEndTime()
+
+        const latestBlock = await ethers.provider.getBlock('latest')
+
+        if (!latestBlock) {
+          throw new Error('Latest block does not exist')
+        }
+
+        const currentTimestamp = latestBlock.timestamp
+
+        // Convert campaignEndTime to a number before subtraction
+        const timeToAdvance =
+          Number(campaignEndTime) -
+          currentTimestamp +
+          (GRACE_PERIOD + 1) * 24 * 60 * 60
+
+        await ethers.provider.send('evm_increaseTime', [timeToAdvance])
+        await ethers.provider.send('evm_mine')
+
+        expect(await campaign.isCampaignActive()).to.be.false
+
+        const campaignBalanceBefore = await mockToken1.balanceOf(
+          await campaign.getAddress()
+        )
+
+        await expect(
+          campaign
+            .connect(otherAdmin)
+            .withdrawAllFromYieldProtocolAdmin(await mockToken1.getAddress())
+        )
+          .to.emit(campaign, 'WithdrawnFromYield')
+          .withArgs(await mockToken1.getAddress(), depositAmount)
+
+        const campaignBalanceAfter = await mockToken1.balanceOf(
+          await campaign.getAddress()
+        )
+        expect(campaignBalanceAfter - campaignBalanceBefore).to.equal(
+          BigInt(depositAmount)
+        )
+
+        const remainingDepositedAmount =
+          await mockDefiManager.getDepositedAmount(
+            await campaign.getAddress(),
+            await mockToken1.getAddress()
+          )
+        expect(remainingDepositedAmount).to.equal(0)
+      })
+
+      it('Should should revert if admin tries to harvest yield before grace period', async function () {
+        const {
+          campaign,
+          mockDefiManager,
+          mockToken1,
+          yieldDistributor,
+          user1,
+          platformTreasury,
+          otherAdmin
+        } = await loadFixture(deployCampaignFixture)
+
+        const depositAmount = 100
+        await mockToken1
+          .connect(user1)
+          .approve(await campaign.getAddress(), depositAmount)
+        await campaign
+          .connect(user1)
+          .contribute(await mockToken1.getAddress(), depositAmount)
+
+        await campaign.depositToYieldProtocol(
+          await mockToken1.getAddress(),
+          depositAmount
+        )
+
+        const yieldRate = await mockDefiManager.yieldRate()
+
+        const totalYield =
+          (BigInt(depositAmount) * BigInt(yieldRate)) / BigInt(10000)
+
+        const [expectedCreatorYield, expectedPlatformYield] =
+          await yieldDistributor.calculateYieldShares(totalYield)
+
+        await mockToken1.mint(await mockDefiManager.getAddress(), totalYield)
+
+        const campaignAddress = campaign.getAddress()
+        const platformTreasuryAddress = platformTreasury.address
+
+        const campaignBalanceBefore = await mockToken1.balanceOf(
+          campaignAddress
+        )
+
+        const platformTreasuryBalanceBefore = await mockToken1.balanceOf(
+          platformTreasuryAddress
+        )
+
+        await expect(
+          campaign
+            .connect(otherAdmin)
+            .withdrawAllFromYieldProtocolAdmin(await mockToken1.getAddress())
+        ).to.be.revertedWithCustomError(campaign, 'GracePeriodNotOver')
+
+        const campaignBalanceAfter = await mockToken1.balanceOf(campaignAddress)
+        const platformTreasuryBalanceAfter = await mockToken1.balanceOf(
+          platformTreasuryAddress
+        )
+
+        expect(campaignBalanceAfter).to.equal(campaignBalanceBefore)
+
+        expect(platformTreasuryBalanceAfter).to.equal(
+          platformTreasuryBalanceBefore
+        )
+      })
+      it('Should revert if non-admin tries to harvest yield using admin function', async function () {
+        const {
+          campaign,
+          mockDefiManager,
+          mockToken1,
+          yieldDistributor,
+          user1,
+          platformTreasury,
+          GRACE_PERIOD,
+          otherAdmin
+        } = await loadFixture(deployCampaignFixture)
+
+        const depositAmount = 100
+        await mockToken1
+          .connect(user1)
+          .approve(await campaign.getAddress(), depositAmount)
+        await campaign
+          .connect(user1)
+          .contribute(await mockToken1.getAddress(), depositAmount)
+
+        await campaign.depositToYieldProtocol(
+          await mockToken1.getAddress(),
+          depositAmount
+        )
+
+        const yieldRate = await mockDefiManager.yieldRate()
+
+        const totalYield =
+          (BigInt(depositAmount) * BigInt(yieldRate)) / BigInt(10000)
+
+        const [expectedCreatorYield, expectedPlatformYield] =
+          await yieldDistributor.calculateYieldShares(totalYield)
+
+        await mockToken1.mint(await mockDefiManager.getAddress(), totalYield)
+
+        const campaignAddress = campaign.getAddress()
+        const platformTreasuryAddress = platformTreasury.address
+
+        const campaignBalanceBefore = await mockToken1.balanceOf(
+          campaignAddress
+        )
+
+        const platformTreasuryBalanceBefore = await mockToken1.balanceOf(
+          platformTreasuryAddress
+        )
+
+        const campaignEndTime = await campaign.campaignEndTime()
+
+        const latestBlock = await ethers.provider.getBlock('latest')
+
+        if (!latestBlock) {
+          throw new Error('Latest block does not exist')
+        }
+
+        const currentTimestamp = latestBlock.timestamp
+
+        const timeToAdvance =
+          Number(campaignEndTime) -
+          currentTimestamp +
+          (GRACE_PERIOD + 1) * 24 * 60 * 60
+
+        await ethers.provider.send('evm_increaseTime', [timeToAdvance])
+        await ethers.provider.send('evm_mine')
+
+        await expect(
+          campaign
+            .connect(user1)
+            .withdrawAllFromYieldProtocolAdmin(await mockToken1.getAddress())
+        ).to.be.revertedWithCustomError(campaign, 'NotAuthorizedAdmin')
+
+        const campaignBalanceAfter = await mockToken1.balanceOf(campaignAddress)
+        const platformTreasuryBalanceAfter = await mockToken1.balanceOf(
+          platformTreasuryAddress
+        )
+
+        expect(campaignBalanceAfter).to.equal(campaignBalanceBefore)
+
+        expect(platformTreasuryBalanceAfter).to.equal(
+          platformTreasuryBalanceBefore
+        )
+      })
+    })
+
+    describe('withdrawFromYieldProtocolAdmin()', function () {
+      it('Should allow admin to withdraw a specific amount of yield after grace period', async function () {
+        const {
+          campaign,
+          mockDefiManager,
+          mockToken1,
+          user1,
+          otherAdmin,
+          GRACE_PERIOD
+        } = await loadFixture(deployCampaignFixture)
+
+        const depositAmount = 100
+        await mockToken1
+          .connect(user1)
+          .approve(await campaign.getAddress(), depositAmount)
+        await campaign
+          .connect(user1)
+          .contribute(await mockToken1.getAddress(), depositAmount)
+
+        await campaign.depositToYieldProtocol(
+          await mockToken1.getAddress(),
+          depositAmount
+        )
+
+        const depositedAmount = await mockDefiManager.getDepositedAmount(
+          await campaign.getAddress(),
+          await mockToken1.getAddress()
+        )
+        expect(depositedAmount).to.equal(BigInt(depositAmount))
+
+        const withdrawAmount = depositAmount / 2
+        const campaignBalanceBefore = await mockToken1.balanceOf(
+          await campaign.getAddress()
+        )
+
+        const campaignEndTime = await campaign.campaignEndTime()
+
+        const latestBlock = await ethers.provider.getBlock('latest')
+
+        if (!latestBlock) {
+          throw new Error('Latest block does not exist')
+        }
+
+        const currentTimestamp = latestBlock.timestamp
+
+        // Convert campaignEndTime to a number before subtraction
+        const timeToAdvance =
+          Number(campaignEndTime) -
+          currentTimestamp +
+          (GRACE_PERIOD + 1) * 24 * 60 * 60
+
+        await ethers.provider.send('evm_increaseTime', [timeToAdvance])
+        await ethers.provider.send('evm_mine')
+
+        expect(await campaign.isCampaignActive()).to.be.false
+
+        await expect(
+          campaign
+            .connect(otherAdmin)
+            .withdrawFromYieldProtocolAdmin(
               await mockToken1.getAddress(),
               withdrawAmount
             )
-          )
-            .to.emit(campaign, 'WithdrawnFromYield')
-            .withArgs(await mockToken1.getAddress(), withdrawAmount)
+        )
+          .to.emit(campaign, 'WithdrawnFromYield')
+          .withArgs(await mockToken1.getAddress(), withdrawAmount)
 
-          const campaignBalanceAfter = await mockToken1.balanceOf(
-            await campaign.getAddress()
-          )
-          expect(campaignBalanceAfter - campaignBalanceBefore).to.equal(
-            BigInt(withdrawAmount)
-          )
+        const campaignBalanceAfter = await mockToken1.balanceOf(
+          await campaign.getAddress()
+        )
+        expect(campaignBalanceAfter - campaignBalanceBefore).to.equal(
+          BigInt(withdrawAmount)
+        )
 
-          const remainingDepositedAmount =
-            await mockDefiManager.getDepositedAmount(
-              await campaign.getAddress(),
-              await mockToken1.getAddress()
-            )
-          expect(remainingDepositedAmount).to.equal(
-            BigInt(depositAmount - withdrawAmount)
-          )
-        })
-
-        it('Should allow owner to withdraw all funds from yield protocol', async function () {
-          const { campaign, mockDefiManager, mockToken1, user1, owner } =
-            await loadFixture(deployCampaignFixture)
-
-          const depositAmount = 100
-          await mockToken1
-            .connect(user1)
-            .approve(await campaign.getAddress(), depositAmount)
-          await campaign
-            .connect(user1)
-            .contribute(await mockToken1.getAddress(), depositAmount)
-
-          await campaign.depositToYieldProtocol(
-            await mockToken1.getAddress(),
-            depositAmount
-          )
-
-          const depositedAmount = await mockDefiManager.getDepositedAmount(
+        const remainingDepositedAmount =
+          await mockDefiManager.getDepositedAmount(
             await campaign.getAddress(),
             await mockToken1.getAddress()
           )
-          expect(depositedAmount).to.equal(BigInt(depositAmount))
+        expect(remainingDepositedAmount).to.equal(
+          BigInt(depositAmount - withdrawAmount)
+        )
+      })
 
-          const campaignBalanceBefore = await mockToken1.balanceOf(
-            await campaign.getAddress()
-          )
+      it('Should should revert if admin tries to harvest yield before grace period', async function () {
+        const {
+          campaign,
+          mockDefiManager,
+          mockToken1,
+          yieldDistributor,
+          user1,
+          platformTreasury,
+          otherAdmin
+        } = await loadFixture(deployCampaignFixture)
 
-          await expect(
-            campaign.withdrawAllFromYieldProtocol(await mockToken1.getAddress())
-          )
-            .to.emit(campaign, 'WithdrawnFromYield')
-            .withArgs(await mockToken1.getAddress(), depositAmount)
+        const depositAmount = 100
+        await mockToken1
+          .connect(user1)
+          .approve(await campaign.getAddress(), depositAmount)
+        await campaign
+          .connect(user1)
+          .contribute(await mockToken1.getAddress(), depositAmount)
 
-          const campaignBalanceAfter = await mockToken1.balanceOf(
-            await campaign.getAddress()
-          )
-          expect(campaignBalanceAfter - campaignBalanceBefore).to.equal(
-            BigInt(depositAmount)
-          )
+        await campaign.depositToYieldProtocol(
+          await mockToken1.getAddress(),
+          depositAmount
+        )
 
-          const remainingDepositedAmount =
-            await mockDefiManager.getDepositedAmount(
-              await campaign.getAddress(),
-              await mockToken1.getAddress()
-            )
-          expect(remainingDepositedAmount).to.equal(0)
-        })
+        const yieldRate = await mockDefiManager.yieldRate()
 
-        it('Should revert when non-owner tries to withdraw from yield protocol', async function () {
-          const { campaign, mockDefiManager, mockToken1, user1, user2 } =
-            await loadFixture(deployCampaignFixture)
+        const totalYield =
+          (BigInt(depositAmount) * BigInt(yieldRate)) / BigInt(10000)
 
-          const depositAmount = 100
-          await mockToken1
-            .connect(user1)
-            .approve(await campaign.getAddress(), depositAmount)
-          await campaign
-            .connect(user1)
-            .contribute(await mockToken1.getAddress(), depositAmount)
+        const [expectedCreatorYield, expectedPlatformYield] =
+          await yieldDistributor.calculateYieldShares(totalYield)
 
-          await campaign.depositToYieldProtocol(
-            await mockToken1.getAddress(),
-            depositAmount
-          )
+        await mockToken1.mint(await mockDefiManager.getAddress(), totalYield)
 
-          const depositedAmount = await mockDefiManager.getDepositedAmount(
-            await campaign.getAddress(),
-            await mockToken1.getAddress()
-          )
-          expect(depositedAmount).to.equal(BigInt(depositAmount))
+        const campaignAddress = campaign.getAddress()
+        const platformTreasuryAddress = platformTreasury.address
 
-          await expect(
-            campaign
-              .connect(user2)
-              .withdrawFromYieldProtocol(await mockToken1.getAddress(), 50)
-          )
-            .to.be.revertedWithCustomError(
-              campaign,
-              'OwnableUnauthorizedAccount'
-            )
-            .withArgs(user2.address)
+        const withdrawAmount = depositAmount / 2
 
-          await expect(
-            campaign
-              .connect(user2)
-              .withdrawAllFromYieldProtocol(await mockToken1.getAddress())
-          )
-            .to.be.revertedWithCustomError(
-              campaign,
-              'OwnableUnauthorizedAccount'
-            )
-            .withArgs(user2.address)
+        const campaignBalanceBefore = await mockToken1.balanceOf(
+          campaignAddress
+        )
 
-          const remainingDepositedAmount =
-            await mockDefiManager.getDepositedAmount(
-              await campaign.getAddress(),
-              await mockToken1.getAddress()
-            )
-          expect(remainingDepositedAmount).to.equal(BigInt(depositAmount))
-        })
+        const platformTreasuryBalanceBefore = await mockToken1.balanceOf(
+          platformTreasuryAddress
+        )
 
-        it('Should revert when withdrawal from yield protocol fails', async function () {
-          const { campaign, mockDefiManager, mockToken1, user1, owner } =
-            await loadFixture(deployCampaignFixture)
-
-          const depositAmount = 100
-          await mockToken1
-            .connect(user1)
-            .approve(await campaign.getAddress(), depositAmount)
-          await campaign
-            .connect(user1)
-            .contribute(await mockToken1.getAddress(), depositAmount)
-
-          await campaign.depositToYieldProtocol(
-            await mockToken1.getAddress(),
-            depositAmount
-          )
-
-          await mockDefiManager.setWithdrawSuccess(false)
-
-          await expect(
-            campaign.withdrawFromYieldProtocol(
+        await expect(
+          campaign
+            .connect(otherAdmin)
+            .withdrawFromYieldProtocolAdmin(
               await mockToken1.getAddress(),
-              50
+              withdrawAmount
             )
-          ).to.be.revertedWithCustomError(
-            mockDefiManager,
-            'YieldwithdrawalFailed'
-          )
+        ).to.be.revertedWithCustomError(campaign, 'GracePeriodNotOver')
 
-          await expect(
-            campaign.withdrawAllFromYieldProtocol(await mockToken1.getAddress())
-          ).to.be.revertedWithCustomError(
-            mockDefiManager,
-            'YieldwithdrawalFailed'
-          )
+        const campaignBalanceAfter = await mockToken1.balanceOf(campaignAddress)
+        const platformTreasuryBalanceAfter = await mockToken1.balanceOf(
+          platformTreasuryAddress
+        )
 
-          const remainingDepositedAmount =
-            await mockDefiManager.getDepositedAmount(
-              await campaign.getAddress(),
-              await mockToken1.getAddress()
-            )
-          expect(remainingDepositedAmount).to.equal(BigInt(depositAmount))
-        })
+        expect(campaignBalanceAfter).to.equal(campaignBalanceBefore)
 
-        it('Should revert when attempting to withdraw more than deposited amount', async function () {
-          const { campaign, mockDefiManager, mockToken1, user1, owner } =
-            await loadFixture(deployCampaignFixture)
+        expect(platformTreasuryBalanceAfter).to.equal(
+          platformTreasuryBalanceBefore
+        )
+      })
+      it('Should revert if non-admin tries to harvest yield using admin function', async function () {
+        const {
+          campaign,
+          mockDefiManager,
+          mockToken1,
+          yieldDistributor,
+          user1,
+          platformTreasury,
+          GRACE_PERIOD,
+          otherAdmin
+        } = await loadFixture(deployCampaignFixture)
 
-          const depositAmount = 100
-          await mockToken1
+        const depositAmount = 100
+        await mockToken1
+          .connect(user1)
+          .approve(await campaign.getAddress(), depositAmount)
+        await campaign
+          .connect(user1)
+          .contribute(await mockToken1.getAddress(), depositAmount)
+
+        await campaign.depositToYieldProtocol(
+          await mockToken1.getAddress(),
+          depositAmount
+        )
+
+        const yieldRate = await mockDefiManager.yieldRate()
+
+        const totalYield =
+          (BigInt(depositAmount) * BigInt(yieldRate)) / BigInt(10000)
+
+        const [expectedCreatorYield, expectedPlatformYield] =
+          await yieldDistributor.calculateYieldShares(totalYield)
+
+        await mockToken1.mint(await mockDefiManager.getAddress(), totalYield)
+
+        const campaignAddress = campaign.getAddress()
+        const platformTreasuryAddress = platformTreasury.address
+        const withdrawAmount = depositAmount / 2
+
+        const campaignBalanceBefore = await mockToken1.balanceOf(
+          campaignAddress
+        )
+
+        const platformTreasuryBalanceBefore = await mockToken1.balanceOf(
+          platformTreasuryAddress
+        )
+
+        const campaignEndTime = await campaign.campaignEndTime()
+
+        const latestBlock = await ethers.provider.getBlock('latest')
+
+        if (!latestBlock) {
+          throw new Error('Latest block does not exist')
+        }
+
+        const currentTimestamp = latestBlock.timestamp
+
+        const timeToAdvance =
+          Number(campaignEndTime) -
+          currentTimestamp +
+          (GRACE_PERIOD + 1) * 24 * 60 * 60
+
+        await ethers.provider.send('evm_increaseTime', [timeToAdvance])
+        await ethers.provider.send('evm_mine')
+
+        await expect(
+          campaign
             .connect(user1)
-            .approve(await campaign.getAddress(), depositAmount)
-          await campaign
+            .withdrawFromYieldProtocolAdmin(
+              await mockToken1.getAddress(),
+              withdrawAmount
+            )
+        ).to.be.revertedWithCustomError(campaign, 'NotAuthorizedAdmin')
+
+        const campaignBalanceAfter = await mockToken1.balanceOf(campaignAddress)
+        const platformTreasuryBalanceAfter = await mockToken1.balanceOf(
+          platformTreasuryAddress
+        )
+
+        expect(campaignBalanceAfter).to.equal(campaignBalanceBefore)
+
+        expect(platformTreasuryBalanceAfter).to.equal(
+          platformTreasuryBalanceBefore
+        )
+      })
+    })
+
+    describe('harvestYieldAdmin()', function () {
+      it('Should allow admin to harvest yield after grace period', async function () {
+        const {
+          campaign,
+          mockDefiManager,
+          mockToken1,
+          yieldDistributor,
+          user1,
+          platformTreasury,
+          GRACE_PERIOD,
+          otherAdmin
+        } = await loadFixture(deployCampaignFixture)
+
+        const depositAmount = 100
+        await mockToken1
+          .connect(user1)
+          .approve(await campaign.getAddress(), depositAmount)
+        await campaign
+          .connect(user1)
+          .contribute(await mockToken1.getAddress(), depositAmount)
+
+        await campaign.depositToYieldProtocol(
+          await mockToken1.getAddress(),
+          depositAmount
+        )
+
+        const yieldRate = await mockDefiManager.yieldRate()
+
+        const totalYield =
+          (BigInt(depositAmount) * BigInt(yieldRate)) / BigInt(10000)
+
+        const [expectedCreatorYield, expectedPlatformYield] =
+          await yieldDistributor.calculateYieldShares(totalYield)
+
+        await mockToken1.mint(await mockDefiManager.getAddress(), totalYield)
+
+        const campaignAddress = campaign.getAddress()
+        const platformTreasuryAddress = platformTreasury.address
+
+        const campaignBalanceBefore = await mockToken1.balanceOf(
+          campaignAddress
+        )
+
+        const platformTreasuryBalanceBefore = await mockToken1.balanceOf(
+          platformTreasuryAddress
+        )
+
+        const campaignEndTime = await campaign.campaignEndTime()
+
+        const latestBlock = await ethers.provider.getBlock('latest')
+
+        if (!latestBlock) {
+          throw new Error('Latest block does not exist')
+        }
+
+        const currentTimestamp = latestBlock.timestamp
+
+        const timeToAdvance =
+          Number(campaignEndTime) -
+          currentTimestamp +
+          (GRACE_PERIOD + 1) * 24 * 60 * 60
+
+        await ethers.provider.send('evm_increaseTime', [timeToAdvance])
+        await ethers.provider.send('evm_mine')
+
+        await expect(
+          campaign
+            .connect(otherAdmin)
+            .harvestYieldAdmin(await mockToken1.getAddress())
+        )
+          .to.emit(campaign, 'YieldHarvested')
+          .withArgs(await mockToken1.getAddress(), expectedCreatorYield)
+
+        const campaignBalanceAfter = await mockToken1.balanceOf(campaignAddress)
+        const platformTreasuryBalanceAfter = await mockToken1.balanceOf(
+          platformTreasuryAddress
+        )
+
+        expect(campaignBalanceAfter - campaignBalanceBefore).to.equal(
+          expectedCreatorYield
+        )
+
+        expect(
+          platformTreasuryBalanceAfter - platformTreasuryBalanceBefore
+        ).to.equal(expectedPlatformYield)
+
+        const depositedAmount = await mockDefiManager.getDepositedAmount(
+          await campaign.getAddress(),
+          await mockToken1.getAddress()
+        )
+        expect(depositedAmount).to.equal(BigInt(depositAmount))
+      })
+      it('Should should revert if admin tries to harvest yield before grace period', async function () {
+        const {
+          campaign,
+          mockDefiManager,
+          mockToken1,
+          yieldDistributor,
+          user1,
+          platformTreasury,
+          otherAdmin
+        } = await loadFixture(deployCampaignFixture)
+
+        const depositAmount = 100
+        await mockToken1
+          .connect(user1)
+          .approve(await campaign.getAddress(), depositAmount)
+        await campaign
+          .connect(user1)
+          .contribute(await mockToken1.getAddress(), depositAmount)
+
+        await campaign.depositToYieldProtocol(
+          await mockToken1.getAddress(),
+          depositAmount
+        )
+
+        const yieldRate = await mockDefiManager.yieldRate()
+
+        const totalYield =
+          (BigInt(depositAmount) * BigInt(yieldRate)) / BigInt(10000)
+
+        const [expectedCreatorYield, expectedPlatformYield] =
+          await yieldDistributor.calculateYieldShares(totalYield)
+
+        await mockToken1.mint(await mockDefiManager.getAddress(), totalYield)
+
+        const campaignAddress = campaign.getAddress()
+        const platformTreasuryAddress = platformTreasury.address
+
+        const campaignBalanceBefore = await mockToken1.balanceOf(
+          campaignAddress
+        )
+
+        const platformTreasuryBalanceBefore = await mockToken1.balanceOf(
+          platformTreasuryAddress
+        )
+
+        await expect(
+          campaign
+            .connect(otherAdmin)
+            .harvestYieldAdmin(await mockToken1.getAddress())
+        ).to.be.revertedWithCustomError(campaign, 'GracePeriodNotOver')
+
+        const campaignBalanceAfter = await mockToken1.balanceOf(campaignAddress)
+        const platformTreasuryBalanceAfter = await mockToken1.balanceOf(
+          platformTreasuryAddress
+        )
+
+        expect(campaignBalanceAfter).to.equal(campaignBalanceBefore)
+
+        expect(platformTreasuryBalanceAfter).to.equal(
+          platformTreasuryBalanceBefore
+        )
+      })
+      it('Should revert if non-admin tries to harvest yield using admin function', async function () {
+        const {
+          campaign,
+          mockDefiManager,
+          mockToken1,
+          yieldDistributor,
+          user1,
+          platformTreasury,
+          GRACE_PERIOD,
+          otherAdmin
+        } = await loadFixture(deployCampaignFixture)
+
+        const depositAmount = 100
+        await mockToken1
+          .connect(user1)
+          .approve(await campaign.getAddress(), depositAmount)
+        await campaign
+          .connect(user1)
+          .contribute(await mockToken1.getAddress(), depositAmount)
+
+        await campaign.depositToYieldProtocol(
+          await mockToken1.getAddress(),
+          depositAmount
+        )
+
+        const yieldRate = await mockDefiManager.yieldRate()
+
+        const totalYield =
+          (BigInt(depositAmount) * BigInt(yieldRate)) / BigInt(10000)
+
+        const [expectedCreatorYield, expectedPlatformYield] =
+          await yieldDistributor.calculateYieldShares(totalYield)
+
+        await mockToken1.mint(await mockDefiManager.getAddress(), totalYield)
+
+        const campaignAddress = campaign.getAddress()
+        const platformTreasuryAddress = platformTreasury.address
+
+        const campaignBalanceBefore = await mockToken1.balanceOf(
+          campaignAddress
+        )
+
+        const platformTreasuryBalanceBefore = await mockToken1.balanceOf(
+          platformTreasuryAddress
+        )
+
+        const campaignEndTime = await campaign.campaignEndTime()
+
+        const latestBlock = await ethers.provider.getBlock('latest')
+
+        if (!latestBlock) {
+          throw new Error('Latest block does not exist')
+        }
+
+        const currentTimestamp = latestBlock.timestamp
+
+        const timeToAdvance =
+          Number(campaignEndTime) -
+          currentTimestamp +
+          (GRACE_PERIOD + 1) * 24 * 60 * 60
+
+        await ethers.provider.send('evm_increaseTime', [timeToAdvance])
+        await ethers.provider.send('evm_mine')
+
+        await expect(
+          campaign
             .connect(user1)
-            .contribute(await mockToken1.getAddress(), depositAmount)
+            .harvestYieldAdmin(await mockToken1.getAddress())
+        ).to.be.revertedWithCustomError(campaign, 'NotAuthorizedAdmin')
 
-          await campaign.depositToYieldProtocol(
-            await mockToken1.getAddress(),
-            depositAmount
-          )
+        const campaignBalanceAfter = await mockToken1.balanceOf(campaignAddress)
+        const platformTreasuryBalanceAfter = await mockToken1.balanceOf(
+          platformTreasuryAddress
+        )
 
-          const initialDepositedAmount =
-            await mockDefiManager.getDepositedAmount(
-              await campaign.getAddress(),
-              await mockToken1.getAddress()
-            )
-          expect(initialDepositedAmount).to.equal(BigInt(depositAmount))
+        expect(campaignBalanceAfter).to.equal(campaignBalanceBefore)
 
-          const excessiveAmount = depositAmount * 2
-
-          // Updated to expect InsufficientDeposit error from mockDefiManager
-          await expect(
-            campaign.withdrawFromYieldProtocol(
-              await mockToken1.getAddress(),
-              excessiveAmount
-            )
-          )
-            .to.be.revertedWithCustomError(
-              mockDefiManager,
-              'InsufficientDeposit'
-            )
-            .withArgs(
-              await mockToken1.getAddress(),
-              excessiveAmount,
-              depositAmount
-            )
-
-          const afterDepositedAmount = await mockDefiManager.getDepositedAmount(
-            await campaign.getAddress(),
-            await mockToken1.getAddress()
-          )
-          expect(afterDepositedAmount).to.equal(initialDepositedAmount)
-
-          await expect(
-            campaign.withdrawFromYieldProtocol(
-              await mockToken1.getAddress(),
-              depositAmount
-            )
-          )
-            .to.emit(campaign, 'WithdrawnFromYield')
-            .withArgs(await mockToken1.getAddress(), depositAmount)
-        })
-
-        it('Should revert with ZeroAmount when trying to withdraw nothing', async function () {
-          const { campaign, mockDefiManager, mockToken1, owner } =
-            await loadFixture(deployCampaignFixture)
-
-          const depositedAmount = await mockDefiManager.getDepositedAmount(
-            await campaign.getAddress(),
-            await mockToken1.getAddress()
-          )
-          expect(depositedAmount).to.equal(0)
-
-          // When withdrawing all with no deposit, expect ZeroAmount error
-          await expect(
-            campaign.withdrawAllFromYieldProtocol(await mockToken1.getAddress())
-          )
-            .to.be.revertedWithCustomError(mockDefiManager, 'ZeroAmount')
-            .withArgs(0)
-
-          // When trying to withdraw specific amount with no deposit, expect InsufficientDeposit
-          await expect(
-            campaign.withdrawFromYieldProtocol(
-              await mockToken1.getAddress(),
-              50
-            )
-          )
-            .to.be.revertedWithCustomError(
-              mockDefiManager,
-              'InsufficientDeposit'
-            )
-            .withArgs(await mockToken1.getAddress(), 50, 0)
-        })
+        expect(platformTreasuryBalanceAfter).to.equal(
+          platformTreasuryBalanceBefore
+        )
       })
     })
   })
