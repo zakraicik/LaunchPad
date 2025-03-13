@@ -6,7 +6,7 @@ const { loadFixture } = require('@nomicfoundation/hardhat-network-helpers')
 
 describe('YieldDistributor', function () {
   async function deployYieldDistributorFixture () {
-    const [owner, user1, user2] = await ethers.getSigners()
+    const [owner, user1, user2, otherAdmin] = await ethers.getSigners()
     const randomWallet = ethers.Wallet.createRandom()
     const randomWallet2 = ethers.Wallet.createRandom()
 
@@ -28,6 +28,9 @@ describe('YieldDistributor', function () {
       owner
     ])
     await platformAdmin.waitForDeployment()
+
+    await platformAdmin.addPlatformAdmin(await otherAdmin.getAddress())
+
     const platformAdminAddress = await platformAdmin.getAddress()
 
     const yieldDistributor = await ethers.deployContract('YieldDistributor', [
@@ -50,7 +53,8 @@ describe('YieldDistributor', function () {
       user2,
       randomWallet,
       randomWallet2,
-      platformAdmin
+      platformAdmin,
+      otherAdmin
     }
   }
 
@@ -148,6 +152,27 @@ describe('YieldDistributor', function () {
 
       expect(await yieldDistributor.getPlatformTreasury()).to.equal(
         randomWallet.address
+      )
+    })
+
+    it('Should allow other admins to updatePlatformTreasury()', async function () {
+      const { yieldDistributor, randomWallet, randomWallet2, otherAdmin } =
+        await loadFixture(deployYieldDistributorFixture)
+
+      expect(await yieldDistributor.getPlatformTreasury()).to.equal(
+        randomWallet.address
+      )
+
+      await expect(
+        yieldDistributor
+          .connect(otherAdmin)
+          .updatePlatformTreasury(randomWallet2.address)
+      )
+        .to.emit(yieldDistributor, 'PlatformTreasuryUpdated')
+        .withArgs(randomWallet.address, randomWallet2.address)
+
+      expect(await yieldDistributor.getPlatformTreasury()).to.equal(
+        randomWallet2.address
       )
     })
   })
@@ -252,6 +277,27 @@ describe('YieldDistributor', function () {
 
       expect(platformShare).to.equal(50)
       expect(creatorShare).to.equal(50)
+    })
+
+    it('Should allow other admins to update platform yield share', async function () {
+      const { yieldDistributor, otherAdmin } = await loadFixture(
+        deployYieldDistributorFixture
+      )
+
+      const currentYieldShare = await yieldDistributor.getPlatformYieldShare()
+      const newYieldShare = 3000
+
+      await expect(
+        yieldDistributor
+          .connect(otherAdmin)
+          .updatePlatformYieldShare(newYieldShare)
+      )
+        .to.emit(yieldDistributor, 'PlatformYieldShareUpdated')
+        .withArgs(currentYieldShare, newYieldShare)
+
+      expect(await yieldDistributor.getPlatformYieldShare()).to.equal(
+        newYieldShare
+      )
     })
   })
 
