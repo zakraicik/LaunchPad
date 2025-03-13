@@ -11,7 +11,8 @@ describe('DefiIntegrationManager', function () {
 
     const GRACE_PERIOD = 7 // 7 days grace period
 
-    const [owner, user1, user2, platformTreasury] = await ethers.getSigners()
+    const [owner, user1, user2, platformTreasury, otherAdmin] =
+      await ethers.getSigners()
 
     const mockToken1 = await ethers.deployContract('MockERC20', [
       'Mock Token 1',
@@ -32,6 +33,9 @@ describe('DefiIntegrationManager', function () {
       owner
     ])
     await platformAdmin.waitForDeployment()
+
+    await platformAdmin.addPlatformAdmin(await otherAdmin.getAddress())
+
     const platformAdminAddress = await platformAdmin.getAddress()
 
     const tokenRegistry = await ethers.deployContract('TokenRegistry', [
@@ -136,7 +140,8 @@ describe('DefiIntegrationManager', function () {
       defiManager,
       platformAdmin,
       CAMPAIGN_GOAL_AMOUNT,
-      CAMPAIGN_DURATION
+      CAMPAIGN_DURATION,
+      otherAdmin
     }
   }
 
@@ -1596,7 +1601,7 @@ describe('DefiIntegrationManager', function () {
 
   describe('Setter functions', function () {
     describe('setTokenRegistry()', function () {
-      it('Should correctly set the token registry', async function () {
+      it('Should allow owner the token registry', async function () {
         const { defiManager, owner, platformAdmin } = await loadFixture(
           deployDefiManagerFixture
         )
@@ -1612,6 +1617,37 @@ describe('DefiIntegrationManager', function () {
         const tokenRegistryNewAddress = await tokenRegistryNew.getAddress()
 
         await expect(defiManager.setTokenRegistry(tokenRegistryNewAddress))
+          .to.emit(defiManager, 'TokenRegistryUpdated')
+          .withArgs(tokenRegistryBefore, tokenRegistryNewAddress)
+
+        expect(await defiManager.tokenRegistry()).to.equal(
+          tokenRegistryNewAddress
+        )
+
+        expect(await defiManager.getTokenRegistry()).to.equal(
+          tokenRegistryNewAddress
+        )
+      })
+
+      it('Should allow otheradmin the token registry', async function () {
+        const { defiManager, owner, platformAdmin, otherAdmin } =
+          await loadFixture(deployDefiManagerFixture)
+
+        const tokenRegistryBefore = await defiManager.tokenRegistry()
+        const platformAdminAddress = await platformAdmin.getAddress()
+
+        const tokenRegistryNew = await ethers.deployContract('TokenRegistry', [
+          owner.address,
+          platformAdminAddress
+        ])
+        await tokenRegistryNew.waitForDeployment()
+        const tokenRegistryNewAddress = await tokenRegistryNew.getAddress()
+
+        await expect(
+          defiManager
+            .connect(otherAdmin)
+            .setTokenRegistry(tokenRegistryNewAddress)
+        )
           .to.emit(defiManager, 'TokenRegistryUpdated')
           .withArgs(tokenRegistryBefore, tokenRegistryNewAddress)
 
@@ -1664,7 +1700,7 @@ describe('DefiIntegrationManager', function () {
     })
 
     describe('setYieldDistributor()', function () {
-      it('Should correctly set the yield distributor', async function () {
+      it('Should allow owner to set the yield distributor', async function () {
         const { defiManager, platformTreasury, platformAdmin, owner } =
           await loadFixture(deployDefiManagerFixture)
 
@@ -1681,6 +1717,39 @@ describe('DefiIntegrationManager', function () {
 
         await expect(
           defiManager.setYieldDistributor(yieldDistributorAfterAddress)
+        )
+          .to.emit(defiManager, 'YieldDistributorUpdated')
+          .withArgs(yieldDistributorBefore, yieldDistributorAfterAddress)
+
+        expect(await defiManager.yieldDistributor()).to.equal(
+          yieldDistributorAfterAddress
+        )
+      })
+
+      it('Should allow otheradmin to set the yield distributor', async function () {
+        const {
+          defiManager,
+          platformTreasury,
+          platformAdmin,
+          owner,
+          otherAdmin
+        } = await loadFixture(deployDefiManagerFixture)
+
+        const yieldDistributorBefore = await defiManager.yieldDistributor()
+        const platformAdminAddress = await platformAdmin.getAddress()
+
+        const yieldDistributorAfter = await ethers.deployContract(
+          'YieldDistributor',
+          [platformTreasury.address, platformAdminAddress, owner.address]
+        )
+        await yieldDistributorAfter.waitForDeployment()
+        const yieldDistributorAfterAddress =
+          await yieldDistributorAfter.getAddress()
+
+        await expect(
+          defiManager
+            .connect(otherAdmin)
+            .setYieldDistributor(yieldDistributorAfterAddress)
         )
           .to.emit(defiManager, 'YieldDistributorUpdated')
           .withArgs(yieldDistributorBefore, yieldDistributorAfterAddress)
@@ -1731,7 +1800,7 @@ describe('DefiIntegrationManager', function () {
     })
 
     describe('setAavePool()', function () {
-      it('Should correctly set the Aave Pool', async function () {
+      it('Should allow owner to set the Aave Pool', async function () {
         const { defiManager, mockAToken1 } = await loadFixture(
           deployDefiManagerFixture
         )
@@ -1746,6 +1815,29 @@ describe('DefiIntegrationManager', function () {
         const mockAavePoolAfter = await mockAavePool.getAddress()
 
         await expect(defiManager.setAavePool(mockAavePoolAfter))
+          .to.emit(defiManager, 'AavePoolUpdated')
+          .withArgs(mockAavePoolBefore, mockAavePoolAfter)
+
+        expect(await defiManager.aavePool()).to.equal(mockAavePoolAfter)
+      })
+
+      it('Should allow other admin to set the Aave Pool', async function () {
+        const { defiManager, mockAToken1, otherAdmin } = await loadFixture(
+          deployDefiManagerFixture
+        )
+
+        const mockAavePoolBefore = await defiManager.aavePool()
+
+        const mockAavePool = await ethers.deployContract('MockAavePool', [
+          await mockAToken1.getAddress()
+        ])
+        await mockAavePool.waitForDeployment()
+
+        const mockAavePoolAfter = await mockAavePool.getAddress()
+
+        await expect(
+          defiManager.connect(otherAdmin).setAavePool(mockAavePoolAfter)
+        )
           .to.emit(defiManager, 'AavePoolUpdated')
           .withArgs(mockAavePoolBefore, mockAavePoolAfter)
 
@@ -1789,7 +1881,7 @@ describe('DefiIntegrationManager', function () {
     })
 
     describe('setUniswapRouter()', function () {
-      it('Should correctly set the Uniswap Router', async function () {
+      it('Should allow owner to set the Uniswap Router', async function () {
         const { defiManager } = await loadFixture(deployDefiManagerFixture)
 
         const mockUniswapRouterBefore = await defiManager.uniswapRouter()
@@ -1802,6 +1894,33 @@ describe('DefiIntegrationManager', function () {
         const mockUniswapRouterAfter = await mockUniswapRouter.getAddress()
 
         await expect(defiManager.setUniswapRouter(mockUniswapRouterAfter))
+          .to.emit(defiManager, 'UniswapRouterUpdated')
+          .withArgs(mockUniswapRouterBefore, mockUniswapRouterAfter)
+
+        expect(await defiManager.uniswapRouter()).to.equal(
+          mockUniswapRouterAfter
+        )
+      })
+
+      it('Should allow otheradmin to set the Uniswap Router', async function () {
+        const { defiManager, otherAdmin } = await loadFixture(
+          deployDefiManagerFixture
+        )
+
+        const mockUniswapRouterBefore = await defiManager.uniswapRouter()
+
+        const mockUniswapRouter = await ethers.deployContract(
+          'MockUniswapRouter'
+        )
+        await mockUniswapRouter.waitForDeployment()
+
+        const mockUniswapRouterAfter = await mockUniswapRouter.getAddress()
+
+        await expect(
+          defiManager
+            .connect(otherAdmin)
+            .setUniswapRouter(mockUniswapRouterAfter)
+        )
           .to.emit(defiManager, 'UniswapRouterUpdated')
           .withArgs(mockUniswapRouterBefore, mockUniswapRouterAfter)
 
@@ -1853,7 +1972,7 @@ describe('DefiIntegrationManager', function () {
     })
 
     describe('setUniswapQuoter()', function () {
-      it('Should correctly set the Uniswap Quoter', async function () {
+      it('Should allow owner to set the Uniswap Quoter', async function () {
         const { defiManager } = await loadFixture(deployDefiManagerFixture)
 
         const mockUniswapQuoterBefore = await defiManager.uniswapQuoter()
@@ -1866,6 +1985,33 @@ describe('DefiIntegrationManager', function () {
         const mockUniswapQuoterAfter = await mockUniswapQuoter.getAddress()
 
         await expect(defiManager.setUniswapQuoter(mockUniswapQuoterAfter))
+          .to.emit(defiManager, 'UniswapQuoterUpdated')
+          .withArgs(mockUniswapQuoterBefore, mockUniswapQuoterAfter)
+
+        expect(await defiManager.uniswapQuoter()).to.equal(
+          mockUniswapQuoterAfter
+        )
+      })
+
+      it('Should allow otheradmin to set the Uniswap Quoter', async function () {
+        const { defiManager, otherAdmin } = await loadFixture(
+          deployDefiManagerFixture
+        )
+
+        const mockUniswapQuoterBefore = await defiManager.uniswapQuoter()
+
+        const mockUniswapQuoter = await ethers.deployContract(
+          'MockUniswapQuoter'
+        )
+        await mockUniswapQuoter.waitForDeployment()
+
+        const mockUniswapQuoterAfter = await mockUniswapQuoter.getAddress()
+
+        await expect(
+          defiManager
+            .connect(otherAdmin)
+            .setUniswapQuoter(mockUniswapQuoterAfter)
+        )
           .to.emit(defiManager, 'UniswapQuoterUpdated')
           .withArgs(mockUniswapQuoterBefore, mockUniswapQuoterAfter)
 
