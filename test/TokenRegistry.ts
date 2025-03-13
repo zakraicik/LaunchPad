@@ -6,7 +6,7 @@ const { loadFixture } = require('@nomicfoundation/hardhat-network-helpers')
 
 describe('TokenRegistry', function () {
   async function deployTokenRegistryFixture () {
-    const [owner, user1, user2] = await ethers.getSigners()
+    const [owner, user1, user2, otherAdmin] = await ethers.getSigners()
 
     const GRACE_PERIOD = 7 // 7 days
     const platformAdmin = await ethers.deployContract('PlatformAdmin', [
@@ -14,6 +14,9 @@ describe('TokenRegistry', function () {
       owner
     ])
     await platformAdmin.waitForDeployment()
+
+    await platformAdmin.addPlatformAdmin(await otherAdmin.getAddress())
+
     const platformAdminAddress = await platformAdmin.getAddress()
 
     const mockToken1 = await ethers.deployContract('MockERC20', [
@@ -46,7 +49,8 @@ describe('TokenRegistry', function () {
       user2,
       platformAdmin,
       platformAdminAddress,
-      GRACE_PERIOD
+      GRACE_PERIOD,
+      otherAdmin
     }
   }
 
@@ -224,6 +228,29 @@ describe('TokenRegistry', function () {
         tokenRegistry.addToken(mockToken1Address, tooLargeAmount)
       ).to.be.revertedWithCustomError(tokenRegistry, 'Overflow')
     })
+
+    it('Should allow other admin to add ERC20 token', async function () {
+      const { tokenRegistry, mockToken1, otherAdmin } = await loadFixture(
+        deployTokenRegistryFixture
+      )
+
+      const mockToken1Address = await mockToken1.getAddress()
+
+      await expect(
+        tokenRegistry.connect(otherAdmin).addToken(mockToken1Address, 0)
+      )
+        .to.emit(tokenRegistry, 'TokenAdded')
+        .withArgs(mockToken1Address, 0, 18)
+
+      expect(await tokenRegistry.getAllSupportedTokens()).to.have.lengthOf(1)
+
+      expect(await tokenRegistry.isTokenSupported(mockToken1Address)).to.be.true
+
+      const config = await tokenRegistry.tokenConfigs(mockToken1Address)
+      expect(config.isSupported).to.be.true
+      expect(config.minimumContributionAmount).to.equal(0)
+      expect(config.decimals).to.equal(18)
+    })
   })
 
   describe('Removing tokens', function () {
@@ -239,6 +266,30 @@ describe('TokenRegistry', function () {
       expect(await tokenRegistry.getAllSupportedTokens()).to.have.lengthOf(1)
 
       await expect(tokenRegistry.removeToken(mockToken1Address))
+        .to.emit(tokenRegistry, 'TokenRemovedFromRegistry')
+        .withArgs(mockToken1Address)
+
+      expect(await tokenRegistry.getAllSupportedTokens()).to.have.lengthOf(0)
+
+      await expect(tokenRegistry.isTokenSupported(mockToken1Address))
+        .to.be.revertedWithCustomError(tokenRegistry, 'TokenNotInRegistry')
+        .withArgs(mockToken1Address)
+    })
+
+    it('Should allow other admin to remove a token from the registry', async function () {
+      const { tokenRegistry, mockToken1, otherAdmin } = await loadFixture(
+        deployTokenRegistryFixture
+      )
+
+      const mockToken1Address = await mockToken1.getAddress()
+
+      await tokenRegistry.addToken(mockToken1Address, 0)
+
+      expect(await tokenRegistry.getAllSupportedTokens()).to.have.lengthOf(1)
+
+      await expect(
+        tokenRegistry.connect(otherAdmin).removeToken(mockToken1Address)
+      )
         .to.emit(tokenRegistry, 'TokenRemovedFromRegistry')
         .withArgs(mockToken1Address)
 
@@ -358,6 +409,33 @@ describe('TokenRegistry', function () {
       expect(await tokenRegistry.getAllSupportedTokens()).to.have.lengthOf(1)
     })
 
+    it('Should allow other admin to enable support for disabled tokens', async function () {
+      const { tokenRegistry, mockToken1, otherAdmin } = await loadFixture(
+        deployTokenRegistryFixture
+      )
+
+      const mockToken1Address = await mockToken1.getAddress()
+
+      await tokenRegistry.addToken(mockToken1Address, 0)
+
+      await tokenRegistry.disableTokenSupport(mockToken1Address)
+
+      expect(await tokenRegistry.isTokenSupported(mockToken1Address)).to.be
+        .false
+
+      expect(await tokenRegistry.getAllSupportedTokens()).to.have.lengthOf(0)
+
+      await expect(
+        tokenRegistry.connect(otherAdmin).enableTokenSupport(mockToken1Address)
+      )
+        .to.emit(tokenRegistry, 'TokenSupportEnabled')
+        .withArgs(mockToken1Address)
+
+      expect(await tokenRegistry.isTokenSupported(mockToken1Address)).to.be.true
+
+      expect(await tokenRegistry.getAllSupportedTokens()).to.have.lengthOf(1)
+    })
+
     it('Should revert when trying to enable support for already enabled token', async function () {
       const { tokenRegistry, mockToken1 } = await loadFixture(
         deployTokenRegistryFixture
@@ -447,6 +525,31 @@ describe('TokenRegistry', function () {
       expect(await tokenRegistry.getAllSupportedTokens()).to.have.lengthOf(0)
     })
 
+    it('Should allow otheradmin to disable support for enabled tokens', async function () {
+      const { tokenRegistry, mockToken1, otherAdmin } = await loadFixture(
+        deployTokenRegistryFixture
+      )
+
+      const mockToken1Address = await mockToken1.getAddress()
+
+      await tokenRegistry.addToken(mockToken1Address, 0)
+
+      expect(await tokenRegistry.isTokenSupported(mockToken1Address)).to.be.true
+
+      expect(await tokenRegistry.getAllSupportedTokens()).to.have.lengthOf(1)
+
+      await expect(
+        tokenRegistry.connect(otherAdmin).disableTokenSupport(mockToken1Address)
+      )
+        .to.emit(tokenRegistry, 'TokenSupportDisabled')
+        .withArgs(mockToken1Address)
+
+      expect(await tokenRegistry.isTokenSupported(mockToken1Address)).to.be
+        .false
+
+      expect(await tokenRegistry.getAllSupportedTokens()).to.have.lengthOf(0)
+    })
+
     it('Should revert when trying to disable support for already disabled token', async function () {
       const { tokenRegistry, mockToken1 } = await loadFixture(
         deployTokenRegistryFixture
@@ -524,6 +627,38 @@ describe('TokenRegistry', function () {
           mockToken1Address,
           newMinContribution
         )
+      )
+        .to.emit(tokenRegistry, 'TokenMinimumContributionUpdated')
+        .withArgs(mockToken1Address, expectedSmallestUnit)
+
+      const updatedConfig = await tokenRegistry.tokenConfigs(mockToken1Address)
+      expect(updatedConfig.minimumContributionAmount).to.equal(
+        expectedSmallestUnit
+      )
+
+      expect(updatedConfig.isSupported).to.equal(true)
+      expect(updatedConfig.decimals).to.equal(18)
+    })
+
+    it('Should allow otheradmin to update minimum contribution amount', async function () {
+      const { tokenRegistry, mockToken1, otherAdmin } = await loadFixture(
+        deployTokenRegistryFixture
+      )
+
+      const mockToken1Address = await mockToken1.getAddress()
+
+      await tokenRegistry.addToken(mockToken1Address, 0)
+
+      const initialConfig = await tokenRegistry.tokenConfigs(mockToken1Address)
+      expect(initialConfig.minimumContributionAmount).to.equal(0)
+
+      const newMinContribution = 5
+      const expectedSmallestUnit = ethers.parseUnits('5', 18)
+
+      await expect(
+        tokenRegistry
+          .connect(otherAdmin)
+          .updateTokenMinimumContribution(mockToken1Address, newMinContribution)
       )
         .to.emit(tokenRegistry, 'TokenMinimumContributionUpdated')
         .withArgs(mockToken1Address, expectedSmallestUnit)
