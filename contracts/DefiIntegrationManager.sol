@@ -10,8 +10,13 @@ import "./interfaces/IYieldDistributor.sol";
 import "./interfaces/IAavePool.sol";
 import "./interfaces/ISwapRouter.sol";
 import "./interfaces/IQuoter.sol";
+import "./abstracts/PlatformAdminAccessControl.sol";
 
-contract DefiIntegrationManager is Ownable, ReentrancyGuard {
+contract DefiIntegrationManager is
+    Ownable,
+    ReentrancyGuard,
+    PlatformAdminAccessControl
+{
     using SafeERC20 for IERC20;
 
     IAavePool public aavePool;
@@ -19,16 +24,13 @@ contract DefiIntegrationManager is Ownable, ReentrancyGuard {
     IQuoter public uniswapQuoter;
     ITokenRegistry public tokenRegistry;
     IYieldDistributor public yieldDistributor;
-    address public campaignFactory;
 
     uint24 public constant UNISWAP_FEE_TIER = 3000; // 0.3%
     uint16 public constant SLIPPAGE_TOLERANCE = 50; // Changed from uint256 to uint16
 
-    mapping(address => bool) public authorizedCampaigns;
     mapping(address => mapping(address => uint256)) public aaveDeposits;
 
     error UnauthorizedAddress();
-    error notCampaignFactory(address campaignFactory);
     error ZeroAmount(uint256 amount);
     error InsufficientDeposit(
         address token,
@@ -74,9 +76,6 @@ contract DefiIntegrationManager is Ownable, ReentrancyGuard {
         uint256 amountIn,
         uint256 amountOut
     );
-    event CampaignAuthorized(address indexed campaign);
-    event CampaignUnauthorized(address indexed campaign);
-    event CampaignFactoryUpdated(address oldAddress, address newAddress);
     event AavePoolUpdated(address oldAddress, address newAddress);
     event TokenRegistryUpdated(address oldAddress, address newAddress);
     event YieldDistributorUpdated(address oldAddress, address newAddress);
@@ -88,10 +87,10 @@ contract DefiIntegrationManager is Ownable, ReentrancyGuard {
         address _uniswapRouter,
         address _uniswapQuoter,
         address _tokenRegistry,
-        address _campaignFactory,
         address _yieldDistributor,
+        address _platformAdmin,
         address _owner
-    ) Ownable(_owner) {
+    ) Ownable(_owner) PlatformAdminAccessControl(_platformAdmin) {
         if (_aavePool == address(0)) {
             revert InvalidConstructorInput(0, _aavePool);
         }
@@ -108,48 +107,20 @@ contract DefiIntegrationManager is Ownable, ReentrancyGuard {
             revert InvalidConstructorInput(3, _tokenRegistry);
         }
 
-        if (_campaignFactory == address(0)) {
-            revert InvalidConstructorInput(4, _campaignFactory);
-        }
-
         if (_yieldDistributor == address(0)) {
-            revert InvalidConstructorInput(5, _yieldDistributor);
+            revert InvalidConstructorInput(4, _yieldDistributor);
         }
 
         aavePool = IAavePool(_aavePool);
         uniswapRouter = ISwapRouter(_uniswapRouter);
         uniswapQuoter = IQuoter(_uniswapQuoter);
         tokenRegistry = ITokenRegistry(_tokenRegistry);
-        campaignFactory = _campaignFactory;
         yieldDistributor = IYieldDistributor(_yieldDistributor);
     }
 
-    modifier onlyCampaignFactory() {
-        if (msg.sender != campaignFactory) {
-            revert notCampaignFactory(msg.sender);
-        }
-        _;
-    }
-
-    modifier onlyCampaign() {
-        if (!authorizedCampaigns[msg.sender]) {
-            revert UnauthorizedAddress();
-        }
-        _;
-    }
-
-    function setCampaignFactory(address _campaignFactory) external onlyOwner {
-        if (_campaignFactory == address(0)) {
-            revert InvalidAddress();
-        }
-
-        address oldFactory = campaignFactory;
-        campaignFactory = _campaignFactory;
-
-        emit CampaignFactoryUpdated(oldFactory, _campaignFactory);
-    }
-
-    function setTokenRegistry(address _tokenRegistry) external onlyOwner {
+    function setTokenRegistry(
+        address _tokenRegistry
+    ) external onlyPlatformAdmin {
         if (_tokenRegistry == address(0)) {
             revert InvalidAddress();
         }
@@ -160,7 +131,9 @@ contract DefiIntegrationManager is Ownable, ReentrancyGuard {
         emit TokenRegistryUpdated(oldRegistry, _tokenRegistry);
     }
 
-    function setYieldDistributor(address _yieldDistributor) external onlyOwner {
+    function setYieldDistributor(
+        address _yieldDistributor
+    ) external onlyPlatformAdmin {
         if (_yieldDistributor == address(0)) {
             revert InvalidAddress();
         }
@@ -171,7 +144,7 @@ contract DefiIntegrationManager is Ownable, ReentrancyGuard {
         emit YieldDistributorUpdated(oldDistributor, _yieldDistributor);
     }
 
-    function setAavePool(address _aavePool) external onlyOwner {
+    function setAavePool(address _aavePool) external onlyPlatformAdmin {
         if (_aavePool == address(0)) {
             revert InvalidAddress();
         }
@@ -181,7 +154,9 @@ contract DefiIntegrationManager is Ownable, ReentrancyGuard {
         emit AavePoolUpdated(oldAavePool, _aavePool);
     }
 
-    function setUniswapRouter(address _uniswapRouter) external onlyOwner {
+    function setUniswapRouter(
+        address _uniswapRouter
+    ) external onlyPlatformAdmin {
         if (_uniswapRouter == address(0)) {
             revert InvalidAddress();
         }
@@ -191,7 +166,9 @@ contract DefiIntegrationManager is Ownable, ReentrancyGuard {
         emit UniswapRouterUpdated(oldUniswapRouter, _uniswapRouter);
     }
 
-    function setUniswapQuoter(address _uniswapQuoter) external onlyOwner {
+    function setUniswapQuoter(
+        address _uniswapQuoter
+    ) external onlyPlatformAdmin {
         if (_uniswapQuoter == address(0)) {
             revert InvalidAddress();
         }
@@ -201,20 +178,10 @@ contract DefiIntegrationManager is Ownable, ReentrancyGuard {
         emit UniswapQuoterUpdated(oldUniswapQuoter, _uniswapQuoter);
     }
 
-    function authorizeCampaign(address _campaign) external onlyCampaignFactory {
-        authorizedCampaigns[_campaign] = true;
-        emit CampaignAuthorized(_campaign);
-    }
-
-    function unauthorizeCampaign(address _campaign) external onlyOwner {
-        authorizedCampaigns[_campaign] = false;
-        emit CampaignUnauthorized(_campaign);
-    }
-
     function depositToYieldProtocol(
         address _token,
         uint256 _amount
-    ) external onlyCampaign nonReentrant {
+    ) external nonReentrant {
         if (_amount <= 0) {
             revert ZeroAmount(_amount);
         }
@@ -239,7 +206,7 @@ contract DefiIntegrationManager is Ownable, ReentrancyGuard {
     function withdrawFromYieldProtocol(
         address _token,
         uint256 _amount
-    ) external onlyCampaign nonReentrant returns (uint256) {
+    ) external nonReentrant returns (uint256) {
         if (_amount <= 0) {
             revert ZeroAmount(_amount);
         }
@@ -270,7 +237,7 @@ contract DefiIntegrationManager is Ownable, ReentrancyGuard {
 
     function withdrawAllFromYieldProtocol(
         address _token
-    ) external onlyCampaign nonReentrant returns (uint256) {
+    ) external nonReentrant returns (uint256) {
         uint256 amount = aaveDeposits[msg.sender][_token];
 
         if (amount <= 0) {
@@ -300,7 +267,6 @@ contract DefiIntegrationManager is Ownable, ReentrancyGuard {
         address _token
     )
         external
-        onlyCampaign
         nonReentrant
         returns (uint256 creatorYield, uint256 platformYield)
     {
@@ -387,7 +353,7 @@ contract DefiIntegrationManager is Ownable, ReentrancyGuard {
         address _fromToken,
         uint256 _amount,
         address _toToken
-    ) external onlyCampaign nonReentrant returns (uint256) {
+    ) external nonReentrant returns (uint256) {
         if (_amount <= 0) {
             revert ZeroAmount(_amount);
         }
@@ -467,12 +433,6 @@ contract DefiIntegrationManager is Ownable, ReentrancyGuard {
         address token
     ) external view returns (uint256 amount) {
         return aaveDeposits[campaign][token];
-    }
-
-    function isCampaignAuthorized(
-        address campaign
-    ) external view returns (bool isAuthorized) {
-        return authorizedCampaigns[campaign];
     }
 
     function getTokenRegistry() external view returns (ITokenRegistry) {

@@ -7,62 +7,116 @@ import { loadFixture } from '@nomicfoundation/hardhat-network-helpers'
 
 describe('CampaignContractFactory', function () {
   async function deployCampaignContractFactoryFixture () {
-    const [owner, user1] = await ethers.getSigners()
+    const GRACE_PERIOD = 7 // 7 days grace period
+    const [owner, user1, platformTreasury] = await ethers.getSigners()
 
-    const mockTokenRegistry = await ethers.deployContract('MockTokenRegistry')
-    await mockTokenRegistry.waitForDeployment()
-    const mockTokenRegistryAddress = await mockTokenRegistry.getAddress()
-
-    const mockYieldDistributor = await ethers.deployContract(
-      'MockYieldDistributor',
-      [
-        owner.address // Use owner as the platform treasury for testing
-      ]
-    )
-    await mockYieldDistributor.waitForDeployment()
-    const mockYieldDistributorAddress = await mockYieldDistributor.getAddress()
-
-    const mockDefiManager = await ethers.deployContract('MockDefiManager', [
-      mockTokenRegistryAddress,
-      mockYieldDistributorAddress
-    ])
-    await mockDefiManager.waitForDeployment()
-    const mockDefiManagerAddress = await mockDefiManager.getAddress()
-
-    const mockERC20 = await ethers.deployContract('MockERC20', [
+    //Deploy mock ERC20 tokens
+    const mockToken1 = await ethers.deployContract('MockERC20', [
       'Mock Token 1',
       'MT1',
-      ethers.parseUnits('100')
+      ethers.parseUnits('100000')
     ])
 
-    const mockERC20_2 = await ethers.deployContract('MockERC20', [
+    await mockToken1.waitForDeployment()
+    const mockToken1Address = await mockToken1.getAddress()
+
+    const mockToken2 = await ethers.deployContract('MockERC20', [
       'Mock Token 2',
       'MT2',
-      ethers.parseUnits('100')
+      ethers.parseUnits('100000')
     ])
+    await mockToken2.waitForDeployment()
+    const mockToken2Address = await mockToken2.getAddress()
 
-    await mockERC20.waitForDeployment()
-    await mockERC20_2.waitForDeployment()
+    // Deploy PlatformAdmin contract
+    const platformAdmin = await ethers.deployContract('PlatformAdmin', [
+      GRACE_PERIOD,
+      owner
+    ])
+    await platformAdmin.waitForDeployment()
+    const platformAdminAddress = await platformAdmin.getAddress()
 
-    const mockERC20Address = await mockERC20.getAddress()
+    // Deploy token registry with platform admin
+    const tokenRegistry = await ethers.deployContract('TokenRegistry', [
+      owner.address,
+      platformAdminAddress
+    ])
+    await tokenRegistry.waitForDeployment()
+    const tokenRegistryAddress = await tokenRegistry.getAddress()
 
+    await tokenRegistry.addToken(mockToken1Address, 1)
+    await tokenRegistry.addToken(mockToken2Address, 1)
+
+    // Deploy yield distributor with platform admin
+    const yieldDistributor = await ethers.deployContract('YieldDistributor', [
+      platformTreasury.address,
+      platformAdminAddress,
+      owner.address
+    ])
+    await yieldDistributor.waitForDeployment()
+    const yieldDistributorAddress = await yieldDistributor.getAddress()
+
+    //Deploy required mocks for defiManager
+    const mockAToken1 = await ethers.deployContract('MockAToken', [
+      'aMock Token 1',
+      'aMT1',
+      await mockToken1.getAddress()
+    ])
+    await mockAToken1.waitForDeployment()
+
+    const mockAToken2 = await ethers.deployContract('MockAToken', [
+      'aMock Token 2',
+      'aMT2',
+      await mockToken2.getAddress()
+    ])
+    await mockAToken2.waitForDeployment()
+
+    const mockAavePool = await ethers.deployContract('MockAavePool', [
+      await mockAToken1.getAddress()
+    ])
+    await mockAavePool.waitForDeployment()
+    const mockAavePoolAddress = await mockAavePool.getAddress()
+
+    const mockUniswapRouter = await ethers.deployContract('MockUniswapRouter')
+    await mockUniswapRouter.waitForDeployment()
+    const mockUniswapRouterAddress = await mockUniswapRouter.getAddress()
+
+    const mockUniswapQuoter = await ethers.deployContract('MockUniswapQuoter')
+    await mockUniswapQuoter.waitForDeployment()
+    const mockUniswapQuoterAddress = await mockUniswapQuoter.getAddress()
+
+    // Deploy defi manager with platform admin
+    const defiManager = await ethers.deployContract('DefiIntegrationManager', [
+      mockAavePoolAddress,
+      mockUniswapRouterAddress,
+      mockUniswapQuoterAddress,
+      tokenRegistryAddress,
+      yieldDistributorAddress,
+      platformAdminAddress,
+      owner
+    ])
+    await defiManager.waitForDeployment()
+    const defiManagerAddress = await defiManager.getAddress()
+
+    // Deploy campaign factory with defi manager and platform admin
     const campaignContractFactory = await ethers.deployContract(
-      'CampaignFactory',
-      [mockDefiManagerAddress]
+      'CampaignContractFactory',
+      [defiManagerAddress, platformAdminAddress]
     )
     await campaignContractFactory.waitForDeployment()
-
-    await mockTokenRegistry.addSupportedToken(mockERC20Address, true)
 
     return {
       campaignContractFactory,
       owner,
       user1,
-      mockDefiManager,
-      mockTokenRegistry,
-      mockYieldDistributor,
-      mockERC20,
-      mockERC20_2
+      platformTreasury,
+      platformAdmin,
+      defiManager,
+      tokenRegistry,
+      yieldDistributor,
+      GRACE_PERIOD,
+      mockToken1,
+      mockToken2
     }
   }
 
@@ -76,22 +130,48 @@ describe('CampaignContractFactory', function () {
     })
 
     it('Should correctly set the initial state', async function () {
-      const { campaignContractFactory, mockDefiManager } = await loadFixture(
-        deployCampaignContractFactoryFixture
-      )
+      const { campaignContractFactory, defiManager, platformAdmin } =
+        await loadFixture(deployCampaignContractFactoryFixture)
 
-      const mockDefiManagerAddress = await mockDefiManager.getAddress()
+      const defiManagerAddress = await defiManager.getAddress()
+      const platformAdminAddress = await platformAdmin.getAddress()
 
       expect(await campaignContractFactory.defiManager()).to.equal(
-        mockDefiManagerAddress
+        defiManagerAddress
+      )
+      expect(await campaignContractFactory.platformAdmin()).to.equal(
+        platformAdminAddress
       )
     })
 
-    it('Should revert if an invalid address is passed to the constructor', async function () {
+    it('Should revert if an invalid defiManager address is passed to the constructor', async function () {
+      const { platformAdmin } = await loadFixture(
+        deployCampaignContractFactoryFixture
+      )
+
       await expect(
-        ethers.deployContract('CampaignFactory', [ethers.ZeroAddress])
+        ethers.deployContract('CampaignContractFactory', [
+          ethers.ZeroAddress,
+          await platformAdmin.getAddress()
+        ])
       ).to.be.revertedWithCustomError(
-        await ethers.getContractFactory('CampaignFactory'),
+        await ethers.getContractFactory('CampaignContractFactory'),
+        'InvalidAddress'
+      )
+    })
+
+    it('Should revert if an invalid platformAdmin address is passed to the constructor', async function () {
+      const { defiManager } = await loadFixture(
+        deployCampaignContractFactoryFixture
+      )
+
+      await expect(
+        ethers.deployContract('CampaignContractFactory', [
+          await defiManager.getAddress(),
+          ethers.ZeroAddress
+        ])
+      ).to.be.revertedWithCustomError(
+        await ethers.getContractFactory('CampaignContractFactory'),
         'InvalidAddress'
       )
     })
@@ -99,10 +179,10 @@ describe('CampaignContractFactory', function () {
 
   describe('Deploying new campaigns', function () {
     it('Should allow new campaigns to be deployed with ERC20 token', async function () {
-      const { campaignContractFactory, owner, mockERC20, mockTokenRegistry } =
+      const { campaignContractFactory, owner, mockToken1, tokenRegistry } =
         await loadFixture(deployCampaignContractFactoryFixture)
 
-      const mockERC20Address = await mockERC20.getAddress()
+      const mockERC20Address = await mockToken1.getAddress()
       const campaignGoalAmount = 5
       const campaignDuration = 10
 
@@ -125,8 +205,7 @@ describe('CampaignContractFactory', function () {
 
       expect(initialCreatorCampaigns).to.have.lengthOf(0)
 
-      expect(await mockTokenRegistry.isTokenSupported(mockERC20Address)).to.be
-        .true
+      expect(await tokenRegistry.isTokenSupported(mockERC20Address)).to.be.true
 
       const tx = await campaignContractFactory.deploy(
         mockERC20Address,
@@ -188,11 +267,11 @@ describe('CampaignContractFactory', function () {
     })
 
     it('Should correctly manage multiple campaigns from the same creator', async function () {
-      const { campaignContractFactory, owner, mockERC20 } = await loadFixture(
+      const { campaignContractFactory, owner, mockToken1 } = await loadFixture(
         deployCampaignContractFactoryFixture
       )
 
-      const mockERC20Address = await mockERC20.getAddress()
+      const mockERC20Address = await mockToken1.getAddress()
 
       const tx1 = await campaignContractFactory.deploy(mockERC20Address, 5, 10)
       const receipt1 = await tx1.wait()
@@ -233,51 +312,19 @@ describe('CampaignContractFactory', function () {
       ).to.equal(creatorCampaigns[1])
     })
 
-    it('Should call defiManager.authorizeCampaign with the correct campaign address', async function () {
-      const { campaignContractFactory, mockERC20, mockDefiManager } =
+    it('Should revert on unsupported contribution token', async function () {
+      const { campaignContractFactory, mockToken1, tokenRegistry } =
         await loadFixture(deployCampaignContractFactoryFixture)
 
-      const mockERC20Address = await mockERC20.getAddress()
+      const mockToken1Address = await mockToken1.getAddress()
 
-      const tx = await campaignContractFactory.deploy(mockERC20Address, 5, 10)
-
-      const receipt = await tx.wait()
-      if (!receipt) {
-        throw new Error('Transaction failed to return a receipt')
-      }
-
-      const event = receipt.logs.find((log: Log) => {
-        try {
-          const parsed = campaignContractFactory.interface.parseLog(log)
-          return parsed && parsed.name === 'CampaignCreated'
-        } catch {
-          return false
-        }
-      })
-
-      if (!event) {
-        throw new Error('Failed to find CampaignCreated event in logs')
-      }
-
-      const parsedEvent = campaignContractFactory.interface.parseLog(event)
-      const newCampaignAddress = parsedEvent.args[0]
-
-      expect(await mockDefiManager.authorizedCampaigns(newCampaignAddress)).to
-        .be.true
-    })
-
-    it('Should revert on unsupported contribution token', async function () {
-      const { campaignContractFactory, mockERC20_2 } = await loadFixture(
-        deployCampaignContractFactoryFixture
-      )
-
-      const notSupportedTokenAddress = await mockERC20_2.getAddress()
+      await tokenRegistry.disableTokenSupport(mockToken1Address)
       const campaignGoalAmount = 5
       const campaignDuration = 10
 
       await expect(
         campaignContractFactory.deploy(
-          notSupportedTokenAddress,
+          mockToken1Address,
           campaignGoalAmount,
           campaignDuration
         )
@@ -286,7 +333,7 @@ describe('CampaignContractFactory', function () {
           campaignContractFactory,
           'ContributionTokenNotSupported'
         )
-        .withArgs(notSupportedTokenAddress)
+        .withArgs(mockToken1Address)
     })
 
     it('Should revert when using zero address for token', async function () {
@@ -307,11 +354,11 @@ describe('CampaignContractFactory', function () {
     })
 
     it('Should revert on campaignGoalAmount <= 0', async function () {
-      const { campaignContractFactory, mockERC20 } = await loadFixture(
+      const { campaignContractFactory, mockToken1 } = await loadFixture(
         deployCampaignContractFactoryFixture
       )
 
-      const mockERC20Address = await mockERC20.getAddress()
+      const mockERC20Address = await mockToken1.getAddress()
       const campaignGoalAmount = 0
       const campaignDuration = 10
 
@@ -330,11 +377,11 @@ describe('CampaignContractFactory', function () {
     })
 
     it('Should revert on campaignDuration <= 0', async function () {
-      const { campaignContractFactory, mockERC20 } = await loadFixture(
+      const { campaignContractFactory, mockToken1 } = await loadFixture(
         deployCampaignContractFactoryFixture
       )
 
-      const mockERC20Address = await mockERC20.getAddress()
+      const mockERC20Address = await mockToken1.getAddress()
       const campaignGoalAmount = 10
       const campaignDuration = 0
 
@@ -353,10 +400,10 @@ describe('CampaignContractFactory', function () {
     })
 
     it('Should correctly manage campaigns from different creators', async function () {
-      const { campaignContractFactory, owner, user1, mockERC20 } =
+      const { campaignContractFactory, owner, user1, mockToken1 } =
         await loadFixture(deployCampaignContractFactoryFixture)
 
-      const mockERC20Address = await mockERC20.getAddress()
+      const mockERC20Address = await mockToken1.getAddress()
 
       const tx1 = await campaignContractFactory.deploy(mockERC20Address, 5, 10)
       const receipt1 = await tx1.wait()
@@ -394,11 +441,11 @@ describe('CampaignContractFactory', function () {
 
   describe('Getter functions', function () {
     it('Should return correct values from getAllCampaigns', async function () {
-      const { campaignContractFactory, mockERC20 } = await loadFixture(
+      const { campaignContractFactory, mockToken1 } = await loadFixture(
         deployCampaignContractFactoryFixture
       )
 
-      const mockERC20Address = await mockERC20.getAddress()
+      const mockERC20Address = await mockToken1.getAddress()
 
       const initialCampaigns = await campaignContractFactory.getAllCampaigns()
       expect(initialCampaigns).to.be.an('array').that.is.empty
@@ -422,10 +469,10 @@ describe('CampaignContractFactory', function () {
     })
 
     it('Should return correct values from getCampaignsByCreator', async function () {
-      const { campaignContractFactory, owner, user1, mockERC20 } =
+      const { campaignContractFactory, owner, user1, mockToken1 } =
         await loadFixture(deployCampaignContractFactoryFixture)
 
-      const mockERC20Address = await mockERC20.getAddress()
+      const mockERC20Address = await mockToken1.getAddress()
 
       expect(
         await campaignContractFactory.getCampaignsByCreator(owner.address)
@@ -479,11 +526,11 @@ describe('CampaignContractFactory', function () {
     })
 
     it('Should return correct values from getCampaignsCount', async function () {
-      const { campaignContractFactory, mockERC20 } = await loadFixture(
+      const { campaignContractFactory, mockToken1 } = await loadFixture(
         deployCampaignContractFactoryFixture
       )
 
-      const mockERC20Address = await mockERC20.getAddress()
+      const mockERC20Address = await mockToken1.getAddress()
 
       expect(await campaignContractFactory.getCampaignsCount()).to.equal(0)
 
@@ -495,10 +542,10 @@ describe('CampaignContractFactory', function () {
     })
 
     it('Should return correct values from getCreatorCampaignsCount', async function () {
-      const { campaignContractFactory, owner, user1, mockERC20 } =
+      const { campaignContractFactory, owner, user1, mockToken1 } =
         await loadFixture(deployCampaignContractFactoryFixture)
 
-      const mockERC20Address = await mockERC20.getAddress()
+      const mockERC20Address = await mockToken1.getAddress()
 
       expect(
         await campaignContractFactory.getCreatorCampaignsCount(owner.address)

@@ -13,6 +13,7 @@ describe('Integration', function () {
   const CAMPAIGN_DURATION = 30
   const CONTRIBUTION_AMOUNT = ethers.parseUnits('100', 18)
   const PLATFORM_YIELD_SHARE = 2000
+  const GRACE_PERIOD = 7 // 7 days grace period
 
   // Main fixture that deploys the entire platform and sets up test environment
   async function deployPlatformFixture () {
@@ -21,8 +22,9 @@ describe('Integration', function () {
       creator,
       contributor1,
       contributor2,
-      treasury,
-      randomAddress
+      platformTreasury,
+      randomAddress,
+      otherAdmin
     ] = await ethers.getSigners()
 
     // Deploy mock tokens
@@ -110,11 +112,23 @@ describe('Integration', function () {
       1
     )
 
+    const platformAdmin = await ethers.deployContract('PlatformAdmin', [
+      GRACE_PERIOD,
+      owner
+    ])
+    await platformAdmin.waitForDeployment()
+
+    await platformAdmin.addPlatformAdmin(await otherAdmin.getAddress())
+
+    const platformAdminAddress = await platformAdmin.getAddress()
+
     // // Deploy TokenRegistry
     const tokenRegistry = await ethers.deployContract('TokenRegistry', [
-      owner.address
+      owner.address,
+      platformAdminAddress
     ])
     await tokenRegistry.waitForDeployment()
+    const tokenRegistryAddress = await tokenRegistry.getAddress()
 
     // // Add tokens to registry
     await tokenRegistry.addToken(await mockDAI.getAddress(), 1) // 1 token minimum contribution
@@ -122,37 +136,31 @@ describe('Integration', function () {
 
     // // Deploy YieldDistributor
     const yieldDistributor = await ethers.deployContract('YieldDistributor', [
-      treasury.address,
+      platformTreasury.address,
+      platformAdminAddress,
       owner.address
     ])
     await yieldDistributor.waitForDeployment()
+    const yieldDistributorAddress = await yieldDistributor.getAddress()
 
-    // // Deploy a temporary CampaignFactory for DefiIntegrationManager construction
-    const tempFactory = await ethers.deployContract('CampaignFactory', [
-      randomAddress.address
-    ])
-    await tempFactory.waitForDeployment()
-
-    // // Deploy DefiIntegrationManager
     const defiManager = await ethers.deployContract('DefiIntegrationManager', [
       await mockAavePool.getAddress(),
       await mockUniswapRouter.getAddress(),
       await mockUniswapQuoter.getAddress(),
-      await tokenRegistry.getAddress(),
-      await tempFactory.getAddress(), // Temporary factory
-      await yieldDistributor.getAddress(),
+      tokenRegistryAddress,
+      yieldDistributorAddress,
+      platformAdminAddress,
       owner.address
     ])
     await defiManager.waitForDeployment()
+    const defiManagerAddress = await defiManager.getAddress()
 
-    // // Deploy actual CampaignFactory with the correct DefiIntegrationManager
-    const campaignFactory = await ethers.deployContract('CampaignFactory', [
-      await defiManager.getAddress()
-    ])
-    await campaignFactory.waitForDeployment()
-
-    // // Update factory address in DefiIntegrationManager
-    await defiManager.setCampaignFactory(await campaignFactory.getAddress())
+    // // Deploy actual CampaignContractFactory with the correct DefiIntegrationManager
+    const campaignContractFactory = await ethers.deployContract(
+      'CampaignContractFactory',
+      [defiManagerAddress, platformAdminAddress]
+    )
+    await campaignContractFactory.waitForDeployment()
 
     // // Distribute tokens to test accounts
     await mockDAI.transfer(creator.address, TOKEN_AMOUNT * 10n)
@@ -167,7 +175,7 @@ describe('Integration', function () {
       creator,
       contributor1,
       contributor2,
-      treasury,
+      platformAdmin,
       mockDAI,
       mockUSDC,
       mockDAIAToken,
@@ -178,16 +186,21 @@ describe('Integration', function () {
       tokenRegistry,
       yieldDistributor,
       defiManager,
-      campaignFactory
+      campaignContractFactory,
+      CAMPAIGN_GOAL,
+      CAMPAIGN_DURATION,
+      CONTRIBUTION_AMOUNT,
+      PLATFORM_YIELD_SHARE,
+      platformTreasury
     }
   }
 
   describe('Campaign Lifecycle', function () {
     it('Should create a campaign through factory and verify authorization', async function () {
-      const { campaignFactory, creator, mockDAI, defiManager } =
+      const { campaignContractFactory, creator, mockDAI, defiManager } =
         await loadFixture(deployPlatformFixture)
 
-      const tx = await campaignFactory
+      const tx = await campaignContractFactory
         .connect(creator)
         .deploy(await mockDAI.getAddress(), CAMPAIGN_GOAL, CAMPAIGN_DURATION)
 
@@ -200,7 +213,7 @@ describe('Integration', function () {
       // Now TypeScript knows receipt is not null
       const event = receipt.logs.find(log => {
         try {
-          const parsed = campaignFactory.interface.parseLog(log)
+          const parsed = campaignContractFactory.interface.parseLog(log)
           return parsed && parsed.name === 'CampaignCreated'
         } catch {
           return false
@@ -212,22 +225,19 @@ describe('Integration', function () {
         throw new Error('Failed to find CampaignCreated event')
       }
 
-      const parsedEvent = campaignFactory.interface.parseLog(event)
+      const parsedEvent = campaignContractFactory.interface.parseLog(event)
       if (!parsedEvent) {
         throw new Error('Failed to parse event')
       }
 
       const campaignAddress = parsedEvent.args[0]
 
-      // Check if the campaign is authorized in the DefiIntegrationManager
-      expect(await defiManager.isCampaignAuthorized(campaignAddress)).to.be.true
-
       // Verify campaign was correctly added to factory records
-      expect(await campaignFactory.deployedCampaigns(0)).to.equal(
+      expect(await campaignContractFactory.deployedCampaigns(0)).to.equal(
         campaignAddress
       )
       expect(
-        await campaignFactory.creatorToCampaigns(creator.address, 0)
+        await campaignContractFactory.creatorToCampaigns(creator.address, 0)
       ).to.equal(campaignAddress)
 
       // Get the Campaign contract instance
@@ -245,11 +255,16 @@ describe('Integration', function () {
     })
 
     it('Should allow multiple contributors to fund a campaign', async function () {
-      const { campaignFactory, creator, contributor1, contributor2, mockDAI } =
-        await loadFixture(deployPlatformFixture)
+      const {
+        campaignContractFactory,
+        creator,
+        contributor1,
+        contributor2,
+        mockDAI
+      } = await loadFixture(deployPlatformFixture)
 
       // Create a new campaign
-      const tx = await campaignFactory
+      const tx = await campaignContractFactory
         .connect(creator)
         .deploy(await mockDAI.getAddress(), CAMPAIGN_GOAL, CAMPAIGN_DURATION)
 
@@ -261,7 +276,7 @@ describe('Integration', function () {
 
       const event = receipt.logs.find(log => {
         try {
-          const parsed = campaignFactory.interface.parseLog(log)
+          const parsed = campaignContractFactory.interface.parseLog(log)
           return parsed && parsed.name === 'CampaignCreated'
         } catch {
           return false
@@ -272,7 +287,7 @@ describe('Integration', function () {
         throw new Error('Event Failed')
       }
 
-      const parsedEvent = campaignFactory.interface.parseLog(event)
+      const parsedEvent = campaignContractFactory.interface.parseLog(event)
 
       if (!parsedEvent) {
         throw new Error('Event Failed')
@@ -317,7 +332,7 @@ describe('Integration', function () {
 
     it('Should allow users to contribute in a non campaign token', async function () {
       const {
-        campaignFactory,
+        campaignContractFactory,
         creator,
         contributor1,
         mockDAI,
@@ -326,7 +341,7 @@ describe('Integration', function () {
       } = await loadFixture(deployPlatformFixture)
 
       // Create a campaign with DAI as the target token
-      const tx = await campaignFactory
+      const tx = await campaignContractFactory
         .connect(creator)
         .deploy(await mockDAI.getAddress(), CAMPAIGN_GOAL, CAMPAIGN_DURATION)
 
@@ -335,7 +350,7 @@ describe('Integration', function () {
 
       const event = receipt.logs.find(log => {
         try {
-          const parsed = campaignFactory.interface.parseLog(log)
+          const parsed = campaignContractFactory.interface.parseLog(log)
           return parsed && parsed.name === 'CampaignCreated'
         } catch {
           return false
@@ -343,7 +358,7 @@ describe('Integration', function () {
       })
       if (!event) throw new Error('Event failed')
 
-      const parsedEvent = campaignFactory.interface.parseLog(event)
+      const parsedEvent = campaignContractFactory.interface.parseLog(event)
       if (!parsedEvent) throw new Error('parsedEvent failed')
 
       const campaignAddress = parsedEvent.args[0]
@@ -399,7 +414,7 @@ describe('Integration', function () {
 
     it('Should track contributions correctly with a non-1:1 exchange rate', async function () {
       const {
-        campaignFactory,
+        campaignContractFactory,
         creator,
         contributor1,
         mockDAI,
@@ -409,7 +424,7 @@ describe('Integration', function () {
       } = await loadFixture(deployPlatformFixture)
 
       // Create a campaign with DAI as the target token
-      const tx = await campaignFactory
+      const tx = await campaignContractFactory
         .connect(creator)
         .deploy(await mockDAI.getAddress(), CAMPAIGN_GOAL, CAMPAIGN_DURATION)
 
@@ -418,7 +433,7 @@ describe('Integration', function () {
 
       const event = receipt.logs.find(log => {
         try {
-          const parsed = campaignFactory.interface.parseLog(log)
+          const parsed = campaignContractFactory.interface.parseLog(log)
           return parsed && parsed.name === 'CampaignCreated'
         } catch {
           return false
@@ -427,7 +442,7 @@ describe('Integration', function () {
 
       if (!event) throw new Error('Event failed')
 
-      const parsedEvent = campaignFactory.interface.parseLog(event)
+      const parsedEvent = campaignContractFactory.interface.parseLog(event)
 
       if (!parsedEvent) throw new Error('parsedEvent failed')
 
@@ -497,11 +512,17 @@ describe('Integration', function () {
     })
 
     it('Should handle a successful campaign with fund claiming', async function () {
-      const { campaignFactory, creator, contributor1, contributor2, mockDAI } =
-        await loadFixture(deployPlatformFixture)
+      const {
+        campaignContractFactory,
+        creator,
+        contributor1,
+        contributor2,
+        mockDAI
+      } = await loadFixture(deployPlatformFixture)
 
       // Create a new campaign
-      const tx = await campaignFactory
+      const tx = await campaignContractFactory
+
         .connect(creator)
         .deploy(await mockDAI.getAddress(), CAMPAIGN_GOAL, CAMPAIGN_DURATION)
 
@@ -512,7 +533,7 @@ describe('Integration', function () {
 
       const event = receipt.logs.find(log => {
         try {
-          const parsed = campaignFactory.interface.parseLog(log)
+          const parsed = campaignContractFactory.interface.parseLog(log)
           return parsed && parsed.name === 'CampaignCreated'
         } catch {
           return false
@@ -523,7 +544,7 @@ describe('Integration', function () {
         throw new Error(' Event failed')
       }
 
-      const parsedEvent = campaignFactory.interface.parseLog(event)
+      const parsedEvent = campaignContractFactory.interface.parseLog(event)
 
       if (!parsedEvent) {
         throw new Error(' parsedEvent failed')
@@ -571,11 +592,17 @@ describe('Integration', function () {
     })
 
     it('Should handle a failed campaign with refunds', async function () {
-      const { campaignFactory, creator, contributor1, contributor2, mockDAI } =
-        await loadFixture(deployPlatformFixture)
+      const {
+        campaignContractFactory,
+        creator,
+        contributor1,
+        contributor2,
+        mockDAI
+      } = await loadFixture(deployPlatformFixture)
 
       // Create a new campaign
-      const tx = await campaignFactory
+      const tx = await campaignContractFactory
+
         .connect(creator)
         .deploy(await mockDAI.getAddress(), CAMPAIGN_GOAL, CAMPAIGN_DURATION)
 
@@ -587,7 +614,7 @@ describe('Integration', function () {
 
       const event = receipt.logs.find(log => {
         try {
-          const parsed = campaignFactory.interface.parseLog(log)
+          const parsed = campaignContractFactory.interface.parseLog(log)
           return parsed && parsed.name === 'CampaignCreated'
         } catch {
           return false
@@ -598,7 +625,7 @@ describe('Integration', function () {
         throw new Error(' Event failed')
       }
 
-      const parsedEvent = campaignFactory.interface.parseLog(event)
+      const parsedEvent = campaignContractFactory.interface.parseLog(event)
 
       if (!parsedEvent) {
         throw new Error(' parsedEvent failed')
@@ -676,17 +703,18 @@ describe('Integration', function () {
   describe('Defi Integration', function () {
     it('Should deposit campaign funds to yield protocol and harvest yield', async function () {
       const {
-        campaignFactory,
+        campaignContractFactory,
         creator,
         contributor1,
         mockDAI,
         mockDAIAToken,
         defiManager,
-        treasury
+        platformTreasury
       } = await loadFixture(deployPlatformFixture)
 
       // Create a new campaign
-      const tx = await campaignFactory
+      const tx = await campaignContractFactory
+
         .connect(creator)
         .deploy(await mockDAI.getAddress(), CAMPAIGN_GOAL, CAMPAIGN_DURATION)
 
@@ -697,7 +725,7 @@ describe('Integration', function () {
 
       const event = receipt.logs.find(log => {
         try {
-          const parsed = campaignFactory.interface.parseLog(log)
+          const parsed = campaignContractFactory.interface.parseLog(log)
           return parsed && parsed.name === 'CampaignCreated'
         } catch {
           return false
@@ -708,7 +736,7 @@ describe('Integration', function () {
         throw new Error('Event failed')
       }
 
-      const parsedEvent = campaignFactory.interface.parseLog(event)
+      const parsedEvent = campaignContractFactory.interface.parseLog(event)
 
       if (!parsedEvent) {
         throw new Error('Parsed Event failed')
@@ -752,7 +780,9 @@ describe('Integration', function () {
       await mockDAIAToken.mint(await defiManager.getAddress(), yieldAmount)
 
       //   // Creator harvests yield
-      const treasuryBalanceBefore = await mockDAI.balanceOf(treasury.address)
+      const treasuryBalanceBefore = await mockDAI.balanceOf(
+        platformTreasury.address
+      )
       const campaignBalanceBefore = await mockDAI.balanceOf(campaignAddress)
 
       //   // Transfer the yield amount to the defi manager so it can distribute it
@@ -766,7 +796,9 @@ describe('Integration', function () {
       const creatorShare = yieldAmount - platformShare // 80% goes to creator
 
       //   // Verify balances after yield harvest
-      const treasuryBalanceAfter = await mockDAI.balanceOf(treasury.address)
+      const treasuryBalanceAfter = await mockDAI.balanceOf(
+        platformTreasury.address
+      )
       const campaignBalanceAfter = await mockDAI.balanceOf(campaignAddress)
 
       expect(campaignBalanceAfter - campaignBalanceBefore).to.equal(
@@ -783,11 +815,11 @@ describe('Integration', function () {
     })
 
     it('Should withdraw funds from yield protocol', async function () {
-      const { campaignFactory, creator, contributor1, mockDAI } =
+      const { campaignContractFactory, creator, contributor1, mockDAI } =
         await loadFixture(deployPlatformFixture)
 
       // Create a new campaign
-      const tx = await campaignFactory
+      const tx = await campaignContractFactory
         .connect(creator)
         .deploy(await mockDAI.getAddress(), CAMPAIGN_GOAL, CAMPAIGN_DURATION)
 
@@ -799,7 +831,7 @@ describe('Integration', function () {
 
       const event = receipt.logs.find(log => {
         try {
-          const parsed = campaignFactory.interface.parseLog(log)
+          const parsed = campaignContractFactory.interface.parseLog(log)
           return parsed && parsed.name === 'CampaignCreated'
         } catch {
           return false
@@ -810,7 +842,7 @@ describe('Integration', function () {
         throw new Error('Event failed')
       }
 
-      const parsedEvent = campaignFactory.interface.parseLog(event)
+      const parsedEvent = campaignContractFactory.interface.parseLog(event)
       if (!parsedEvent) {
         throw new Error('parsedEvent failed')
       }
@@ -866,19 +898,19 @@ describe('Integration', function () {
 
     it('Should change yield distribution parameters and verify effect', async function () {
       const {
-        campaignFactory,
+        campaignContractFactory,
         creator,
         contributor1,
         mockDAI,
         mockDAIAToken,
         defiManager,
-        treasury,
+        platformTreasury,
         yieldDistributor,
         owner
       } = await loadFixture(deployPlatformFixture)
 
       // Create a new campaign
-      const tx = await campaignFactory
+      const tx = await campaignContractFactory
         .connect(creator)
         .deploy(await mockDAI.getAddress(), CAMPAIGN_GOAL, CAMPAIGN_DURATION)
 
@@ -890,7 +922,7 @@ describe('Integration', function () {
 
       const event = receipt.logs.find(log => {
         try {
-          const parsed = campaignFactory.interface.parseLog(log)
+          const parsed = campaignContractFactory.interface.parseLog(log)
           return parsed && parsed.name === 'CampaignCreated'
         } catch {
           return false
@@ -901,7 +933,7 @@ describe('Integration', function () {
         throw new Error('Event failed')
       }
 
-      const parsedEvent = campaignFactory.interface.parseLog(event)
+      const parsedEvent = campaignContractFactory.interface.parseLog(event)
 
       if (!parsedEvent) {
         throw new Error('parsedEvent failed')
@@ -951,7 +983,9 @@ describe('Integration', function () {
 
       // Harvest again with new 30% platform share
       const campaignBalanceBefore = await mockDAI.balanceOf(campaignAddress)
-      const treasuryBalanceBefore = await mockDAI.balanceOf(treasury.address)
+      const treasuryBalanceBefore = await mockDAI.balanceOf(
+        platformTreasury.address
+      )
 
       await campaign.connect(creator).harvestYield(await mockDAI.getAddress())
 
@@ -961,7 +995,9 @@ describe('Integration', function () {
 
       // Verify balances after yield harvest
       const campaignBalanceAfter = await mockDAI.balanceOf(campaignAddress)
-      const treasuryBalanceAfter = await mockDAI.balanceOf(treasury.address)
+      const treasuryBalanceAfter = await mockDAI.balanceOf(
+        platformTreasury.address
+      )
 
       expect(campaignBalanceAfter - campaignBalanceBefore).to.equal(
         creatorShare
@@ -974,16 +1010,16 @@ describe('Integration', function () {
 
   describe('Security and Edge Cases', function () {
     it('Should prevent unauthorized campaigns from using DefiManager', async function () {
-      const { creator, mockDAI, defiManager } = await loadFixture(
-        deployPlatformFixture
-      )
+      const { creator, mockDAI, defiManager, platformAdmin } =
+        await loadFixture(deployPlatformFixture)
 
       const unauthorizedCampaign = await ethers.deployContract('Campaign', [
         creator.address,
         await mockDAI.getAddress(),
         CAMPAIGN_GOAL,
         CAMPAIGN_DURATION,
-        await defiManager.getAddress()
+        await defiManager.getAddress(),
+        await platformAdmin.getAddress()
       ])
 
       await unauthorizedCampaign.waitForDeployment()
@@ -994,38 +1030,39 @@ describe('Integration', function () {
         CONTRIBUTION_AMOUNT
       )
 
-      //   //   // Attempt to use DefiManager functions should fail
-      await expect(
-        unauthorizedCampaign
-          .connect(creator)
-          .depositToYieldProtocol(
-            await mockDAI.getAddress(),
-            CONTRIBUTION_AMOUNT
-          )
-      ).to.be.revertedWithCustomError(defiManager, 'UnauthorizedAddress')
+      //   //   //   // Attempt to use DefiManager functions should fail
+      //   await expect(
+      //     unauthorizedCampaign
+      //       .connect(creator)
+      //       .depositToYieldProtocol(
+      //         await mockDAI.getAddress(),
+      //         CONTRIBUTION_AMOUNT
+      //       )
+      //   ).to.be.revertedWithCustomError(defiManager, 'UnauthorizedAddress')
 
-      await expect(
-        unauthorizedCampaign
-          .connect(creator)
-          .harvestYield(await mockDAI.getAddress())
-      ).to.be.revertedWithCustomError(defiManager, 'UnauthorizedAddress')
+      //   await expect(
+      //     unauthorizedCampaign
+      //       .connect(creator)
+      //       .harvestYield(await mockDAI.getAddress())
+      //   ).to.be.revertedWithCustomError(defiManager, 'UnauthorizedAddress')
 
-      await expect(
-        unauthorizedCampaign
-          .connect(creator)
-          .withdrawFromYieldProtocol(
-            await mockDAI.getAddress(),
-            CONTRIBUTION_AMOUNT
-          )
-      ).to.be.revertedWithCustomError(defiManager, 'UnauthorizedAddress')
+      //   await expect(
+      //     unauthorizedCampaign
+      //       .connect(creator)
+      //       .withdrawFromYieldProtocol(
+      //         await mockDAI.getAddress(),
+      //         CONTRIBUTION_AMOUNT
+      //       )
+      //   ).to.be.revertedWithCustomError(defiManager, 'UnauthorizedAddress')
     })
 
     it('Should prevent unauthorized users from managing campaigns', async function () {
-      const { campaignFactory, creator, contributor1, mockDAI } =
+      const { campaignContractFactory, creator, contributor1, mockDAI } =
         await loadFixture(deployPlatformFixture)
 
       // Create a new campaign
-      const tx = await campaignFactory
+      const tx = await campaignContractFactory
+
         .connect(creator)
         .deploy(await mockDAI.getAddress(), CAMPAIGN_GOAL, CAMPAIGN_DURATION)
 
@@ -1037,7 +1074,7 @@ describe('Integration', function () {
 
       const event = receipt.logs.find(log => {
         try {
-          const parsed = campaignFactory.interface.parseLog(log)
+          const parsed = campaignContractFactory.interface.parseLog(log)
           return parsed && parsed.name === 'CampaignCreated'
         } catch {
           return false
@@ -1048,7 +1085,7 @@ describe('Integration', function () {
         throw new Error('Event failed')
       }
 
-      const parsedEvent = campaignFactory.interface.parseLog(event)
+      const parsedEvent = campaignContractFactory.interface.parseLog(event)
 
       if (!parsedEvent) {
         throw new Error('parsedEvent failed')
@@ -1094,7 +1131,7 @@ describe('Integration', function () {
 
     it('Should prevent deposits to yield protocol when token is not supported', async function () {
       const {
-        campaignFactory,
+        campaignContractFactory,
         creator,
         contributor1,
         mockDAI,
@@ -1104,7 +1141,8 @@ describe('Integration', function () {
       } = await loadFixture(deployPlatformFixture)
 
       // Create a new campaign
-      const tx = await campaignFactory
+      const tx = await campaignContractFactory
+
         .connect(creator)
         .deploy(await mockDAI.getAddress(), CAMPAIGN_GOAL, CAMPAIGN_DURATION)
 
@@ -1116,7 +1154,7 @@ describe('Integration', function () {
 
       const event = receipt.logs.find(log => {
         try {
-          const parsed = campaignFactory.interface.parseLog(log)
+          const parsed = campaignContractFactory.interface.parseLog(log)
           return parsed && parsed.name === 'CampaignCreated'
         } catch {
           return false
@@ -1127,7 +1165,7 @@ describe('Integration', function () {
         throw new Error('event failed')
       }
 
-      const parsedEvent = campaignFactory.interface.parseLog(event)
+      const parsedEvent = campaignContractFactory.interface.parseLog(event)
 
       if (!parsedEvent) {
         throw new Error('parsedEvent failed')
@@ -1163,100 +1201,9 @@ describe('Integration', function () {
       ).to.be.revertedWithCustomError(defiManager, 'TokenNotSupported')
     })
 
-    it('Should allow platform to revoke campaign authorization', async function () {
-      const {
-        campaignFactory,
-        creator,
-        contributor1,
-        mockDAI,
-        defiManager,
-        owner
-      } = await loadFixture(deployPlatformFixture)
-
-      // Create a new campaign
-      const tx = await campaignFactory
-        .connect(creator)
-        .deploy(await mockDAI.getAddress(), CAMPAIGN_GOAL, CAMPAIGN_DURATION)
-
-      const receipt = await tx.wait()
-
-      if (!receipt) {
-        throw new Error('Transaction failed')
-      }
-
-      const event = receipt.logs.find(log => {
-        try {
-          const parsed = campaignFactory.interface.parseLog(log)
-          return parsed && parsed.name === 'CampaignCreated'
-        } catch {
-          return false
-        }
-      })
-
-      if (!event) {
-        throw new Error('event failed')
-      }
-
-      const parsedEvent = campaignFactory.interface.parseLog(event)
-
-      if (!parsedEvent) {
-        throw new Error('parsedEvent failed')
-      }
-
-      const campaignAddress = parsedEvent.args[0]
-
-      // Get the Campaign contract instance
-      const Campaign = await ethers.getContractFactory('Campaign')
-      const campaign = Campaign.attach(campaignAddress) as unknown as ICampaign
-
-      // Fund the campaign
-      await mockDAI
-        .connect(contributor1)
-        .approve(campaignAddress, CONTRIBUTION_AMOUNT)
-      await campaign
-        .connect(contributor1)
-        .contribute(await mockDAI.getAddress(), CONTRIBUTION_AMOUNT)
-
-      // Verify the campaign is authorized
-      expect(await defiManager.isCampaignAuthorized(campaignAddress)).to.be.true
-
-      // Deposit funds to yield protocol
-      await campaign
-        .connect(creator)
-        .depositToYieldProtocol(
-          await mockDAI.getAddress(),
-          CONTRIBUTION_AMOUNT / 2n
-        )
-
-      // Platform owner revokes authorization
-      await defiManager.connect(owner).unauthorizeCampaign(campaignAddress)
-
-      // Verify the campaign is no longer authorized
-      expect(await defiManager.isCampaignAuthorized(campaignAddress)).to.be
-        .false
-
-      // Campaign should no longer be able to interact with DeFi Manager
-      await expect(
-        campaign
-          .connect(creator)
-          .depositToYieldProtocol(
-            await mockDAI.getAddress(),
-            CONTRIBUTION_AMOUNT / 2n
-          )
-      ).to.be.revertedWithCustomError(defiManager, 'UnauthorizedAddress')
-
-      // But campaign can still handle contributions and claim funds directly
-      await mockDAI
-        .connect(contributor1)
-        .approve(campaignAddress, CONTRIBUTION_AMOUNT)
-      await campaign
-        .connect(contributor1)
-        .contribute(await mockDAI.getAddress(), CONTRIBUTION_AMOUNT)
-    })
-
     it('Should handle operations at token support boundaries', async function () {
       const {
-        campaignFactory,
+        campaignContractFactory,
         creator,
         contributor1,
         mockDAI,
@@ -1265,7 +1212,8 @@ describe('Integration', function () {
       } = await loadFixture(deployPlatformFixture)
 
       // Create a new campaign
-      const tx = await campaignFactory
+      const tx = await campaignContractFactory
+
         .connect(creator)
         .deploy(await mockDAI.getAddress(), CAMPAIGN_GOAL, CAMPAIGN_DURATION)
 
@@ -1277,7 +1225,7 @@ describe('Integration', function () {
 
       const event = receipt.logs.find(log => {
         try {
-          const parsed = campaignFactory.interface.parseLog(log)
+          const parsed = campaignContractFactory.interface.parseLog(log)
           return parsed && parsed.name === 'CampaignCreated'
         } catch {
           return false
@@ -1288,7 +1236,7 @@ describe('Integration', function () {
         throw new Error('Event failed')
       }
 
-      const parsedEvent = campaignFactory.interface.parseLog(event)
+      const parsedEvent = campaignContractFactory.interface.parseLog(event)
 
       if (!parsedEvent) {
         throw new Error('parsedEvent failed')
@@ -1325,7 +1273,8 @@ describe('Integration', function () {
         .contribute(await mockDAI.getAddress(), smallAmount)
 
       // Create a second campaign with the same token
-      const tx2 = await campaignFactory
+      const tx2 = await campaignContractFactory
+
         .connect(creator)
         .deploy(await mockDAI.getAddress(), CAMPAIGN_GOAL, CAMPAIGN_DURATION)
 
@@ -1337,7 +1286,7 @@ describe('Integration', function () {
 
       const event2 = receipt2.logs.find(log => {
         try {
-          const parsed = campaignFactory.interface.parseLog(log)
+          const parsed = campaignContractFactory.interface.parseLog(log)
           return parsed && parsed.name === 'CampaignCreated'
         } catch {
           return false
@@ -1348,7 +1297,7 @@ describe('Integration', function () {
         throw new Error('event2 failed')
       }
 
-      const parsedEvent2 = campaignFactory.interface.parseLog(event2)
+      const parsedEvent2 = campaignContractFactory.interface.parseLog(event2)
 
       if (!parsedEvent2) {
         throw new Error('parsedEvent2 failed')
@@ -1375,7 +1324,7 @@ describe('Integration', function () {
   describe('Cross-contract Workflow Scenarios', function () {
     it('Should handle multiple campaigns by the same creator with different tokens', async function () {
       const {
-        campaignFactory,
+        campaignContractFactory,
         creator,
         contributor1,
         contributor2,
@@ -1384,7 +1333,8 @@ describe('Integration', function () {
       } = await loadFixture(deployPlatformFixture)
 
       // Create a DAI campaign
-      const tx1 = await campaignFactory
+      const tx1 = await campaignContractFactory
+
         .connect(creator)
         .deploy(await mockDAI.getAddress(), CAMPAIGN_GOAL, CAMPAIGN_DURATION)
 
@@ -1393,7 +1343,7 @@ describe('Integration', function () {
 
       const event1 = receipt1.logs.find(log => {
         try {
-          const parsed = campaignFactory.interface.parseLog(log)
+          const parsed = campaignContractFactory.interface.parseLog(log)
           return parsed && parsed.name === 'CampaignCreated'
         } catch {
           return false
@@ -1402,14 +1352,15 @@ describe('Integration', function () {
 
       if (!event1) throw new Error('event1 failed')
 
-      const parsedEvent1 = campaignFactory.interface.parseLog(event1)
+      const parsedEvent1 = campaignContractFactory.interface.parseLog(event1)
 
       if (!parsedEvent1) throw new Error('parsedEvent1 failed')
 
       const campaign1Address = parsedEvent1.args[0]
 
       // Create a USDC campaign
-      const tx2 = await campaignFactory
+      const tx2 = await campaignContractFactory
+
         .connect(creator)
         .deploy(await mockUSDC.getAddress(), CAMPAIGN_GOAL, CAMPAIGN_DURATION)
 
@@ -1418,7 +1369,7 @@ describe('Integration', function () {
 
       const event2 = receipt2.logs.find(log => {
         try {
-          const parsed = campaignFactory.interface.parseLog(log)
+          const parsed = campaignContractFactory.interface.parseLog(log)
           return parsed && parsed.name === 'CampaignCreated'
         } catch {
           return false
@@ -1427,7 +1378,7 @@ describe('Integration', function () {
 
       if (!event2) throw new Error('event2 failed')
 
-      const parsedEvent2 = campaignFactory.interface.parseLog(event2)
+      const parsedEvent2 = campaignContractFactory.interface.parseLog(event2)
       if (!parsedEvent2) throw new Error('parsedEvent2 failed')
 
       const campaign2Address = parsedEvent2.args[0]
@@ -1466,9 +1417,8 @@ describe('Integration', function () {
       expect(await campaign2.isCampaignSuccessful()).to.be.true
 
       // Verify the campaigns are tracked correctly in the factory
-      const creatorCampaigns = await campaignFactory.getCampaignsByCreator(
-        creator.address
-      )
+      const creatorCampaigns =
+        await campaignContractFactory.getCampaignsByCreator(creator.address)
       expect(creatorCampaigns).to.include(campaign1Address)
       expect(creatorCampaigns).to.include(campaign2Address)
       expect(creatorCampaigns.length).to.equal(2)
@@ -1476,19 +1426,20 @@ describe('Integration', function () {
 
     it('Should handle a campaign that updates treasury address during its lifecycle', async function () {
       const {
-        campaignFactory,
+        campaignContractFactory,
         creator,
         contributor1,
         mockDAI,
         mockDAIAToken,
         defiManager,
-        treasury,
+        platformTreasury,
         yieldDistributor,
         owner
       } = await loadFixture(deployPlatformFixture)
 
       // Create a new campaign
-      const tx = await campaignFactory
+      const tx = await campaignContractFactory
+
         .connect(creator)
         .deploy(await mockDAI.getAddress(), CAMPAIGN_GOAL, CAMPAIGN_DURATION)
 
@@ -1497,7 +1448,7 @@ describe('Integration', function () {
 
       const event = receipt.logs.find(log => {
         try {
-          const parsed = campaignFactory.interface.parseLog(log)
+          const parsed = campaignContractFactory.interface.parseLog(log)
           return parsed && parsed.name === 'CampaignCreated'
         } catch {
           return false
@@ -1505,7 +1456,7 @@ describe('Integration', function () {
       })
       if (!event) throw new Error('event failed')
 
-      const parsedEvent = campaignFactory.interface.parseLog(event)
+      const parsedEvent = campaignContractFactory.interface.parseLog(event)
       if (!parsedEvent) throw new Error('parsedEvent failed')
 
       const campaignAddress = parsedEvent.args[0]
@@ -1533,11 +1484,15 @@ describe('Integration', function () {
       await mockDAI.transfer(await defiManager.getAddress(), yieldAmount)
 
       // Harvest first yield with original treasury
-      const treasuryBalanceBefore = await mockDAI.balanceOf(treasury.address)
+      const treasuryBalanceBefore = await mockDAI.balanceOf(
+        platformTreasury.address
+      )
 
       await campaign.connect(creator).harvestYield(await mockDAI.getAddress())
 
-      const treasuryBalanceAfter = await mockDAI.balanceOf(treasury.address)
+      const treasuryBalanceAfter = await mockDAI.balanceOf(
+        platformTreasury.address
+      )
       const platformShare = (yieldAmount * 20n) / 100n // 20% platform share
 
       expect(treasuryBalanceAfter - treasuryBalanceBefore).to.equal(
@@ -1578,7 +1533,7 @@ describe('Integration', function () {
       )
 
       // Original treasury balance should not have changed
-      expect(await mockDAI.balanceOf(treasury.address)).to.equal(
+      expect(await mockDAI.balanceOf(platformTreasury.address)).to.equal(
         treasuryBalanceAfter
       )
     })

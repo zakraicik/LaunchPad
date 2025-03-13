@@ -3,9 +3,13 @@ pragma solidity ^0.8.28;
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
+import "./abstracts/PlatformAdminAccessControl.sol";
 
-contract TokenRegistry is Ownable {
-    constructor(address _owner) Ownable(_owner) {}
+contract TokenRegistry is Ownable, PlatformAdminAccessControl {
+    constructor(
+        address _owner,
+        address _platformAdmin
+    ) Ownable(_owner) PlatformAdminAccessControl(_platformAdmin) {}
 
     struct TokenConfig {
         bool isSupported;
@@ -17,6 +21,7 @@ contract TokenRegistry is Ownable {
     mapping(address => bool) private tokenExists;
     address[] public supportedTokens;
 
+    error InvalidAddress();
     error InvalidToken(address _token);
     error TokenAlreadyInRegistry(address _token);
     error TokenNotInRegistry(address _token);
@@ -98,7 +103,7 @@ contract TokenRegistry is Ownable {
     function addToken(
         address _token,
         uint256 _minimumContributionInWholeTokens
-    ) external onlyOwner {
+    ) external onlyPlatformAdmin {
         if (_tokenExists(_token)) {
             revert TokenAlreadyInRegistry(_token);
         }
@@ -121,7 +126,7 @@ contract TokenRegistry is Ownable {
         emit TokenAdded(_token, minimumContributionInSmallestUnit, decimals);
     }
 
-    function removeToken(address _token) external onlyOwner {
+    function removeToken(address _token) external onlyPlatformAdmin {
         if (!_tokenExists(_token)) {
             revert TokenNotInRegistry(_token);
         }
@@ -144,7 +149,7 @@ contract TokenRegistry is Ownable {
         emit TokenRemovedFromRegistry(_token);
     }
 
-    function disableTokenSupport(address _token) external onlyOwner {
+    function disableTokenSupport(address _token) external onlyPlatformAdmin {
         if (!_tokenExists(_token)) {
             revert TokenNotInRegistry(_token);
         }
@@ -170,7 +175,7 @@ contract TokenRegistry is Ownable {
         emit TokenSupportDisabled(_token);
     }
 
-    function enableTokenSupport(address _token) external onlyOwner {
+    function enableTokenSupport(address _token) external onlyPlatformAdmin {
         if (!_tokenExists(_token)) {
             revert TokenNotInRegistry(_token);
         }
@@ -188,7 +193,7 @@ contract TokenRegistry is Ownable {
     function updateTokenMinimumContribution(
         address _token,
         uint256 _minimumContributionInWholeTokens
-    ) external onlyOwner {
+    ) external onlyPlatformAdmin {
         if (!_tokenExists(_token)) {
             revert TokenNotInRegistry(_token);
         }

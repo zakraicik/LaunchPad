@@ -6,7 +6,7 @@ const { loadFixture } = require('@nomicfoundation/hardhat-network-helpers')
 
 describe('YieldDistributor', function () {
   async function deployYieldDistributorFixture () {
-    const [owner, user1, user2] = await ethers.getSigners()
+    const [owner, user1, user2, otherAdmin] = await ethers.getSigners()
     const randomWallet = ethers.Wallet.createRandom()
     const randomWallet2 = ethers.Wallet.createRandom()
 
@@ -22,8 +22,20 @@ describe('YieldDistributor', function () {
       ethers.parseUnits('100')
     ])
 
+    const GRACE_PERIOD = 7 // 7 days
+    const platformAdmin = await ethers.deployContract('PlatformAdmin', [
+      GRACE_PERIOD,
+      owner
+    ])
+    await platformAdmin.waitForDeployment()
+
+    await platformAdmin.addPlatformAdmin(await otherAdmin.getAddress())
+
+    const platformAdminAddress = await platformAdmin.getAddress()
+
     const yieldDistributor = await ethers.deployContract('YieldDistributor', [
       randomWallet.address,
+      platformAdminAddress,
       owner.address
     ])
 
@@ -40,19 +52,19 @@ describe('YieldDistributor', function () {
       user1,
       user2,
       randomWallet,
-      randomWallet2
+      randomWallet2,
+      platformAdmin,
+      otherAdmin
     }
   }
 
   describe('Deployment', function () {
     it('Should deploy all contracts successfully.', async function () {
-      const { yieldDistributor, mockToken1, mockToken2 } = await loadFixture(
+      const { yieldDistributor } = await loadFixture(
         deployYieldDistributorFixture
       )
 
       expect(await yieldDistributor.getAddress()).to.be.properAddress
-      expect(await mockToken1.getAddress()).to.be.properAddress
-      expect(await mockToken2.getAddress()).to.be.properAddress
     })
 
     it('Should correctly set the initial state.', async function () {
@@ -67,14 +79,22 @@ describe('YieldDistributor', function () {
     })
 
     it('Should revert if zero address platform treasury passed to constructor', async function () {
-      const [owner] = await ethers.getSigners()
+      const { owner, platformAdmin } = await loadFixture(
+        deployYieldDistributorFixture
+      )
 
       const YieldDistributorFactory = await ethers.getContractFactory(
         'YieldDistributor'
       )
 
+      const platformAdminAddress = await platformAdmin.getAddress()
+
       await expect(
-        YieldDistributorFactory.deploy(ethers.ZeroAddress, owner.address)
+        YieldDistributorFactory.deploy(
+          ethers.ZeroAddress,
+          platformAdminAddress,
+          owner.address
+        )
       ).to.be.revertedWithCustomError(YieldDistributorFactory, 'InvalidAddress')
     })
   })
@@ -110,10 +130,7 @@ describe('YieldDistributor', function () {
           .connect(user1)
           .updatePlatformTreasury(randomWallet2.address)
       )
-        .to.be.revertedWithCustomError(
-          yieldDistributor,
-          'OwnableUnauthorizedAccount'
-        )
+        .to.be.revertedWithCustomError(yieldDistributor, 'NotAuthorizedAdmin')
         .withArgs(user1.address)
 
       expect(await yieldDistributor.getPlatformTreasury()).to.equal(
@@ -135,6 +152,27 @@ describe('YieldDistributor', function () {
 
       expect(await yieldDistributor.getPlatformTreasury()).to.equal(
         randomWallet.address
+      )
+    })
+
+    it('Should allow other admins to updatePlatformTreasury()', async function () {
+      const { yieldDistributor, randomWallet, randomWallet2, otherAdmin } =
+        await loadFixture(deployYieldDistributorFixture)
+
+      expect(await yieldDistributor.getPlatformTreasury()).to.equal(
+        randomWallet.address
+      )
+
+      await expect(
+        yieldDistributor
+          .connect(otherAdmin)
+          .updatePlatformTreasury(randomWallet2.address)
+      )
+        .to.emit(yieldDistributor, 'PlatformTreasuryUpdated')
+        .withArgs(randomWallet.address, randomWallet2.address)
+
+      expect(await yieldDistributor.getPlatformTreasury()).to.equal(
+        randomWallet2.address
       )
     })
   })
@@ -185,10 +223,7 @@ describe('YieldDistributor', function () {
       await expect(
         yieldDistributor.connect(user1).updatePlatformYieldShare(newYieldShare)
       )
-        .to.be.revertedWithCustomError(
-          yieldDistributor,
-          'OwnableUnauthorizedAccount'
-        )
+        .to.be.revertedWithCustomError(yieldDistributor, 'NotAuthorizedAdmin')
         .withArgs(user1.address)
 
       expect(await yieldDistributor.getPlatformYieldShare()).to.equal(
@@ -242,6 +277,27 @@ describe('YieldDistributor', function () {
 
       expect(platformShare).to.equal(50)
       expect(creatorShare).to.equal(50)
+    })
+
+    it('Should allow other admins to update platform yield share', async function () {
+      const { yieldDistributor, otherAdmin } = await loadFixture(
+        deployYieldDistributorFixture
+      )
+
+      const currentYieldShare = await yieldDistributor.getPlatformYieldShare()
+      const newYieldShare = 3000
+
+      await expect(
+        yieldDistributor
+          .connect(otherAdmin)
+          .updatePlatformYieldShare(newYieldShare)
+      )
+        .to.emit(yieldDistributor, 'PlatformYieldShareUpdated')
+        .withArgs(currentYieldShare, newYieldShare)
+
+      expect(await yieldDistributor.getPlatformYieldShare()).to.equal(
+        newYieldShare
+      )
     })
   })
 
