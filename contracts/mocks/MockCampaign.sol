@@ -10,6 +10,8 @@ contract MockCampaign {
     uint256 public campaignGoalAmount;
     uint256 public campaignDuration;
     IDefiIntegrationManager public defiManager;
+    uint256 public campaignEndTime;
+    bool private _isCampaignActive;
 
     // Track all interactions with DefiIntegrationManager for testing
     uint256 public totalDeposited;
@@ -39,9 +41,22 @@ contract MockCampaign {
         campaignGoalAmount = _goal;
         campaignDuration = _duration;
         defiManager = IDefiIntegrationManager(_defiManager);
+
+        _isCampaignActive = true;
+        campaignEndTime = block.timestamp + (_duration * 1 days);
     }
 
-    // Functions to interact with DefiIntegrationManager
+    function setCampaignActive(bool isActive) external {
+        _isCampaignActive = isActive;
+    }
+
+    function setCampaignEndTime(uint256 endTime) external {
+        campaignEndTime = endTime;
+    }
+
+    function isCampaignActive() external view returns (bool) {
+        return _isCampaignActive;
+    }
 
     function depositToYield(address token, uint256 amount) external {
         IERC20(token).approve(address(defiManager), amount);
