@@ -100,7 +100,7 @@ describe('CampaignContractFactory', function () {
 
     // Deploy campaign factory with defi manager and platform admin
     const campaignContractFactory = await ethers.deployContract(
-      'CampaignFactory',
+      'CampaignContractFactory',
       [defiManagerAddress, platformAdminAddress]
     )
     await campaignContractFactory.waitForDeployment()
@@ -150,12 +150,12 @@ describe('CampaignContractFactory', function () {
       )
 
       await expect(
-        ethers.deployContract('CampaignFactory', [
+        ethers.deployContract('CampaignContractFactory', [
           ethers.ZeroAddress,
           await platformAdmin.getAddress()
         ])
       ).to.be.revertedWithCustomError(
-        await ethers.getContractFactory('CampaignFactory'),
+        await ethers.getContractFactory('CampaignContractFactory'),
         'InvalidAddress'
       )
     })
@@ -166,12 +166,12 @@ describe('CampaignContractFactory', function () {
       )
 
       await expect(
-        ethers.deployContract('CampaignFactory', [
+        ethers.deployContract('CampaignContractFactory', [
           await defiManager.getAddress(),
           ethers.ZeroAddress
         ])
       ).to.be.revertedWithCustomError(
-        await ethers.getContractFactory('CampaignFactory'),
+        await ethers.getContractFactory('CampaignContractFactory'),
         'InvalidAddress'
       )
     })

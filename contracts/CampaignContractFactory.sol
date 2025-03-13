@@ -4,7 +4,7 @@ import "./Campaign.sol";
 import "./interfaces/IDefiIntegrationManager.sol";
 import "./interfaces/IPlatformAdmin.sol";
 
-contract CampaignFactory {
+contract CampaignContractFactory {
     address[] public deployedCampaigns;
     mapping(address => address[]) public creatorToCampaigns;
     IDefiIntegrationManager public defiManager;

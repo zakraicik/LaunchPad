@@ -172,11 +172,13 @@ describe('Campaign', function () {
       const mockToken1Address = await mockToken1.getAddress()
 
       // Get the Campaign contract factory
-      const CampaignFactory = await ethers.getContractFactory('Campaign')
+      const CampaignContractFactory = await ethers.getContractFactory(
+        'Campaign'
+      )
 
       // Try to deploy with zero address for defiManager (should fail)
       await expect(
-        CampaignFactory.deploy(
+        CampaignContractFactory.deploy(
           owner.address,
           mockToken1Address,
           CAMPAIGN_GOAL_AMOUNT,
@@ -184,7 +186,7 @@ describe('Campaign', function () {
           ethers.ZeroAddress, // Invalid defiManager address
           await platformAdmin.getAddress()
         )
-      ).to.be.revertedWithCustomError(CampaignFactory, 'InvalidAddress')
+      ).to.be.revertedWithCustomError(CampaignContractFactory, 'InvalidAddress')
     })
 
     it('Should revert if zero address is provided as token', async function () {
@@ -198,11 +200,13 @@ describe('Campaign', function () {
       } = await loadFixture(deployCampaignFixture)
 
       // Get the Campaign contract factory
-      const CampaignFactory = await ethers.getContractFactory('Campaign')
+      const CampaignContractFactory = await ethers.getContractFactory(
+        'Campaign'
+      )
 
       // Try to deploy with zero address for token (should fail)
       await expect(
-        CampaignFactory.deploy(
+        CampaignContractFactory.deploy(
           owner.address,
           ethers.ZeroAddress, // Zero address for token
           CAMPAIGN_GOAL_AMOUNT,
@@ -210,7 +214,7 @@ describe('Campaign', function () {
           await mockDefiManager.getAddress(),
           await platformAdmin.getAddress()
         )
-      ).to.be.revertedWithCustomError(CampaignFactory, 'InvalidAddress')
+      ).to.be.revertedWithCustomError(CampaignContractFactory, 'InvalidAddress')
     })
 
     it('Should revert if non-supported token address is provided to campaign constructor', async function () {
@@ -238,9 +242,11 @@ describe('Campaign', function () {
       await tokenRegistry.disableTokenSupport(unsupportedTokenAddress)
 
       // Try to deploy campaign with unsupported token
-      const CampaignFactory = await ethers.getContractFactory('Campaign')
+      const CampaignContractFactory = await ethers.getContractFactory(
+        'Campaign'
+      )
       await expect(
-        CampaignFactory.deploy(
+        CampaignContractFactory.deploy(
           owner.address,
           unsupportedTokenAddress,
           CAMPAIGN_GOAL_AMOUNT,
@@ -250,7 +256,7 @@ describe('Campaign', function () {
         )
       )
         .to.be.revertedWithCustomError(
-          CampaignFactory,
+          CampaignContractFactory,
           'ContributionTokenNotSupported'
         )
         .withArgs(unsupportedTokenAddress)
@@ -275,9 +281,11 @@ describe('Campaign', function () {
       const nonCompliantAddress = await nonCompliantToken.getAddress()
 
       // Try to deploy campaign with non-registered token
-      const CampaignFactory = await ethers.getContractFactory('Campaign')
+      const CampaignContractFactory = await ethers.getContractFactory(
+        'Campaign'
+      )
       await expect(
-        CampaignFactory.deploy(
+        CampaignContractFactory.deploy(
           owner.address,
           nonCompliantAddress,
           CAMPAIGN_GOAL_AMOUNT,
@@ -302,10 +310,12 @@ describe('Campaign', function () {
 
       // Try to deploy campaign with zero goal amount
       const CAMPAIGN_GOAL_AMOUNT = 0
-      const CampaignFactory = await ethers.getContractFactory('Campaign')
+      const CampaignContractFactory = await ethers.getContractFactory(
+        'Campaign'
+      )
 
       await expect(
-        CampaignFactory.deploy(
+        CampaignContractFactory.deploy(
           owner.address,
           await mockToken1.getAddress(),
           CAMPAIGN_GOAL_AMOUNT,
@@ -314,7 +324,10 @@ describe('Campaign', function () {
           await platformAdmin.getAddress()
         )
       )
-        .to.be.revertedWithCustomError(CampaignFactory, 'InvalidGoalAmount')
+        .to.be.revertedWithCustomError(
+          CampaignContractFactory,
+          'InvalidGoalAmount'
+        )
         .withArgs(CAMPAIGN_GOAL_AMOUNT)
     })
 
@@ -330,10 +343,12 @@ describe('Campaign', function () {
 
       // Try to deploy campaign with zero duration
       const CAMPAIGN_DURATION = 0
-      const CampaignFactory = await ethers.getContractFactory('Campaign')
+      const CampaignContractFactory = await ethers.getContractFactory(
+        'Campaign'
+      )
 
       await expect(
-        CampaignFactory.deploy(
+        CampaignContractFactory.deploy(
           owner.address,
           await mockToken1.getAddress(),
           CAMPAIGN_GOAL_AMOUNT,
@@ -343,7 +358,7 @@ describe('Campaign', function () {
         )
       )
         .to.be.revertedWithCustomError(
-          CampaignFactory,
+          CampaignContractFactory,
           'InvalidCampaignDuration'
         )
         .withArgs(CAMPAIGN_DURATION)
@@ -1094,8 +1109,10 @@ describe('Campaign', function () {
         await tokenRegistry.addToken(mockFailingTokenAddress, 1)
 
         // Deploy campaign with failing token
-        const CampaignFactory = await ethers.getContractFactory('Campaign')
-        const campaign = await CampaignFactory.deploy(
+        const CampaignContractFactory = await ethers.getContractFactory(
+          'Campaign'
+        )
+        const campaign = await CampaignContractFactory.deploy(
           owner.address,
           mockFailingTokenAddress,
           CAMPAIGN_GOAL_AMOUNT,
