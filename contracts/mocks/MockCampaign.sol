@@ -84,8 +84,7 @@ contract MockCampaign {
     }
 
     function harvestYield(address token) external {
-        (uint256 creatorYield, uint256 platformYield) = defiManager
-            .harvestYield(token);
+        (uint256 creatorYield, ) = defiManager.harvestYield(token);
         totalYieldHarvested += creatorYield;
 
         emit YieldHarvested(token, creatorYield);
