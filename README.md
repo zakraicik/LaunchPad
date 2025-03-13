@@ -1,179 +1,178 @@
-# DeFi-Integrated Crowdfunding Platform
+# DeFi Campaign Platform
+
+A decentralized crowdfunding platform leveraging DeFi protocols to generate yield on contributed funds.
 
 ## Overview
 
-A decentralized crowdfunding platform that combines traditional crowdfunding mechanics with DeFi yield generation capabilities. Built on Ethereum/EVM compatible networks, this platform empowers creators while generating additional value through yield strategies.
+This platform allows creators to launch fundraising campaigns where contributions earn yield while the campaign is active. The system integrates with Aave for yield generation and Uniswap for token swaps, enabling multi-token contributions.
 
----
+## System Architecture
 
-## 📋 Core Features
+The platform consists of six main smart contracts:
 
-- **Token-based Campaigns**: Create campaigns to raise funds in any supported ERC20 token
-- **Multi-token Contributions**: Contributors can donate using any supported token
-- **DeFi Integration**: Seamlessly deposit campaign funds into Aave to generate yield
-- **Yield Sharing**: Generated yield is split between creators and platform
-- **Full Lifecycle Management**: From creation to funding to claiming/refunds
+1. `Campaign`: Individual fundraising campaign instance
+2. `CampaignContractFactory`: Factory contract to create new campaigns
+3. `DefiIntegrationManager`: Manages interactions with DeFi protocols
+4. `PlatformAdmin`: Handles platform administration and emergency measures
+5. `TokenRegistry`: Manages supported tokens and their configurations
+6. `YieldDistributor`: Controls yield distribution between creators and platform
 
----
+## Contract Details
 
-## 🏗️ Architecture
+### Campaign
 
-The platform consists of five main smart contracts that work together to provide a complete crowdfunding solution with DeFi capabilities.
+The `Campaign` contract represents an individual fundraising campaign.
 
-```mermaid
-graph TD
-    A[User] --> B[CampaignFactory]
-    B --> C[Campaign]
-    C --> D[DefiIntegrationManager]
-    D --> E[Aave]
-    D --> F[Uniswap]
-    D --> G[TokenRegistry]
-    D --> H[YieldDistributor]
-```
+**Features:**
 
-### 1. `Campaign.sol`
+- Fundraising with a goal amount and time limit
+- Support for contributions in multiple tokens
+- DeFi yield generation on contributed funds
+- Automatic refunds if the goal is not reached
+- Platform administration safety measures
 
-```solidity
-contract Campaign is Ownable, ReentrancyGuard {
-    // Core campaign properties
-    address public campaignToken;
-    uint256 public campaignGoalAmount;
-    uint256 public campaignDuration;
-    // ...
-}
-```
+**Key Functions:**
 
-Individual crowdfunding campaign contract that:
+- `contribute(address fromToken, uint256 amount)`: Make a contribution in any supported token
+- `requestRefund()`: Request a refund if campaign fails to reach its goal
+- `claimFunds()`: Creator claims funds after successful campaign
+- `depositToYieldProtocol()`: Deposit funds to earn yield
+- `harvestYield()`: Collect generated yield
+- `withdrawFromYieldProtocol()`: Withdraw funds from yield protocol
 
-- Tracks contributions from multiple users
-- Accepts contributions in any supported token
-- Manages campaign state (active, successful, failed)
-- Handles fund claiming and refunds
-- Interacts with DeFi protocols through the integration manager
+### CampaignContractFactory
 
-### 2. `CampaignFactory.sol`
+Factory contract for deploying new campaign instances.
 
-```solidity
-contract CampaignFactory {
-    address[] public deployedCampaigns;
-    mapping(address => address[]) public creatorToCampaigns;
-    // ...
-}
-```
+**Features:**
 
-Factory contract responsible for:
+- Creates standardized campaign contracts
+- Maintains registry of deployed campaigns
+- Associates campaigns with their creators
 
-- Creating new Campaign contracts
-- Tracking all deployed campaigns
-- Associating campaigns with their creators
-- Ensuring proper authorization in the DeFi system
+**Key Functions:**
 
-### 3. `DefiIntegrationManager.sol`
+- `deploy(address _campaignToken, uint256 _campaignGoalAmount, uint16 _campaignDuration)`: Deploy a new campaign
+- `getAllCampaigns()`: Get all deployed campaigns
+- `getCampaignsByCreator(address _creator)`: Get campaigns by a specific creator
 
-```solidity
-contract DefiIntegrationManager is Ownable, ReentrancyGuard {
-    IAavePool public aavePool;
-    ISwapRouter public uniswapRouter;
-    // ...
-}
-```
+### DefiIntegrationManager
 
-Central hub for all DeFi interactions that:
+Manages all interactions with external DeFi protocols (Aave for yield, Uniswap for swaps).
 
-- Manages Aave integration for yield generation
-- Handles token swaps via Uniswap
-- Controls campaign authorization
-- Coordinates yield distribution
-- Provides an upgradable interface for future DeFi protocols
+**Features:**
 
-### 4. `TokenRegistry.sol`
+- Token deposit and withdrawal to/from Aave
+- Token swaps via Uniswap
+- Yield calculation and distribution
+- Slippage protection for swaps
 
-```solidity
-contract TokenRegistry is Ownable {
-    struct TokenConfig {
-        bool isSupported;
-        uint8 decimals;
-        uint256 minimumContributionAmount;
-    }
-    // ...
-}
-```
+**Key Functions:**
 
-Registry that:
+- `depositToYieldProtocol(address _token, uint256 _amount)`: Deposit tokens to Aave
+- `withdrawFromYieldProtocol(address _token, uint256 _amount)`: Withdraw tokens from Aave
+- `harvestYield(address _token)`: Harvest and distribute yield
+- `swapTokenForTarget(address _fromToken, uint256 _amount, address _toToken)`: Swap tokens via Uniswap
+- `getCurrentYieldRate(address token)`: Get current yield rate from Aave
 
-- Maintains the list of supported ERC20 tokens
-- Configures minimum contribution amounts
-- Validates token compliance and decimals
-- Controls platform token inclusion/exclusion
+### PlatformAdmin
 
-### 5. `YieldDistributor.sol`
+Handles platform administration and emergency access control.
 
-```solidity
-contract YieldDistributor is Ownable {
-    address public platformTreasury;
-    uint16 public platformYieldShare = 2000; // 20%
-    // ...
-}
-```
+**Features:**
 
-Manages yield distribution by:
+- Multi-admin support
+- Grace period management for emergency interventions
+- Campaign status monitoring
 
-- Setting platform fee percentages
-- Routing the platform's share to treasury
-- Calculating yield splits (creator vs platform)
-- Enforcing maximum platform take rate (50%)
+**Key Functions:**
 
----
+- `addPlatformAdmin(address _admin)`: Add a new platform administrator
+- `removePlatformAdmin(address _admin)`: Remove a platform administrator
+- `updateGracePeriod(uint256 _gracePeriod)`: Update the grace period
+- `isGracePeriodOver(address _campaign)`: Check if grace period is over for a campaign
 
-## 🔒 Security Features
+### TokenRegistry
 
-- **Reentrancy Protection**: `ReentrancyGuard` on all external-facing functions
-- **Access Control**: Owner-only and authorized-only function modifiers
-- **Slippage Protection**: For token swaps with configurable tolerance
-- **Custom Error Types**: Clear, gas-efficient error handling
-- **Decimal-Aware Math**: Precision handling for different token decimals
-- **Integer Safety**: Fixed-sized types with overflow/underflow protection
-- **Address Validation**: Comprehensive zero-address checks
+Manages the registry of supported tokens and their configurations.
 
----
+**Features:**
 
-## 🔄 Integration Points
+- Token support management
+- Minimum contribution amounts
+- Token validation
 
-| Protocol         | Purpose          | Integration                 |
-| ---------------- | ---------------- | --------------------------- |
-| **Aave V3**      | Yield generation | Direct pool interaction     |
-| **Uniswap V3**   | Token swapping   | Router and quoter contracts |
-| **ERC20 Tokens** | Contributions    | SafeERC20 for transfers     |
+**Key Functions:**
 
----
+- `addToken(address _token, uint256 _minimumContributionInWholeTokens)`: Add a new supported token
+- `removeToken(address _token)`: Remove a token from the registry
+- `enableTokenSupport(address _token)`: Enable support for a token
+- `disableTokenSupport(address _token)`: Disable support for a token
+- `updateTokenMinimumContribution(address _token, uint256 _minimumContributionInWholeTokens)`: Update minimum contribution
 
-## 🔄 Workflow
+### YieldDistributor
 
-1. Platform admin adds supported tokens to the `TokenRegistry`
-2. Creator deploys a campaign via `CampaignFactory`
-3. Contributors fund the campaign with various tokens
-4. Creator may deposit funds to Aave for yield generation
-5. Creator can harvest yield during the campaign
-6. When campaign ends:
-   - **Success**: Creator claims all funds
-   - **Failure**: Contributors receive refunds
-7. Creator can withdraw deposited funds from yield protocols at any time
+Manages yield distribution between creators and the platform.
 
----
+**Features:**
 
-## 📦 Technical Requirements
+- Configurable platform yield share
+- Treasury management
+- Safe math for yield calculations
 
-- Solidity `^0.8.20` or higher
-- OpenZeppelin Contracts for access control and security
-- Aave V3 Protocol integration
-- Uniswap V3 Protocol integration
+**Key Functions:**
 
----
+- `calculateYieldShares(uint256 totalYield)`: Calculate creator and platform shares
+- `updatePlatformTreasury(address _platformTreasury)`: Update platform treasury address
+- `updatePlatformYieldShare(uint256 _platformYieldShare)`: Update platform's yield share percentage
 
-## 🧪 Testing
+## System Flow
 
-Comprehensive test coverage including:
+1. **Campaign Creation**: Creator deploys a campaign via the factory
+2. **Contribution**: Users contribute in any supported token
+3. **Yield Generation**: Funds earn yield in Aave during the campaign
+4. **Campaign Resolution**:
+   - If successful: Creator claims funds
+   - If unsuccessful: Contributors request refunds
+5. **Yield Harvesting**: Yield is harvested and distributed between creator and platform
 
-- Unit tests for each contract
-- Integration tests for complete workflows
-- Edge case testing for security validation
+## Security Features
+
+- Non-reentrant function guards
+- Platform admin safety measures with grace periods
+- Ownable contracts with access control
+- Token validation and safety checks
+- Slippage protection for token swaps
+- Proper error handling with custom errors
+
+## Dependencies
+
+- OpenZeppelin Contracts (v4.x):
+  - Access control
+  - SafeERC20
+  - ReentrancyGuard
+  - Ownable
+- Aave (v3) for yield generation
+- Uniswap (v3) for token swaps
+
+## Development and Deployment
+
+### Requirements
+
+- Solidity ^0.8.28
+- Access to Aave v3 contracts
+- Access to Uniswap v3 Router and Quoter
+- OpenZeppelin libraries
+
+### Deployment Sequence
+
+1. Deploy `PlatformAdmin`
+2. Deploy `TokenRegistry`
+3. Deploy `YieldDistributor`
+4. Deploy `DefiIntegrationManager`
+5. Deploy `CampaignContractFactory`
+6. Add supported tokens to `TokenRegistry`
+
+## License
+
+MIT
