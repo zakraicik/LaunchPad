@@ -2,25 +2,38 @@
 pragma solidity ^0.8.28;
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import "./abstracts/PlatformAdminAccessControl.sol";
+import "./libraries/YieldLibrary.sol";
 
 contract YieldDistributor is Ownable, PlatformAdminAccessControl {
+    // Use the library
+    using YieldLibrary for *;
+
+    // Operation types
+    uint8 private constant OP_TREASURY_UPDATED = 1;
+    uint8 private constant OP_SHARE_UPDATED = 2;
+    uint8 private constant OP_YIELD_DISTRIBUTED = 3;
+
+    // Error codes
+    uint8 private constant ERR_INVALID_ADDRESS = 1;
+    uint8 private constant ERR_INVALID_SHARE = 2;
+    uint8 private constant ERR_SHARE_EXCEEDS_MAXIMUM = 3;
+    uint8 private constant ERR_OVERFLOW = 4;
+
+    // State variables
     address public platformTreasury;
     uint16 public platformYieldShare = 2000;
     uint16 public constant maximumYieldShare = 5000;
 
-    error InvalidAddress();
-    error InvalidShare(uint256 share);
-    error ShareExceedsMaximum(uint256 share);
-    error Overflow();
+    // Consolidated errors
+    error YieldDistributorError(uint8 code, address addr, uint256 value);
 
-    event PlatformTreasuryUpdated(address oldTreasury, address newTreasury);
-    event PlatformYieldShareUpdated(uint256 oldShare, uint256 newShare);
-    event YieldDistributed(
-        address indexed campaign,
-        address indexed token,
-        uint256 totalYield,
-        uint256 creatorShare,
-        uint256 platformShare
+    // Consolidated events
+    event YieldDistributorOperation(
+        uint8 opType,
+        address indexed relatedAddress,
+        address indexed secondaryAddress,
+        uint256 primaryValue,
+        uint256 secondaryValue
     );
 
     constructor(
@@ -29,7 +42,11 @@ contract YieldDistributor is Ownable, PlatformAdminAccessControl {
         address _owner
     ) Ownable(_owner) PlatformAdminAccessControl(_platformAdmin) {
         if (_platformTreasury == address(0)) {
-            revert InvalidAddress();
+            revert YieldDistributorError(
+                ERR_INVALID_ADDRESS,
+                _platformTreasury,
+                0
+            );
         }
 
         platformTreasury = _platformTreasury;
@@ -39,45 +56,103 @@ contract YieldDistributor is Ownable, PlatformAdminAccessControl {
         address _platformTreasury
     ) external onlyPlatformAdmin {
         if (_platformTreasury == address(0)) {
-            revert InvalidAddress();
+            revert YieldDistributorError(
+                ERR_INVALID_ADDRESS,
+                _platformTreasury,
+                0
+            );
         }
 
         address oldTreasury = platformTreasury;
         platformTreasury = _platformTreasury;
 
-        emit PlatformTreasuryUpdated(oldTreasury, _platformTreasury);
+        emit YieldDistributorOperation(
+            OP_TREASURY_UPDATED,
+            oldTreasury,
+            _platformTreasury,
+            0,
+            0
+        );
     }
 
     function updatePlatformYieldShare(
         uint256 _platformYieldShare
     ) external onlyPlatformAdmin {
-        uint16 newShare = uint16(_platformYieldShare);
-
-        if (newShare > maximumYieldShare) {
-            revert ShareExceedsMaximum(newShare);
+        // Use library to validate share
+        if (
+            !YieldLibrary.isValidShare(_platformYieldShare, maximumYieldShare)
+        ) {
+            if (_platformYieldShare > maximumYieldShare) {
+                revert YieldDistributorError(
+                    ERR_SHARE_EXCEEDS_MAXIMUM,
+                    address(0),
+                    _platformYieldShare
+                );
+            } else {
+                revert YieldDistributorError(
+                    ERR_INVALID_SHARE,
+                    address(0),
+                    _platformYieldShare
+                );
+            }
         }
 
+        uint16 newShare = uint16(_platformYieldShare);
         uint256 oldShare = platformYieldShare;
         platformYieldShare = newShare;
 
-        emit PlatformYieldShareUpdated(oldShare, newShare);
+        emit YieldDistributorOperation(
+            OP_SHARE_UPDATED,
+            address(0),
+            address(0),
+            oldShare,
+            newShare
+        );
     }
 
     function calculateYieldShares(
         uint256 totalYield
     ) external view returns (uint256 creatorShare, uint256 platformShare) {
-        if (
-            totalYield > 0 &&
-            platformYieldShare > 0 &&
-            totalYield > type(uint256).max / platformYieldShare
-        ) {
-            revert Overflow();
+        // Use library for calculation
+        (creatorShare, platformShare) = YieldLibrary.calculateYieldShares(
+            totalYield,
+            platformYieldShare
+        );
+
+        // Check for overflow that the library detected (returned zeros)
+        if (creatorShare == 0 && platformShare == 0 && totalYield > 0) {
+            revert YieldDistributorError(ERR_OVERFLOW, address(0), totalYield);
         }
 
-        platformShare = (totalYield * platformYieldShare) / 10000;
-        unchecked {
-            creatorShare = totalYield - platformShare;
+        return (creatorShare, platformShare);
+    }
+
+    // Events for yield distribution would be emitted by calling contracts
+    function distributeYield(
+        address campaign,
+        address token,
+        uint256 totalYield
+    ) external returns (uint256 creatorShare, uint256 platformShare) {
+        // Use library for calculation
+        (creatorShare, platformShare) = YieldLibrary.calculateYieldShares(
+            totalYield,
+            platformYieldShare
+        );
+
+        // Check for overflow that the library detected (returned zeros)
+        if (creatorShare == 0 && platformShare == 0 && totalYield > 0) {
+            revert YieldDistributorError(ERR_OVERFLOW, address(0), totalYield);
         }
+
+        // This function would typically involve token transfers, but for simplicity
+        // we're just emitting the event to show the pattern
+        emit YieldDistributorOperation(
+            OP_YIELD_DISTRIBUTED,
+            campaign,
+            token,
+            creatorShare,
+            platformShare
+        );
 
         return (creatorShare, platformShare);
     }
