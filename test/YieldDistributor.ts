@@ -5,6 +5,14 @@ const { ethers } = require('hardhat')
 const { loadFixture } = require('@nomicfoundation/hardhat-network-helpers')
 
 describe('YieldDistributor', function () {
+  const OP_TREASURY_UPDATED = 1
+  const OP_SHARE_UPDATED = 2
+
+  const ERR_INVALID_ADDRESS = 1
+  const ERR_INVALID_SHARE = 2
+  const ERR_SHARE_EXCEEDS_MAXIMUM = 3
+  const ERR_OVERFLOW = 4
+
   async function deployYieldDistributorFixture () {
     const [owner, user1, user2, otherAdmin] = await ethers.getSigners()
     const randomWallet = ethers.Wallet.createRandom()
@@ -95,7 +103,12 @@ describe('YieldDistributor', function () {
           platformAdminAddress,
           owner.address
         )
-      ).to.be.revertedWithCustomError(YieldDistributorFactory, 'InvalidAddress')
+      )
+        .to.be.revertedWithCustomError(
+          YieldDistributorFactory,
+          'YieldDistributorError'
+        )
+        .withArgs(ERR_INVALID_ADDRESS, ethers.ZeroAddress, 0)
     })
   })
 
@@ -109,8 +122,14 @@ describe('YieldDistributor', function () {
       )
 
       await expect(yieldDistributor.updatePlatformTreasury(randomWallet2))
-        .to.emit(yieldDistributor, 'PlatformTreasuryUpdated')
-        .withArgs(randomWallet.address, randomWallet2.address)
+        .to.emit(yieldDistributor, 'YieldDistributorOperation')
+        .withArgs(
+          OP_TREASURY_UPDATED,
+          randomWallet.address,
+          randomWallet2.address,
+          0,
+          0
+        )
 
       expect(await yieldDistributor.getPlatformTreasury()).to.equal(
         randomWallet2.address
@@ -124,6 +143,10 @@ describe('YieldDistributor', function () {
       expect(await yieldDistributor.getPlatformTreasury()).to.equal(
         randomWallet.address
       )
+
+      yieldDistributor
+        .connect(user1)
+        .updatePlatformTreasury(randomWallet2.address)
 
       await expect(
         yieldDistributor
@@ -146,9 +169,12 @@ describe('YieldDistributor', function () {
         randomWallet.address
       )
 
-      await expect(
-        yieldDistributor.updatePlatformTreasury(ethers.ZeroAddress)
-      ).to.be.revertedWithCustomError(yieldDistributor, 'InvalidAddress')
+      await expect(yieldDistributor.updatePlatformTreasury(ethers.ZeroAddress))
+        .to.be.revertedWithCustomError(
+          yieldDistributor,
+          'YieldDistributorError'
+        )
+        .withArgs(ERR_INVALID_ADDRESS, ethers.ZeroAddress, 0)
 
       expect(await yieldDistributor.getPlatformTreasury()).to.equal(
         randomWallet.address
@@ -168,8 +194,14 @@ describe('YieldDistributor', function () {
           .connect(otherAdmin)
           .updatePlatformTreasury(randomWallet2.address)
       )
-        .to.emit(yieldDistributor, 'PlatformTreasuryUpdated')
-        .withArgs(randomWallet.address, randomWallet2.address)
+        .to.emit(yieldDistributor, 'YieldDistributorOperation')
+        .withArgs(
+          OP_TREASURY_UPDATED,
+          randomWallet.address,
+          randomWallet2.address,
+          0,
+          0
+        )
 
       expect(await yieldDistributor.getPlatformTreasury()).to.equal(
         randomWallet2.address
@@ -187,8 +219,14 @@ describe('YieldDistributor', function () {
       const newYieldShare = 3000
 
       await expect(yieldDistributor.updatePlatformYieldShare(newYieldShare))
-        .to.emit(yieldDistributor, 'PlatformYieldShareUpdated')
-        .withArgs(currentYieldShare, newYieldShare)
+        .to.emit(yieldDistributor, 'YieldDistributorOperation')
+        .withArgs(
+          OP_SHARE_UPDATED,
+          ethers.ZeroAddress,
+          ethers.ZeroAddress,
+          currentYieldShare,
+          newYieldShare
+        )
 
       expect(await yieldDistributor.getPlatformYieldShare()).to.equal(
         newYieldShare
@@ -204,8 +242,11 @@ describe('YieldDistributor', function () {
       const newYieldShare = 7000
 
       await expect(yieldDistributor.updatePlatformYieldShare(newYieldShare))
-        .to.be.revertedWithCustomError(yieldDistributor, 'ShareExceedsMaximum')
-        .withArgs(newYieldShare)
+        .to.be.revertedWithCustomError(
+          yieldDistributor,
+          'YieldDistributorError'
+        )
+        .withArgs(ERR_SHARE_EXCEEDS_MAXIMUM, ethers.ZeroAddress, newYieldShare)
 
       expect(await yieldDistributor.getPlatformYieldShare()).to.equal(
         currentYieldShare
@@ -240,8 +281,14 @@ describe('YieldDistributor', function () {
       const newYieldShare = 0
 
       await expect(yieldDistributor.updatePlatformYieldShare(newYieldShare))
-        .to.emit(yieldDistributor, 'PlatformYieldShareUpdated')
-        .withArgs(currentYieldShare, newYieldShare)
+        .to.emit(yieldDistributor, 'YieldDistributorOperation')
+        .withArgs(
+          OP_SHARE_UPDATED,
+          ethers.ZeroAddress,
+          ethers.ZeroAddress,
+          currentYieldShare,
+          newYieldShare
+        )
 
       expect(await yieldDistributor.getPlatformYieldShare()).to.equal(
         newYieldShare
@@ -264,8 +311,14 @@ describe('YieldDistributor', function () {
       const maxYieldShare = 5000 // 50%
 
       await expect(yieldDistributor.updatePlatformYieldShare(maxYieldShare))
-        .to.emit(yieldDistributor, 'PlatformYieldShareUpdated')
-        .withArgs(currentYieldShare, maxYieldShare)
+        .to.emit(yieldDistributor, 'YieldDistributorOperation')
+        .withArgs(
+          OP_SHARE_UPDATED,
+          ethers.ZeroAddress,
+          ethers.ZeroAddress,
+          currentYieldShare,
+          maxYieldShare
+        )
 
       expect(await yieldDistributor.getPlatformYieldShare()).to.equal(
         maxYieldShare
@@ -292,8 +345,14 @@ describe('YieldDistributor', function () {
           .connect(otherAdmin)
           .updatePlatformYieldShare(newYieldShare)
       )
-        .to.emit(yieldDistributor, 'PlatformYieldShareUpdated')
-        .withArgs(currentYieldShare, newYieldShare)
+        .to.emit(yieldDistributor, 'YieldDistributorOperation')
+        .withArgs(
+          OP_SHARE_UPDATED,
+          ethers.ZeroAddress,
+          ethers.ZeroAddress,
+          currentYieldShare,
+          newYieldShare
+        )
 
       expect(await yieldDistributor.getPlatformYieldShare()).to.equal(
         newYieldShare
@@ -406,15 +465,21 @@ describe('YieldDistributor', function () {
 
       const maxUint256 = 2n ** 256n - 1n
 
-      await expect(
-        yieldDistributor.calculateYieldShares(maxUint256)
-      ).to.be.revertedWithCustomError(yieldDistributor, 'Overflow')
+      await expect(yieldDistributor.calculateYieldShares(maxUint256))
+        .to.be.revertedWithCustomError(
+          yieldDistributor,
+          'YieldDistributorError'
+        )
+        .withArgs(4, ethers.ZeroAddress, maxUint256)
 
       const overflowTrigger = maxUint256 / 2000n + 1n
 
-      await expect(
-        yieldDistributor.calculateYieldShares(overflowTrigger)
-      ).to.be.revertedWithCustomError(yieldDistributor, 'Overflow')
+      await expect(yieldDistributor.calculateYieldShares(overflowTrigger))
+        .to.be.revertedWithCustomError(
+          yieldDistributor,
+          'YieldDistributorError'
+        )
+        .withArgs(ERR_OVERFLOW, ethers.ZeroAddress, overflowTrigger)
     })
 
     it('Should calculate correct yield share with 0% platform share', async function () {

@@ -21,6 +21,7 @@ contract PlatformAdmin is Ownable, ReentrancyGuard {
     uint8 private constant ERR_INVALID_GRACE_PERIOD = 3;
     uint8 private constant ERR_ADMIN_NOT_EXISTS = 4;
     uint8 private constant ERR_ADMIN_ALREADY_EXISTS = 5;
+    uint8 private constant ERR_CANT_REMOVE_OWNER = 6;
 
     // State variables
     uint256 public gracePeriod; // Grace period in days
@@ -71,7 +72,7 @@ contract PlatformAdmin is Ownable, ReentrancyGuard {
         if (!platformAdmins[_admin])
             revert PlatformAdminError(ERR_ADMIN_NOT_EXISTS, _admin, 0);
         if (_admin == owner())
-            revert PlatformAdminError(ERR_ADMIN_NOT_EXISTS, _admin, 0);
+            revert PlatformAdminError(ERR_CANT_REMOVE_OWNER, _admin, 0);
 
         platformAdmins[_admin] = false;
         emit PlatformAdminOperation(OP_ADMIN_REMOVED, _admin, 0, 0);

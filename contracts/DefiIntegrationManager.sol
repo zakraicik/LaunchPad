@@ -60,7 +60,7 @@ contract DefiIntegrationManager is
     mapping(address => mapping(address => uint256)) public aaveDeposits;
 
     // Consolidated error
-    error DefiError(uint8 code, address addr, uint256 value, string reason);
+    error DefiError(uint8 code, address addr, uint256 value);
 
     // Consolidated event
     event DefiOperation(
@@ -89,48 +89,23 @@ contract DefiIntegrationManager is
         address _owner
     ) Ownable(_owner) PlatformAdminAccessControl(_platformAdmin) {
         if (_aavePool == address(0)) {
-            revert DefiError(
-                ERR_INVALID_CONSTRUCTOR,
-                _aavePool,
-                0,
-                "Invalid Aave pool"
-            );
+            revert DefiError(ERR_INVALID_CONSTRUCTOR, _aavePool, 0);
         }
 
         if (_uniswapRouter == address(0)) {
-            revert DefiError(
-                ERR_INVALID_CONSTRUCTOR,
-                _uniswapRouter,
-                1,
-                "Invalid Uniswap router"
-            );
+            revert DefiError(ERR_INVALID_CONSTRUCTOR, _uniswapRouter, 1);
         }
 
         if (_uniswapQuoter == address(0)) {
-            revert DefiError(
-                ERR_INVALID_CONSTRUCTOR,
-                _uniswapQuoter,
-                2,
-                "Invalid Uniswap quoter"
-            );
+            revert DefiError(ERR_INVALID_CONSTRUCTOR, _uniswapQuoter, 2);
         }
 
         if (_tokenRegistry == address(0)) {
-            revert DefiError(
-                ERR_INVALID_CONSTRUCTOR,
-                _tokenRegistry,
-                3,
-                "Invalid token registry"
-            );
+            revert DefiError(ERR_INVALID_CONSTRUCTOR, _tokenRegistry, 3);
         }
 
         if (_yieldDistributor == address(0)) {
-            revert DefiError(
-                ERR_INVALID_CONSTRUCTOR,
-                _yieldDistributor,
-                4,
-                "Invalid yield distributor"
-            );
+            revert DefiError(ERR_INVALID_CONSTRUCTOR, _yieldDistributor, 4);
         }
 
         aavePool = IAavePool(_aavePool);
@@ -144,7 +119,7 @@ contract DefiIntegrationManager is
         address _tokenRegistry
     ) external onlyPlatformAdmin {
         if (_tokenRegistry == address(0)) {
-            revert DefiError(ERR_INVALID_ADDRESS, _tokenRegistry, 0, "");
+            revert DefiError(ERR_INVALID_ADDRESS, _tokenRegistry, 0);
         }
 
         address oldRegistry = address(tokenRegistry);
@@ -157,7 +132,7 @@ contract DefiIntegrationManager is
         address _yieldDistributor
     ) external onlyPlatformAdmin {
         if (_yieldDistributor == address(0)) {
-            revert DefiError(ERR_INVALID_ADDRESS, _yieldDistributor, 0, "");
+            revert DefiError(ERR_INVALID_ADDRESS, _yieldDistributor, 0);
         }
 
         address oldDistributor = address(yieldDistributor);
@@ -168,7 +143,7 @@ contract DefiIntegrationManager is
 
     function setAavePool(address _aavePool) external onlyPlatformAdmin {
         if (_aavePool == address(0)) {
-            revert DefiError(ERR_INVALID_ADDRESS, _aavePool, 0, "");
+            revert DefiError(ERR_INVALID_ADDRESS, _aavePool, 0);
         }
 
         address oldAavePool = address(aavePool);
@@ -181,7 +156,7 @@ contract DefiIntegrationManager is
         address _uniswapRouter
     ) external onlyPlatformAdmin {
         if (_uniswapRouter == address(0)) {
-            revert DefiError(ERR_INVALID_ADDRESS, _uniswapRouter, 0, "");
+            revert DefiError(ERR_INVALID_ADDRESS, _uniswapRouter, 0);
         }
 
         address oldUniswapRouter = address(uniswapRouter);
@@ -194,7 +169,7 @@ contract DefiIntegrationManager is
         address _uniswapQuoter
     ) external onlyPlatformAdmin {
         if (_uniswapQuoter == address(0)) {
-            revert DefiError(ERR_INVALID_ADDRESS, _uniswapQuoter, 0, "");
+            revert DefiError(ERR_INVALID_ADDRESS, _uniswapQuoter, 0);
         }
 
         address oldUniswapQuoter = address(uniswapQuoter);
@@ -208,11 +183,11 @@ contract DefiIntegrationManager is
         uint256 _amount
     ) external nonReentrant {
         if (_amount <= 0) {
-            revert DefiError(ERR_ZERO_AMOUNT, _token, _amount, "");
+            revert DefiError(ERR_ZERO_AMOUNT, _token, _amount);
         }
 
         if (!tokenRegistry.isTokenSupported(_token)) {
-            revert DefiError(ERR_TOKEN_NOT_SUPPORTED, _token, 0, "");
+            revert DefiError(ERR_TOKEN_NOT_SUPPORTED, _token, 0);
         }
 
         IERC20(_token).safeTransferFrom(msg.sender, address(this), _amount);
@@ -229,15 +204,8 @@ contract DefiIntegrationManager is
                 _amount,
                 0
             );
-        } catch Error(string memory reason) {
-            revert DefiError(ERR_YIELD_DEPOSIT_FAILED, _token, _amount, reason);
         } catch {
-            revert DefiError(
-                ERR_YIELD_DEPOSIT_FAILED,
-                _token,
-                _amount,
-                "Aave deposit failed"
-            );
+            revert DefiError(ERR_YIELD_DEPOSIT_FAILED, _token, _amount);
         }
     }
 
@@ -246,19 +214,19 @@ contract DefiIntegrationManager is
         uint256 _amount
     ) external nonReentrant returns (uint256) {
         if (_amount <= 0) {
-            revert DefiError(ERR_ZERO_AMOUNT, _token, _amount, "");
+            revert DefiError(ERR_ZERO_AMOUNT, _token, _amount);
         }
 
         uint256 deposited = aaveDeposits[msg.sender][_token];
         if (_amount > deposited) {
-            revert DefiError(ERR_INSUFFICIENT_DEPOSIT, _token, _amount, "");
+            revert DefiError(ERR_INSUFFICIENT_DEPOSIT, _token, _amount);
         }
 
         try aavePool.withdraw(_token, _amount, address(this)) returns (
             uint256 withdrawn
         ) {
             if (withdrawn != _amount) {
-                revert DefiError(ERR_WITHDRAWAL_MISMATCH, _token, _amount, "");
+                revert DefiError(ERR_WITHDRAWAL_MISMATCH, _token, _amount);
             }
 
             aaveDeposits[msg.sender][_token] -= _amount;
@@ -274,20 +242,8 @@ contract DefiIntegrationManager is
             );
 
             return withdrawn;
-        } catch Error(string memory reason) {
-            revert DefiError(
-                ERR_YIELD_WITHDRAWAL_FAILED,
-                _token,
-                _amount,
-                reason
-            );
         } catch {
-            revert DefiError(
-                ERR_YIELD_WITHDRAWAL_FAILED,
-                _token,
-                _amount,
-                "Aave withdrawal failed"
-            );
+            revert DefiError(ERR_YIELD_WITHDRAWAL_FAILED, _token, _amount);
         }
     }
 
@@ -297,14 +253,14 @@ contract DefiIntegrationManager is
         uint256 amount = aaveDeposits[msg.sender][_token];
 
         if (amount <= 0) {
-            revert DefiError(ERR_ZERO_AMOUNT, _token, amount, "");
+            revert DefiError(ERR_ZERO_AMOUNT, _token, amount);
         }
 
         try aavePool.withdraw(_token, amount, address(this)) returns (
             uint256 withdrawn
         ) {
             if (withdrawn != amount) {
-                revert DefiError(ERR_WITHDRAWAL_MISMATCH, _token, amount, "");
+                revert DefiError(ERR_WITHDRAWAL_MISMATCH, _token, amount);
             }
 
             aaveDeposits[msg.sender][_token] = 0;
@@ -320,20 +276,8 @@ contract DefiIntegrationManager is
             );
 
             return withdrawn;
-        } catch Error(string memory reason) {
-            revert DefiError(
-                ERR_YIELD_WITHDRAWAL_FAILED,
-                _token,
-                amount,
-                reason
-            );
         } catch {
-            revert DefiError(
-                ERR_YIELD_WITHDRAWAL_FAILED,
-                _token,
-                amount,
-                "Aave withdrawal failed"
-            );
+            revert DefiError(ERR_YIELD_WITHDRAWAL_FAILED, _token, amount);
         }
     }
 
@@ -346,7 +290,7 @@ contract DefiIntegrationManager is
     {
         uint256 deposited = aaveDeposits[msg.sender][_token];
         if (deposited <= 0) {
-            revert DefiError(ERR_NO_YIELD, _token, 0, "");
+            revert DefiError(ERR_NO_YIELD, _token, 0);
         }
 
         address aToken;
@@ -355,16 +299,16 @@ contract DefiIntegrationManager is
         ) {
             aToken = data.aTokenAddress;
         } catch {
-            revert DefiError(ERR_FAILED_GET_ATOKEN, _token, 0, "");
+            revert DefiError(ERR_FAILED_GET_ATOKEN, _token, 0);
         }
 
         if (aToken == address(0)) {
-            revert DefiError(ERR_INVALID_ADDRESS, aToken, 0, "");
+            revert DefiError(ERR_INVALID_ADDRESS, aToken, 0);
         }
 
         uint256 aTokenBalance = IERC20(aToken).balanceOf(address(this));
         if (aTokenBalance <= deposited) {
-            revert DefiError(ERR_NO_YIELD, _token, 0, "");
+            revert DefiError(ERR_NO_YIELD, _token, 0);
         }
 
         uint256 totalYield = aTokenBalance - deposited;
@@ -373,12 +317,7 @@ contract DefiIntegrationManager is
             uint256 withdrawn
         ) {
             if (withdrawn != totalYield) {
-                revert DefiError(
-                    ERR_WITHDRAWAL_MISMATCH,
-                    _token,
-                    totalYield,
-                    ""
-                );
+                revert DefiError(ERR_WITHDRAWAL_MISMATCH, _token, totalYield);
             }
 
             (creatorYield, platformYield) = yieldDistributor
@@ -399,20 +338,8 @@ contract DefiIntegrationManager is
             );
 
             return (creatorYield, platformYield);
-        } catch Error(string memory reason) {
-            revert DefiError(
-                ERR_YIELD_WITHDRAWAL_FAILED,
-                _token,
-                totalYield,
-                reason
-            );
         } catch {
-            revert DefiError(
-                ERR_YIELD_WITHDRAWAL_FAILED,
-                _token,
-                totalYield,
-                "Yield withdrawal failed"
-            );
+            revert DefiError(ERR_YIELD_WITHDRAWAL_FAILED, _token, totalYield);
         }
     }
 
@@ -422,7 +349,7 @@ contract DefiIntegrationManager is
         address _toToken
     ) public view returns (uint256) {
         if (_fromToken == _toToken) {
-            revert DefiError(ERR_TOKENS_SAME, _fromToken, 0, "");
+            revert DefiError(ERR_TOKENS_SAME, _fromToken, 0);
         }
 
         try
@@ -446,19 +373,19 @@ contract DefiIntegrationManager is
         address _toToken
     ) external nonReentrant returns (uint256) {
         if (_amount <= 0) {
-            revert DefiError(ERR_ZERO_AMOUNT, _fromToken, _amount, "");
+            revert DefiError(ERR_ZERO_AMOUNT, _fromToken, _amount);
         }
 
         if (!tokenRegistry.isTokenSupported(_fromToken)) {
-            revert DefiError(ERR_TOKEN_NOT_SUPPORTED, _fromToken, 0, "");
+            revert DefiError(ERR_TOKEN_NOT_SUPPORTED, _fromToken, 0);
         }
 
         if (!tokenRegistry.isTokenSupported(_toToken)) {
-            revert DefiError(ERR_TOKEN_NOT_SUPPORTED, _toToken, 0, "");
+            revert DefiError(ERR_TOKEN_NOT_SUPPORTED, _toToken, 0);
         }
 
         if (_fromToken == _toToken) {
-            revert DefiError(ERR_TOKENS_SAME, _fromToken, 0, "");
+            revert DefiError(ERR_TOKENS_SAME, _fromToken, 0);
         }
 
         uint256 expectedOut = getTargetTokenEquivalent(
@@ -467,7 +394,7 @@ contract DefiIntegrationManager is
             _toToken
         );
         if (expectedOut == 0) {
-            revert DefiError(ERR_SWAP_QUOTE_INVALID, _fromToken, _amount, "");
+            revert DefiError(ERR_SWAP_QUOTE_INVALID, _fromToken, _amount);
         }
 
         // Use library to calculate minimum output
@@ -494,7 +421,7 @@ contract DefiIntegrationManager is
 
         try uniswapRouter.exactInputSingle(params) returns (uint256 received) {
             if (received < minAmountOut) {
-                revert DefiError(ERR_SLIPPAGE_EXCEEDED, _toToken, received, "");
+                revert DefiError(ERR_SLIPPAGE_EXCEEDED, _toToken, received);
             }
 
             IERC20(_toToken).safeTransfer(msg.sender, received);
@@ -509,15 +436,8 @@ contract DefiIntegrationManager is
             );
 
             return received;
-        } catch Error(string memory reason) {
-            revert DefiError(ERR_SWAP_FAILED, _fromToken, _amount, reason);
         } catch {
-            revert DefiError(
-                ERR_SWAP_FAILED,
-                _fromToken,
-                _amount,
-                "Uniswap swap failed"
-            );
+            revert DefiError(ERR_SWAP_FAILED, _fromToken, _amount);
         }
     }
 

@@ -11,7 +11,6 @@ contract YieldDistributor is Ownable, PlatformAdminAccessControl {
     // Operation types
     uint8 private constant OP_TREASURY_UPDATED = 1;
     uint8 private constant OP_SHARE_UPDATED = 2;
-    uint8 private constant OP_YIELD_DISTRIBUTED = 3;
 
     // Error codes
     uint8 private constant ERR_INVALID_ADDRESS = 1;
@@ -88,12 +87,6 @@ contract YieldDistributor is Ownable, PlatformAdminAccessControl {
                     address(0),
                     _platformYieldShare
                 );
-            } else {
-                revert YieldDistributorError(
-                    ERR_INVALID_SHARE,
-                    address(0),
-                    _platformYieldShare
-                );
             }
         }
 
@@ -123,36 +116,6 @@ contract YieldDistributor is Ownable, PlatformAdminAccessControl {
         if (creatorShare == 0 && platformShare == 0 && totalYield > 0) {
             revert YieldDistributorError(ERR_OVERFLOW, address(0), totalYield);
         }
-
-        return (creatorShare, platformShare);
-    }
-
-    // Events for yield distribution would be emitted by calling contracts
-    function distributeYield(
-        address campaign,
-        address token,
-        uint256 totalYield
-    ) external returns (uint256 creatorShare, uint256 platformShare) {
-        // Use library for calculation
-        (creatorShare, platformShare) = YieldLibrary.calculateYieldShares(
-            totalYield,
-            platformYieldShare
-        );
-
-        // Check for overflow that the library detected (returned zeros)
-        if (creatorShare == 0 && platformShare == 0 && totalYield > 0) {
-            revert YieldDistributorError(ERR_OVERFLOW, address(0), totalYield);
-        }
-
-        // This function would typically involve token transfers, but for simplicity
-        // we're just emitting the event to show the pattern
-        emit YieldDistributorOperation(
-            OP_YIELD_DISTRIBUTED,
-            campaign,
-            token,
-            creatorShare,
-            platformShare
-        );
 
         return (creatorShare, platformShare);
     }

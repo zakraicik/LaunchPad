@@ -6,6 +6,13 @@ import { Log } from 'ethers'
 import { loadFixture } from '@nomicfoundation/hardhat-network-helpers'
 
 describe('CampaignContractFactory', function () {
+  const OP_CAMPAIGN_CREATED = 1
+  const ERR_INVALID_ADDRESS = 1
+  const ERR_TOKEN_NOT_SUPPORTED = 2
+  const ERR_INVALID_GOAL = 3
+  const ERR_INVALID_DURATION = 4
+  const ERR_VALIDATION_FAILED = 5
+
   async function deployCampaignContractFactoryFixture () {
     const GRACE_PERIOD = 7 // 7 days grace period
     const [owner, user1, platformTreasury] = await ethers.getSigners()
@@ -154,10 +161,12 @@ describe('CampaignContractFactory', function () {
           ethers.ZeroAddress,
           await platformAdmin.getAddress()
         ])
-      ).to.be.revertedWithCustomError(
-        await ethers.getContractFactory('CampaignContractFactory'),
-        'InvalidAddress'
       )
+        .to.be.revertedWithCustomError(
+          await ethers.getContractFactory('CampaignContractFactory'),
+          'FactoryError'
+        )
+        .withArgs(ERR_INVALID_ADDRESS, ethers.ZeroAddress, 0)
     })
 
     it('Should revert if an invalid platformAdmin address is passed to the constructor', async function () {
@@ -170,10 +179,12 @@ describe('CampaignContractFactory', function () {
           await defiManager.getAddress(),
           ethers.ZeroAddress
         ])
-      ).to.be.revertedWithCustomError(
-        await ethers.getContractFactory('CampaignContractFactory'),
-        'InvalidAddress'
       )
+        .to.be.revertedWithCustomError(
+          await ethers.getContractFactory('CampaignContractFactory'),
+          'FactoryError'
+        )
+        .withArgs(ERR_INVALID_ADDRESS, ethers.ZeroAddress, 0)
     })
   })
 
@@ -221,14 +232,14 @@ describe('CampaignContractFactory', function () {
       const event = receipt.logs.find((log: Log) => {
         try {
           const parsed = campaignContractFactory.interface.parseLog(log)
-          return parsed && parsed.name === 'CampaignCreated'
+          return parsed && parsed.name === 'FactoryOperation'
         } catch {
           return false
         }
       })
 
       if (!event) {
-        throw new Error('Failed to find CampaignCreated event in logs')
+        throw new Error('Failed to find FactoryOperation event in logs')
       }
 
       const parsedEvent = campaignContractFactory.interface.parseLog(event)
@@ -238,8 +249,13 @@ describe('CampaignContractFactory', function () {
       }
 
       await expect(tx)
-        .to.emit(campaignContractFactory, 'CampaignCreated')
-        .withArgs(parsedEvent.args[0], owner.address, parsedEvent.args[2])
+        .to.emit(campaignContractFactory, 'FactoryOperation')
+        .withArgs(
+          OP_CAMPAIGN_CREATED,
+          parsedEvent.args[1],
+          owner.address,
+          parsedEvent.args[3]
+        )
 
       const newCampaignsCount =
         await campaignContractFactory.getCampaignsCount()
@@ -253,16 +269,16 @@ describe('CampaignContractFactory', function () {
 
       const lastDeployedCampaign =
         await campaignContractFactory.deployedCampaigns(0)
-      expect(lastDeployedCampaign).to.equal(parsedEvent.args[0])
+      expect(lastDeployedCampaign).to.equal(parsedEvent.args[1])
 
       const creatorCampaign = await campaignContractFactory.creatorToCampaigns(
         owner.address,
         0
       )
-      expect(creatorCampaign).to.equal(parsedEvent.args[0])
+      expect(creatorCampaign).to.equal(parsedEvent.args[1])
 
       const Campaign = await ethers.getContractFactory('Campaign')
-      const deployedCampaign = Campaign.attach(parsedEvent.args[0])
+      const deployedCampaign = Campaign.attach(parsedEvent.args[1])
       expect(await (deployedCampaign as any).owner()).to.equal(owner.address)
     })
 
@@ -329,11 +345,8 @@ describe('CampaignContractFactory', function () {
           campaignDuration
         )
       )
-        .to.be.revertedWithCustomError(
-          campaignContractFactory,
-          'ContributionTokenNotSupported'
-        )
-        .withArgs(mockToken1Address)
+        .to.be.revertedWithCustomError(campaignContractFactory, 'FactoryError')
+        .withArgs(ERR_TOKEN_NOT_SUPPORTED, mockToken1Address, 0)
     })
 
     it('Should revert when using zero address for token', async function () {
@@ -350,7 +363,9 @@ describe('CampaignContractFactory', function () {
           campaignGoalAmount,
           campaignDuration
         )
-      ).to.be.revertedWithCustomError(campaignContractFactory, 'InvalidAddress')
+      )
+        .to.be.revertedWithCustomError(campaignContractFactory, 'FactoryError')
+        .withArgs(ERR_INVALID_ADDRESS, ethers.ZeroAddress, 0)
     })
 
     it('Should revert on campaignGoalAmount <= 0', async function () {
@@ -369,11 +384,8 @@ describe('CampaignContractFactory', function () {
           campaignDuration
         )
       )
-        .to.be.revertedWithCustomError(
-          campaignContractFactory,
-          'InvalidGoalAmount'
-        )
-        .withArgs(campaignGoalAmount)
+        .to.be.revertedWithCustomError(campaignContractFactory, 'FactoryError')
+        .withArgs(ERR_INVALID_GOAL, ethers.ZeroAddress, campaignGoalAmount)
     })
 
     it('Should revert on campaignDuration <= 0', async function () {
@@ -392,11 +404,8 @@ describe('CampaignContractFactory', function () {
           campaignDuration
         )
       )
-        .to.be.revertedWithCustomError(
-          campaignContractFactory,
-          'InvalidCampaignDuration'
-        )
-        .withArgs(campaignDuration)
+        .to.be.revertedWithCustomError(campaignContractFactory, 'FactoryError')
+        .withArgs(ERR_INVALID_DURATION, ethers.ZeroAddress, campaignDuration)
     })
 
     it('Should correctly manage campaigns from different creators', async function () {
@@ -455,13 +464,13 @@ describe('CampaignContractFactory', function () {
       const event = receipt.logs.find((log: Log) => {
         try {
           const parsed = campaignContractFactory.interface.parseLog(log)
-          return parsed && parsed.name === 'CampaignCreated'
+          return parsed && parsed.name === 'FactoryOperation'
         } catch {
           return false
         }
       })
       const parsedEvent = campaignContractFactory.interface.parseLog(event)
-      const campaignAddress = parsedEvent.args[0]
+      const campaignAddress = parsedEvent.args[1]
 
       const campaigns = await campaignContractFactory.getAllCampaigns()
       expect(campaigns).to.have.lengthOf(1)
@@ -486,13 +495,13 @@ describe('CampaignContractFactory', function () {
       const event1 = receipt1.logs.find((log: Log) => {
         try {
           const parsed = campaignContractFactory.interface.parseLog(log)
-          return parsed && parsed.name === 'CampaignCreated'
+          return parsed && parsed.name === 'FactoryOperation'
         } catch {
           return false
         }
       })
       const parsedEvent1 = campaignContractFactory.interface.parseLog(event1)
-      const ownerCampaignAddress = parsedEvent1.args[0]
+      const ownerCampaignAddress = parsedEvent1.args[1]
 
       const tx2 = await campaignContractFactory
         .connect(user1)
@@ -501,13 +510,13 @@ describe('CampaignContractFactory', function () {
       const event2 = receipt2.logs.find((log: Log) => {
         try {
           const parsed = campaignContractFactory.interface.parseLog(log)
-          return parsed && parsed.name === 'CampaignCreated'
+          return parsed && parsed.name === 'FactoryOperation'
         } catch {
           return false
         }
       })
       const parsedEvent2 = campaignContractFactory.interface.parseLog(event2)
-      const user1CampaignAddress = parsedEvent2.args[0]
+      const user1CampaignAddress = parsedEvent2.args[1]
 
       const ownerCampaigns =
         await campaignContractFactory.getCampaignsByCreator(owner.address)

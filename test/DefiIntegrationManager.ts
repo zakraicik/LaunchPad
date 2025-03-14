@@ -5,6 +5,29 @@ const { ethers } = require('hardhat')
 const { loadFixture } = require('@nomicfoundation/hardhat-network-helpers')
 
 describe('DefiIntegrationManager', function () {
+  const OP_YIELD_DEPOSITED = 1
+  const OP_YIELD_WITHDRAWN = 2
+  const OP_YIELD_HARVESTED = 3
+  const OP_TOKEN_SWAPPED = 4
+  const OP_CONFIG_UPDATED = 5
+
+  // Error codes
+  const ERR_UNAUTHORIZED = 1
+  const ERR_ZERO_AMOUNT = 2
+  const ERR_INSUFFICIENT_DEPOSIT = 3
+  const ERR_TOKEN_NOT_SUPPORTED = 4
+  const ERR_SLIPPAGE_EXCEEDED = 5
+  const ERR_YIELD_DEPOSIT_FAILED = 6
+  const ERR_YIELD_WITHDRAWAL_FAILED = 7
+  const ERR_INVALID_ADDRESS = 8
+  const ERR_INVALID_CONSTRUCTOR = 9
+  const ERR_NO_YIELD = 10
+  const ERR_WITHDRAWAL_MISMATCH = 11
+  const ERR_FAILED_GET_ATOKEN = 12
+  const ERR_TOKENS_SAME = 13
+  const ERR_SWAP_QUOTE_INVALID = 14
+  const ERR_SWAP_FAILED = 15
+
   async function deployDefiManagerFixture () {
     const CAMPAIGN_GOAL_AMOUNT = 5
     const CAMPAIGN_DURATION = 30
