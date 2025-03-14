@@ -290,7 +290,7 @@ contract DefiIntegrationManager is
     {
         uint256 deposited = aaveDeposits[msg.sender][_token];
         if (deposited <= 0) {
-            revert DefiError(ERR_NO_YIELD, _token, 0);
+            revert DefiError(ERR_INSUFFICIENT_DEPOSIT, _token, 0);
         }
 
         address aToken;

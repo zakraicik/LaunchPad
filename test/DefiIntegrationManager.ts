@@ -240,8 +240,8 @@ describe('DefiIntegrationManager', function () {
           owner.address
         )
       )
-        .to.be.revertedWithCustomError(DefiManager, 'InvalidConstructorInput')
-        .withArgs(0, ethers.ZeroAddress)
+        .to.be.revertedWithCustomError(DefiManager, 'DefiError')
+        .withArgs(ERR_INVALID_CONSTRUCTOR, ethers.ZeroAddress, 0)
 
       // Test zero address for uniswapRouter (index 1)
       await expect(
@@ -255,8 +255,8 @@ describe('DefiIntegrationManager', function () {
           owner.address
         )
       )
-        .to.be.revertedWithCustomError(DefiManager, 'InvalidConstructorInput')
-        .withArgs(1, ethers.ZeroAddress)
+        .to.be.revertedWithCustomError(DefiManager, 'DefiError')
+        .withArgs(ERR_INVALID_CONSTRUCTOR, ethers.ZeroAddress, 1)
 
       // Test zero address for uniswapQuoter (index 2)
       await expect(
@@ -270,8 +270,8 @@ describe('DefiIntegrationManager', function () {
           owner.address
         )
       )
-        .to.be.revertedWithCustomError(DefiManager, 'InvalidConstructorInput')
-        .withArgs(2, ethers.ZeroAddress)
+        .to.be.revertedWithCustomError(DefiManager, 'DefiError')
+        .withArgs(ERR_INVALID_CONSTRUCTOR, ethers.ZeroAddress, 2)
 
       await expect(
         DefiManager.deploy(
@@ -284,8 +284,8 @@ describe('DefiIntegrationManager', function () {
           owner.address
         )
       )
-        .to.be.revertedWithCustomError(DefiManager, 'InvalidConstructorInput')
-        .withArgs(3, ethers.ZeroAddress)
+        .to.be.revertedWithCustomError(DefiManager, 'DefiError')
+        .withArgs(ERR_INVALID_CONSTRUCTOR, ethers.ZeroAddress, 3)
 
       await expect(
         DefiManager.deploy(
@@ -298,15 +298,15 @@ describe('DefiIntegrationManager', function () {
           owner.address
         )
       )
-        .to.be.revertedWithCustomError(DefiManager, 'InvalidConstructorInput')
-        .withArgs(4, ethers.ZeroAddress)
+        .to.be.revertedWithCustomError(DefiManager, 'DefiError')
+        .withArgs(ERR_INVALID_CONSTRUCTOR, ethers.ZeroAddress, 4)
     })
   })
 
   describe('Yield Distributor Integration', function () {
     describe('Depositing to yield protocol', function () {
       it('Should successfully deposit tokens to the yield protocol', async function () {
-        const { defiManager, mockToken1, mockAToken1, mockCampaign } =
+        const { defiManager, mockToken1, mockAToken1, mockCampaign, owner } =
           await loadFixture(deployDefiManagerFixture)
 
         const campaignAddress = await mockCampaign.getAddress()
@@ -321,8 +321,15 @@ describe('DefiIntegrationManager', function () {
         ).to.equal(0)
 
         await expect(mockCampaign.depositToYield(tokenAddress, depositAmount))
-          .to.emit(defiManager, 'YieldDeposited')
-          .withArgs(campaignAddress, tokenAddress, depositAmount)
+          .to.emit(defiManager, 'DefiOperation')
+          .withArgs(
+            OP_YIELD_DEPOSITED,
+            campaignAddress,
+            await mockToken1.getAddress(),
+            ethers.ZeroAddress,
+            depositAmount,
+            0
+          )
 
         expect(
           await defiManager.getDepositedAmount(campaignAddress, tokenAddress)
@@ -344,8 +351,8 @@ describe('DefiIntegrationManager', function () {
         const zeroAmount = 0
 
         await expect(mockCampaign.depositToYield(tokenAddress, zeroAmount))
-          .to.be.revertedWithCustomError(defiManager, 'ZeroAmount')
-          .withArgs(zeroAmount)
+          .to.be.revertedWithCustomError(defiManager, 'DefiError')
+          .withArgs(ERR_ZERO_AMOUNT, await mockToken1.getAddress(), 0)
       })
 
       it('Should revert when trying to deposit an unsupported token', async function () {
@@ -375,8 +382,8 @@ describe('DefiIntegrationManager', function () {
         await expect(
           mockCampaign.depositToYield(unsupportedTokenAddress, depositAmount)
         )
-          .to.be.revertedWithCustomError(defiManager, 'TokenNotSupported')
-          .withArgs(unsupportedTokenAddress)
+          .to.be.revertedWithCustomError(defiManager, 'DefiError')
+          .withArgs(ERR_TOKEN_NOT_SUPPORTED, unsupportedTokenAddress, 0)
       })
 
       it('Should revert when Aave supply fails', async function () {
@@ -399,8 +406,8 @@ describe('DefiIntegrationManager', function () {
 
         // Attempt deposit, should fail due to Aave supply failure
         await expect(mockCampaign.depositToYield(tokenAddress, depositAmount))
-          .to.be.revertedWithCustomError(defiManager, 'YieldDepositFailed')
-          .withArgs('Supply failed')
+          .to.be.revertedWithCustomError(defiManager, 'DefiError')
+          .withArgs(ERR_YIELD_DEPOSIT_FAILED, tokenAddress, depositAmount)
       })
 
       it('Should correctly add to existing deposits when depositing more of the same token', async function () {
@@ -441,9 +448,8 @@ describe('DefiIntegrationManager', function () {
 
     describe('Withdrawing to yield protocol', function () {
       it('Should successfully withdraw tokens from the yield protocol', async function () {
-        const { defiManager, mockToken1, mockCampaign } = await loadFixture(
-          deployDefiManagerFixture
-        )
+        const { defiManager, mockToken1, mockCampaign, owner } =
+          await loadFixture(deployDefiManagerFixture)
 
         const campaignAddress = await mockCampaign.getAddress()
 
@@ -467,8 +473,15 @@ describe('DefiIntegrationManager', function () {
         await expect(
           mockCampaign.withdrawFromYield(tokenAddress, withdrawAmount)
         )
-          .to.emit(defiManager, 'YieldWithdrawn')
-          .withArgs(campaignAddress, tokenAddress, withdrawAmount)
+          .to.emit(defiManager, 'DefiOperation')
+          .withArgs(
+            OP_YIELD_WITHDRAWN,
+            campaignAddress,
+            tokenAddress,
+            ethers.ZeroAddress,
+            withdrawAmount,
+            0
+          )
 
         // Verify state changes after withdrawal
         expect(
@@ -490,8 +503,8 @@ describe('DefiIntegrationManager', function () {
         const zeroAmount = 0
 
         await expect(mockCampaign.withdrawFromYield(tokenAddress, zeroAmount))
-          .to.be.revertedWithCustomError(defiManager, 'ZeroAmount')
-          .withArgs(zeroAmount)
+          .to.be.revertedWithCustomError(defiManager, 'DefiError')
+          .withArgs(ERR_ZERO_AMOUNT, tokenAddress, zeroAmount)
       })
 
       it('Should revert when trying to withdraw more than deposited', async function () {
@@ -516,8 +529,8 @@ describe('DefiIntegrationManager', function () {
         await expect(
           mockCampaign.withdrawFromYield(tokenAddress, withdrawAmount)
         )
-          .to.be.revertedWithCustomError(defiManager, 'InsufficientDeposit')
-          .withArgs(tokenAddress, withdrawAmount, depositAmount)
+          .to.be.revertedWithCustomError(defiManager, 'DefiError')
+          .withArgs(ERR_INSUFFICIENT_DEPOSIT, tokenAddress, withdrawAmount)
       })
 
       it('Should revert when Aave withdrawal fails', async function () {
@@ -544,8 +557,8 @@ describe('DefiIntegrationManager', function () {
         await expect(
           mockCampaign.withdrawFromYield(tokenAddress, withdrawAmount)
         )
-          .to.be.revertedWithCustomError(defiManager, 'YieldwithdrawalFailed')
-          .withArgs('Withdraw failed')
+          .to.be.revertedWithCustomError(defiManager, 'DefiError')
+          .withArgs(ERR_YIELD_WITHDRAWAL_FAILED, tokenAddress, withdrawAmount)
       })
 
       it('Should revert when withdrawal amount does not match expected amount', async function () {
@@ -575,17 +588,13 @@ describe('DefiIntegrationManager', function () {
         await expect(
           mockCampaign.withdrawFromYield(tokenAddress, withdrawAmount)
         )
-          .to.be.revertedWithCustomError(
-            defiManager,
-            'WithdrawalAmountMismatch'
-          )
-          .withArgs(withdrawAmount, mismatchAmount) // Use the same variable here
+          .to.be.revertedWithCustomError(defiManager, 'DefiError')
+          .withArgs(ERR_WITHDRAWAL_MISMATCH, tokenAddress, withdrawAmount)
       })
 
       it('Should successfully withdraw all tokens from the yield protocol', async function () {
-        const { defiManager, mockToken1, mockCampaign } = await loadFixture(
-          deployDefiManagerFixture
-        )
+        const { defiManager, mockToken1, mockCampaign, owner } =
+          await loadFixture(deployDefiManagerFixture)
 
         const campaignAddress = await mockCampaign.getAddress()
 
@@ -606,8 +615,15 @@ describe('DefiIntegrationManager', function () {
 
         // Withdraw all tokens
         await expect(mockCampaign.withdrawAllFromYield(tokenAddress))
-          .to.emit(defiManager, 'YieldWithdrawn')
-          .withArgs(campaignAddress, tokenAddress, depositAmount)
+          .to.emit(defiManager, 'DefiOperation')
+          .withArgs(
+            OP_YIELD_WITHDRAWN,
+            campaignAddress,
+            tokenAddress,
+            ethers.ZeroAddress,
+            depositAmount,
+            0
+          )
 
         // Verify state changes after withdrawal
         expect(
@@ -629,8 +645,8 @@ describe('DefiIntegrationManager', function () {
         const tokenAddress = await mockToken1.getAddress()
 
         await expect(mockCampaign.withdrawAllFromYield(tokenAddress))
-          .to.be.revertedWithCustomError(defiManager, 'ZeroAmount')
-          .withArgs(0)
+          .to.be.revertedWithCustomError(defiManager, 'DefiError')
+          .withArgs(ERR_ZERO_AMOUNT, tokenAddress, 0)
       })
 
       it('Should revert when Aave withdrawal fails for withdrawAll', async function () {
@@ -654,8 +670,8 @@ describe('DefiIntegrationManager', function () {
 
         // Attempt withdraw all, should fail due to Aave withdrawal failure
         await expect(mockCampaign.withdrawAllFromYield(tokenAddress))
-          .to.be.revertedWithCustomError(defiManager, 'YieldwithdrawalFailed')
-          .withArgs('Withdraw failed')
+          .to.be.revertedWithCustomError(defiManager, 'DefiError')
+          .withArgs(ERR_YIELD_WITHDRAWAL_FAILED, tokenAddress, depositAmount)
       })
 
       it('Should revert when withdrawal amount does not match expected amount for withdrawAll', async function () {
@@ -682,11 +698,8 @@ describe('DefiIntegrationManager', function () {
 
         // Attempt withdraw all, should fail due to amount mismatch
         await expect(mockCampaign.withdrawAllFromYield(tokenAddress))
-          .to.be.revertedWithCustomError(
-            defiManager,
-            'WithdrawalAmountMismatch'
-          )
-          .withArgs(depositAmount, mismatchAmount)
+          .to.be.revertedWithCustomError(defiManager, 'DefiError')
+          .withArgs(ERR_WITHDRAWAL_MISMATCH, tokenAddress, depositAmount)
       })
     })
 
@@ -745,11 +758,12 @@ describe('DefiIntegrationManager', function () {
 
         // Harvest yield
         await expect(mockCampaign.harvestYield(tokenAddress))
-          .to.emit(defiManager, 'YieldHarvested')
+          .to.emit(defiManager, 'DefiOperation')
           .withArgs(
+            OP_YIELD_HARVESTED,
             campaignAddress,
             tokenAddress,
-            yieldAmount,
+            await platformTreasury.getAddress(),
             creatorShare,
             platformShare
           )
@@ -779,8 +793,8 @@ describe('DefiIntegrationManager', function () {
         const tokenAddress = await mockToken1.getAddress()
 
         await expect(mockCampaign.harvestYield(tokenAddress))
-          .to.be.revertedWithCustomError(defiManager, 'NoYield')
-          .withArgs(tokenAddress)
+          .to.be.revertedWithCustomError(defiManager, 'DefiError')
+          .withArgs(ERR_INSUFFICIENT_DEPOSIT, tokenAddress, 0)
       })
 
       it('Should revert when there is no yield to harvest', async function () {
@@ -818,8 +832,8 @@ describe('DefiIntegrationManager', function () {
 
         // Attempt to harvest with no yield
         await expect(mockCampaign.harvestYield(tokenAddress))
-          .to.be.revertedWithCustomError(defiManager, 'NoYield')
-          .withArgs(tokenAddress)
+          .to.be.revertedWithCustomError(defiManager, 'DefiError')
+          .withArgs(ERR_NO_YIELD, tokenAddress, 0)
       })
 
       it('Should revert when getReserveData fails', async function () {
@@ -855,9 +869,9 @@ describe('DefiIntegrationManager', function () {
         await mockAavePool.setShouldFailGetReserveData(true)
 
         // Attempt to harvest
-        await expect(
-          mockCampaign.harvestYield(tokenAddress)
-        ).to.be.revertedWithCustomError(defiManager, 'FailedToGetATokenAddress')
+        await expect(mockCampaign.harvestYield(tokenAddress))
+          .to.be.revertedWithCustomError(defiManager, 'DefiError')
+          .withArgs(ERR_FAILED_GET_ATOKEN, tokenAddress, 0)
       })
 
       it('Should revert when aTokenAddress is zero', async function () {
@@ -882,7 +896,7 @@ describe('DefiIntegrationManager', function () {
         // Attempt to harvest
         await expect(
           mockCampaign.harvestYield(tokenAddress)
-        ).to.be.revertedWithCustomError(defiManager, 'InvalidAddress')
+        ).to.be.revertedWithCustomError(defiManager, 'DefiError')
       })
 
       it('Should revert when Aave withdrawal fails during harvest', async function () {
@@ -912,15 +926,15 @@ describe('DefiIntegrationManager', function () {
 
         // Simulate yield generation by minting additional aTokens
         const defiManagerAddress = await defiManager.getAddress()
-        await mockAToken1.mint(defiManagerAddress, depositAmount + yieldAmount)
+        await mockAToken1.mint(defiManagerAddress, yieldAmount)
 
         // Configure Aave mock to fail on withdraw
         await mockAavePool.setShouldFailWithdraw(true)
 
         // Attempt to harvest
         await expect(mockCampaign.harvestYield(tokenAddress))
-          .to.be.revertedWithCustomError(defiManager, 'YieldwithdrawalFailed')
-          .withArgs('Withdraw failed')
+          .to.be.revertedWithCustomError(defiManager, 'DefiError')
+          .withArgs(ERR_YIELD_WITHDRAWAL_FAILED, tokenAddress, yieldAmount)
       })
 
       it('Should revert when withdrawal amount mismatch during harvest', async function () {
@@ -933,50 +947,50 @@ describe('DefiIntegrationManager', function () {
         } = await loadFixture(deployDefiManagerFixture)
 
         const campaignAddress = await mockCampaign.getAddress()
+        const defiManagerAddress = await defiManager.getAddress()
 
         // Set up token
         const tokenAddress = await mockToken1.getAddress()
         const depositAmount = ethers.parseUnits('100')
         const yieldAmount = ethers.parseUnits('10')
-        const mismatchAmount = yieldAmount - 1n
+        const totalAmount = depositAmount + yieldAmount
+        const mismatchAmount = yieldAmount - 1n // Slightly less than requested yield
 
-        // Transfer tokens to campaign
+        // Transfer tokens to campaign for the initial deposit
         await mockToken1.transfer(campaignAddress, depositAmount)
 
-        // Transfer tokens to defi manager for the mismatched yield
-        await mockToken1.transfer(
-          await defiManager.getAddress(),
-          mismatchAmount
-        )
+        // Transfer tokens to defi manager for the later withdrawal
+        // This is needed so the mock can actually transfer tokens
+        await mockToken1.transfer(defiManagerAddress, mismatchAmount)
 
-        // Deposit tokens
+        // Setup the deposit in the aaveDeposits mapping
         await mockCampaign.depositToYield(tokenAddress, depositAmount)
 
         // Reset any existing aToken balance to avoid interference
-        const defiManagerAddress = await defiManager.getAddress()
         const existingBalance = await mockAToken1.balanceOf(defiManagerAddress)
         if (existingBalance > 0) {
           await mockAToken1.burn(defiManagerAddress, existingBalance)
         }
 
-        // Now mint exactly the deposit + yield amount
-        await mockAToken1.mint(defiManagerAddress, depositAmount + yieldAmount)
+        // Mint aTokens representing deposit + yield
+        // This simulates how Aave works - your aToken balance increases over time
+        await mockAToken1.mint(defiManagerAddress, totalAmount)
 
-        // Verify the aToken balance is correct for our test
+        // Verify the aToken balance is correct
         expect(await mockAToken1.balanceOf(defiManagerAddress)).to.equal(
-          depositAmount + yieldAmount
+          totalAmount
         )
 
         // Configure the mock Aave pool to return a different amount than requested
+        // When trying to withdraw yieldAmount, it will return mismatchAmount instead
         await mockAavePool.setMismatchWithdraw(true, mismatchAmount)
 
-        // Attempt to harvest
+        // Attempt to harvest yield - should revert because of the mismatch
+        // The contract will calculate yield as (totalAmount - depositAmount) = yieldAmount
+        // Then attempt to withdraw yieldAmount, but mockAavePool returns mismatchAmount
         await expect(mockCampaign.harvestYield(tokenAddress))
-          .to.be.revertedWithCustomError(
-            defiManager,
-            'WithdrawalAmountMismatch'
-          )
-          .withArgs(yieldAmount, mismatchAmount)
+          .to.be.revertedWithCustomError(defiManager, 'DefiError')
+          .withArgs(ERR_WITHDRAWAL_MISMATCH, tokenAddress, yieldAmount)
       })
     })
 
@@ -1143,8 +1157,8 @@ describe('DefiIntegrationManager', function () {
             tokenAddress
           )
         )
-          .to.be.revertedWithCustomError(defiManager, 'TokensAreTheSame')
-          .withArgs(tokenAddress, tokenAddress)
+          .to.be.revertedWithCustomError(defiManager, 'DefiError')
+          .withArgs(ERR_TOKENS_SAME, tokenAddress, 0)
       })
 
       it('Should return 0 when quoter fails globally', async function () {
@@ -1260,8 +1274,10 @@ describe('DefiIntegrationManager', function () {
             .connect(campaignSigner)
             .swapTokenForTarget(fromTokenAddress, swapAmount, toTokenAddress)
         )
-          .to.emit(defiManager, 'TokenSwapped')
+          .to.emit(defiManager, 'DefiOperation')
           .withArgs(
+            OP_TOKEN_SWAPPED,
+            campaignAddress,
             fromTokenAddress,
             toTokenAddress,
             swapAmount,
@@ -1306,8 +1322,8 @@ describe('DefiIntegrationManager', function () {
             .connect(campaignSigner)
             .swapTokenForTarget(fromTokenAddress, zeroAmount, toTokenAddress)
         )
-          .to.be.revertedWithCustomError(defiManager, 'ZeroAmount')
-          .withArgs(zeroAmount)
+          .to.be.revertedWithCustomError(defiManager, 'DefiError')
+          .withArgs(ERR_ZERO_AMOUNT, fromTokenAddress, zeroAmount)
       })
 
       it('Should revert when fromToken is not supported', async function () {
@@ -1356,8 +1372,8 @@ describe('DefiIntegrationManager', function () {
             .connect(campaignSigner)
             .swapTokenForTarget(fromTokenAddress, swapAmount, toTokenAddress)
         )
-          .to.be.revertedWithCustomError(defiManager, 'TokenNotSupported')
-          .withArgs(fromTokenAddress)
+          .to.be.revertedWithCustomError(defiManager, 'DefiError')
+          .withArgs(ERR_TOKEN_NOT_SUPPORTED, fromTokenAddress, 0)
       })
 
       it('Should revert when toToken is not supported', async function () {
@@ -1406,8 +1422,8 @@ describe('DefiIntegrationManager', function () {
             .connect(campaignSigner)
             .swapTokenForTarget(fromTokenAddress, swapAmount, toTokenAddress)
         )
-          .to.be.revertedWithCustomError(defiManager, 'TokenNotSupported')
-          .withArgs(toTokenAddress)
+          .to.be.revertedWithCustomError(defiManager, 'DefiError')
+          .withArgs(ERR_TOKEN_NOT_SUPPORTED, toTokenAddress, 0)
       })
 
       it('Should revert when tokens are the same', async function () {
@@ -1447,8 +1463,8 @@ describe('DefiIntegrationManager', function () {
             .connect(campaignSigner)
             .swapTokenForTarget(tokenAddress, swapAmount, tokenAddress)
         )
-          .to.be.revertedWithCustomError(defiManager, 'TokensAreTheSame')
-          .withArgs(tokenAddress, tokenAddress)
+          .to.be.revertedWithCustomError(defiManager, 'DefiError')
+          .withArgs(ERR_TOKENS_SAME, tokenAddress, 0)
       })
 
       it('Should revert when swap quote is invalid', async function () {
@@ -1501,7 +1517,9 @@ describe('DefiIntegrationManager', function () {
           defiManager
             .connect(campaignSigner)
             .swapTokenForTarget(fromTokenAddress, swapAmount, toTokenAddress)
-        ).to.be.revertedWithCustomError(defiManager, 'SwapQuoteInvalid')
+        )
+          .to.be.revertedWithCustomError(defiManager, 'DefiError')
+          .withArgs(ERR_SWAP_QUOTE_INVALID, fromTokenAddress, swapAmount)
       })
 
       it('Should revert when Uniswap swap fails', async function () {
@@ -1551,8 +1569,8 @@ describe('DefiIntegrationManager', function () {
             .connect(campaignSigner)
             .swapTokenForTarget(fromTokenAddress, swapAmount, toTokenAddress)
         )
-          .to.be.revertedWithCustomError(defiManager, 'SwapFailed')
-          .withArgs('Swap failed')
+          .to.be.revertedWithCustomError(defiManager, 'DefiError')
+          .withArgs(ERR_SWAP_FAILED, fromTokenAddress, swapAmount)
       })
 
       it('Should revert when slippage exceeds tolerance', async function () {
@@ -1616,8 +1634,8 @@ describe('DefiIntegrationManager', function () {
             .connect(campaignSigner)
             .swapTokenForTarget(fromTokenAddress, swapAmount, toTokenAddress)
         )
-          .to.be.revertedWithCustomError(defiManager, 'SlippageExceeded')
-          .withArgs(minAmountOut, actualOut)
+          .to.be.revertedWithCustomError(defiManager, 'DefiError')
+          .withArgs(ERR_SLIPPAGE_EXCEEDED, toTokenAddress, actualOut)
       })
     })
   })
@@ -1640,8 +1658,8 @@ describe('DefiIntegrationManager', function () {
         const tokenRegistryNewAddress = await tokenRegistryNew.getAddress()
 
         await expect(defiManager.setTokenRegistry(tokenRegistryNewAddress))
-          .to.emit(defiManager, 'TokenRegistryUpdated')
-          .withArgs(tokenRegistryBefore, tokenRegistryNewAddress)
+          .to.emit(defiManager, 'ConfigUpdated')
+          .withArgs(1, tokenRegistryBefore, tokenRegistryNewAddress)
 
         expect(await defiManager.tokenRegistry()).to.equal(
           tokenRegistryNewAddress
@@ -1671,8 +1689,8 @@ describe('DefiIntegrationManager', function () {
             .connect(otherAdmin)
             .setTokenRegistry(tokenRegistryNewAddress)
         )
-          .to.emit(defiManager, 'TokenRegistryUpdated')
-          .withArgs(tokenRegistryBefore, tokenRegistryNewAddress)
+          .to.emit(defiManager, 'ConfigUpdated')
+          .withArgs(1, tokenRegistryBefore, tokenRegistryNewAddress)
 
         expect(await defiManager.tokenRegistry()).to.equal(
           tokenRegistryNewAddress
@@ -1714,9 +1732,9 @@ describe('DefiIntegrationManager', function () {
 
         const tokenRegistryBefore = await defiManager.tokenRegistry()
 
-        await expect(
-          defiManager.setTokenRegistry(ethers.ZeroAddress)
-        ).to.be.revertedWithCustomError(defiManager, 'InvalidAddress')
+        await expect(defiManager.setTokenRegistry(ethers.ZeroAddress))
+          .to.be.revertedWithCustomError(defiManager, 'DefiError')
+          .withArgs(ERR_INVALID_ADDRESS, ethers.ZeroAddress, 0)
 
         expect(await defiManager.tokenRegistry()).to.equal(tokenRegistryBefore)
       })
@@ -1741,8 +1759,8 @@ describe('DefiIntegrationManager', function () {
         await expect(
           defiManager.setYieldDistributor(yieldDistributorAfterAddress)
         )
-          .to.emit(defiManager, 'YieldDistributorUpdated')
-          .withArgs(yieldDistributorBefore, yieldDistributorAfterAddress)
+          .to.emit(defiManager, 'ConfigUpdated')
+          .withArgs(2, yieldDistributorBefore, yieldDistributorAfterAddress)
 
         expect(await defiManager.yieldDistributor()).to.equal(
           yieldDistributorAfterAddress
@@ -1774,8 +1792,8 @@ describe('DefiIntegrationManager', function () {
             .connect(otherAdmin)
             .setYieldDistributor(yieldDistributorAfterAddress)
         )
-          .to.emit(defiManager, 'YieldDistributorUpdated')
-          .withArgs(yieldDistributorBefore, yieldDistributorAfterAddress)
+          .to.emit(defiManager, 'ConfigUpdated')
+          .withArgs(2, yieldDistributorBefore, yieldDistributorAfter)
 
         expect(await defiManager.yieldDistributor()).to.equal(
           yieldDistributorAfterAddress
@@ -1812,9 +1830,9 @@ describe('DefiIntegrationManager', function () {
 
         const yieldDistributorBefore = await defiManager.yieldDistributor()
 
-        await expect(
-          defiManager.setYieldDistributor(ethers.ZeroAddress)
-        ).to.be.revertedWithCustomError(defiManager, 'InvalidAddress')
+        await expect(defiManager.setYieldDistributor(ethers.ZeroAddress))
+          .to.be.revertedWithCustomError(defiManager, 'DefiError')
+          .withArgs(ERR_INVALID_ADDRESS, ethers.ZeroAddress, 0)
 
         expect(await defiManager.yieldDistributor()).to.equal(
           yieldDistributorBefore
@@ -1838,8 +1856,8 @@ describe('DefiIntegrationManager', function () {
         const mockAavePoolAfter = await mockAavePool.getAddress()
 
         await expect(defiManager.setAavePool(mockAavePoolAfter))
-          .to.emit(defiManager, 'AavePoolUpdated')
-          .withArgs(mockAavePoolBefore, mockAavePoolAfter)
+          .to.emit(defiManager, 'ConfigUpdated')
+          .withArgs(3, mockAavePoolBefore, mockAavePoolAfter)
 
         expect(await defiManager.aavePool()).to.equal(mockAavePoolAfter)
       })
@@ -1861,8 +1879,8 @@ describe('DefiIntegrationManager', function () {
         await expect(
           defiManager.connect(otherAdmin).setAavePool(mockAavePoolAfter)
         )
-          .to.emit(defiManager, 'AavePoolUpdated')
-          .withArgs(mockAavePoolBefore, mockAavePoolAfter)
+          .to.emit(defiManager, 'ConfigUpdated')
+          .withArgs(3, mockAavePoolBefore, mockAavePoolAfter)
 
         expect(await defiManager.aavePool()).to.equal(mockAavePoolAfter)
       })
@@ -1895,9 +1913,9 @@ describe('DefiIntegrationManager', function () {
 
         const mockAavePoolBefore = await defiManager.aavePool()
 
-        await expect(
-          defiManager.setAavePool(ethers.ZeroAddress)
-        ).to.be.revertedWithCustomError(defiManager, 'InvalidAddress')
+        await expect(defiManager.setAavePool(ethers.ZeroAddress))
+          .to.be.revertedWithCustomError(defiManager, 'DefiError')
+          .withArgs(ERR_INVALID_ADDRESS, ethers.ZeroAddress, 0)
 
         expect(await defiManager.aavePool()).to.equal(mockAavePoolBefore)
       })
@@ -1917,8 +1935,8 @@ describe('DefiIntegrationManager', function () {
         const mockUniswapRouterAfter = await mockUniswapRouter.getAddress()
 
         await expect(defiManager.setUniswapRouter(mockUniswapRouterAfter))
-          .to.emit(defiManager, 'UniswapRouterUpdated')
-          .withArgs(mockUniswapRouterBefore, mockUniswapRouterAfter)
+          .to.emit(defiManager, 'ConfigUpdated')
+          .withArgs(4, mockUniswapRouterBefore, mockUniswapRouterAfter)
 
         expect(await defiManager.uniswapRouter()).to.equal(
           mockUniswapRouterAfter
@@ -1944,8 +1962,8 @@ describe('DefiIntegrationManager', function () {
             .connect(otherAdmin)
             .setUniswapRouter(mockUniswapRouterAfter)
         )
-          .to.emit(defiManager, 'UniswapRouterUpdated')
-          .withArgs(mockUniswapRouterBefore, mockUniswapRouterAfter)
+          .to.emit(defiManager, 'ConfigUpdated')
+          .withArgs(4, mockUniswapRouterBefore, mockUniswapRouterAfter)
 
         expect(await defiManager.uniswapRouter()).to.equal(
           mockUniswapRouterAfter
@@ -1984,9 +2002,9 @@ describe('DefiIntegrationManager', function () {
 
         const mockUniswapRouterBefore = await defiManager.uniswapRouter()
 
-        await expect(
-          defiManager.setUniswapRouter(ethers.ZeroAddress)
-        ).to.be.revertedWithCustomError(defiManager, 'InvalidAddress')
+        await expect(defiManager.setUniswapRouter(ethers.ZeroAddress))
+          .to.be.revertedWithCustomError(defiManager, 'DefiError')
+          .withArgs(ERR_INVALID_ADDRESS, ethers.ZeroAddress, 0)
 
         expect(await defiManager.uniswapRouter()).to.equal(
           mockUniswapRouterBefore
@@ -2008,8 +2026,8 @@ describe('DefiIntegrationManager', function () {
         const mockUniswapQuoterAfter = await mockUniswapQuoter.getAddress()
 
         await expect(defiManager.setUniswapQuoter(mockUniswapQuoterAfter))
-          .to.emit(defiManager, 'UniswapQuoterUpdated')
-          .withArgs(mockUniswapQuoterBefore, mockUniswapQuoterAfter)
+          .to.emit(defiManager, 'ConfigUpdated')
+          .withArgs(5, mockUniswapQuoterBefore, mockUniswapQuoterAfter)
 
         expect(await defiManager.uniswapQuoter()).to.equal(
           mockUniswapQuoterAfter
@@ -2035,8 +2053,8 @@ describe('DefiIntegrationManager', function () {
             .connect(otherAdmin)
             .setUniswapQuoter(mockUniswapQuoterAfter)
         )
-          .to.emit(defiManager, 'UniswapQuoterUpdated')
-          .withArgs(mockUniswapQuoterBefore, mockUniswapQuoterAfter)
+          .to.emit(defiManager, 'ConfigUpdated')
+          .withArgs(5, mockUniswapQuoterBefore, mockUniswapQuoterAfter)
 
         expect(await defiManager.uniswapQuoter()).to.equal(
           mockUniswapQuoterAfter
@@ -2074,9 +2092,9 @@ describe('DefiIntegrationManager', function () {
         )
         const mockUniswapQuoterrBefore = await defiManager.uniswapQuoter()
 
-        await expect(
-          defiManager.setUniswapQuoter(ethers.ZeroAddress)
-        ).to.be.revertedWithCustomError(defiManager, 'InvalidAddress')
+        await expect(defiManager.setUniswapQuoter(ethers.ZeroAddress))
+          .to.be.revertedWithCustomError(defiManager, 'DefiError')
+          .withArgs(ERR_INVALID_ADDRESS, ethers.ZeroAddress, 0)
 
         expect(await defiManager.uniswapQuoter()).to.equal(
           mockUniswapQuoterrBefore

@@ -53,23 +53,4 @@ library DefiLibrary {
                 sqrtPriceLimitX96: 0
             });
     }
-
-    /**
-     * @dev Validate that a token address is valid
-     * @param token The token address to validate
-     * @param registry The token registry to check against
-     * @param isSupported Function to check if a token is supported
-     * @return True if the token is valid, false otherwise
-     */
-    function validateToken(
-        address token,
-        address registry,
-        function(address) external view returns (bool) isSupported
-    ) internal view returns (bool) {
-        if (token == address(0)) {
-            return false;
-        }
-
-        return isSupported(token);
-    }
 }
