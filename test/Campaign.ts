@@ -3292,4 +3292,298 @@ describe('Campaign', function () {
       })
     })
   })
+
+  describe('Yield Claiming', function () {
+    describe('claimYield', function () {
+      it('Should allow contributor to claim their yield share after campaign ends', async function () {
+        const {
+          campaign,
+          mockToken1,
+          user1,
+          user2,
+          mockDefiManager,
+          CAMPAIGN_DURATION
+        } = await loadFixture(deployCampaignFixture)
+
+        // Setup: Make contributions
+        await mockToken1.connect(user1).approve(await campaign.getAddress(), 1)
+        await campaign
+          .connect(user1)
+          .contribute(await mockToken1.getAddress(), 1)
+
+        await mockToken1.connect(user2).approve(await campaign.getAddress(), 1)
+        await campaign
+          .connect(user2)
+          .contribute(await mockToken1.getAddress(), 1)
+
+        await mockToken1.mint(await campaign.getAddress(), 148)
+
+        // Generate some yield
+        await campaign.depositToYieldProtocol(
+          await mockToken1.getAddress(),
+          150
+        )
+        const yieldAmount = 30 // 20% yield
+        await mockToken1.mint(await mockDefiManager.getAddress(), yieldAmount)
+        await campaign.harvestYield(await mockToken1.getAddress())
+
+        // Move past campaign end
+        await ethers.provider.send('evm_increaseTime', [
+          CAMPAIGN_DURATION * 24 * 60 * 60
+        ])
+        await ethers.provider.send('evm_mine')
+
+        // Calculate weighted contributions
+        await campaign.calculateWeightedContributions()
+
+        // Get initial balances
+        const user1BalanceBefore = await mockToken1.balanceOf(user1.address)
+
+        // Claim yield
+        await expect(campaign.connect(user1).claimYield()).to.emit(
+          campaign,
+          'YieldDistributed'
+        )
+
+        const user1BalanceAfter = await mockToken1.balanceOf(user1.address)
+        expect(user1BalanceAfter).to.be.gt(user1BalanceBefore)
+
+        // Verify user can't claim twice
+        await expect(campaign.connect(user1).claimYield())
+          .to.be.revertedWithCustomError(campaign, 'CampaignError')
+          .withArgs(ERR_YIELD_CLAIMED, user1.address, 0)
+      })
+
+      it('Should revert if campaign is still active', async function () {
+        const { campaign, mockToken1, user1, mockDefiManager } =
+          await loadFixture(deployCampaignFixture)
+
+        // Setup: Make contribution and generate yield
+        await mockToken1.connect(user1).approve(await campaign.getAddress(), 4)
+        await campaign
+          .connect(user1)
+          .contribute(await mockToken1.getAddress(), 4)
+
+        await mockToken1.mint(await campaign.getAddress(), 146)
+
+        await campaign.depositToYieldProtocol(
+          await mockToken1.getAddress(),
+          150
+        )
+        await mockToken1.mint(await mockDefiManager.getAddress(), 20)
+        await campaign.harvestYield(await mockToken1.getAddress())
+
+        await expect(campaign.connect(user1).claimYield())
+          .to.be.revertedWithCustomError(campaign, 'CampaignError')
+          .withArgs(ERR_CAMPAIGN_STILL_ACTIVE, ethers.ZeroAddress, 0)
+      })
+
+      it('Should revert if weighted contributions are not calculated', async function () {
+        const {
+          campaign,
+          mockToken1,
+          user1,
+          mockDefiManager,
+          CAMPAIGN_DURATION
+        } = await loadFixture(deployCampaignFixture)
+
+        // Setup: Make contribution and generate yield
+        await mockToken1.connect(user1).approve(await campaign.getAddress(), 2)
+        await campaign
+          .connect(user1)
+          .contribute(await mockToken1.getAddress(), 2)
+
+        await mockToken1.mint(await campaign.getAddress(), 148)
+
+        await campaign.depositToYieldProtocol(
+          await mockToken1.getAddress(),
+          150
+        )
+        await mockToken1.mint(await mockDefiManager.getAddress(), 20)
+        await campaign.harvestYield(await mockToken1.getAddress())
+
+        // Move past campaign end
+        await ethers.provider.send('evm_increaseTime', [
+          CAMPAIGN_DURATION * 24 * 60 * 60
+        ])
+        await ethers.provider.send('evm_mine')
+
+        await expect(campaign.connect(user1).claimYield())
+          .to.be.revertedWithCustomError(campaign, 'CampaignError')
+          .withArgs(ERR_WEIGHTED_NOT_CALCULATED, ethers.ZeroAddress, 0)
+      })
+
+      it('Should revert if user has no contributions', async function () {
+        const {
+          campaign,
+          mockToken1,
+          user1,
+          user2,
+          mockDefiManager,
+          CAMPAIGN_DURATION
+        } = await loadFixture(deployCampaignFixture)
+
+        // Setup: Make contribution with user1 and generate yield
+        await mockToken1.connect(user1).approve(await campaign.getAddress(), 2)
+        await campaign
+          .connect(user1)
+          .contribute(await mockToken1.getAddress(), 2)
+
+        await mockToken1.mint(await campaign.getAddress(), 148)
+
+        await campaign.depositToYieldProtocol(
+          await mockToken1.getAddress(),
+          150
+        )
+        await mockToken1.mint(await mockDefiManager.getAddress(), 20)
+        await campaign.harvestYield(await mockToken1.getAddress())
+
+        // Move past campaign end
+        await ethers.provider.send('evm_increaseTime', [
+          CAMPAIGN_DURATION * 24 * 60 * 60
+        ])
+        await ethers.provider.send('evm_mine')
+
+        await campaign.calculateWeightedContributions()
+
+        // Try to claim with user2 who hasn't contributed
+        await expect(campaign.connect(user2).claimYield())
+          .to.be.revertedWithCustomError(campaign, 'CampaignError')
+          .withArgs(ERR_NO_YIELD, user2.address, 0)
+      })
+
+      it('Should revert if user has been refunded', async function () {
+        const {
+          campaign,
+          mockToken1,
+          user1,
+          mockDefiManager,
+          CAMPAIGN_DURATION
+        } = await loadFixture(deployCampaignFixture)
+
+        // Setup: Make contribution that's less than goal
+        await mockToken1.connect(user1).approve(await campaign.getAddress(), 2)
+        await campaign
+          .connect(user1)
+          .contribute(await mockToken1.getAddress(), 2)
+
+        await mockToken1.mint(await campaign.getAddress(), 148)
+
+        // Generate some yield
+        await campaign.depositToYieldProtocol(
+          await mockToken1.getAddress(),
+          150
+        )
+
+        const yieldAmount = 30 // 20% yield
+        await mockToken1.mint(await mockDefiManager.getAddress(), yieldAmount)
+        await campaign.harvestYield(await mockToken1.getAddress())
+
+        // Move past campaign end
+        await ethers.provider.send('evm_increaseTime', [
+          CAMPAIGN_DURATION * 24 * 60 * 60
+        ])
+        await ethers.provider.send('evm_mine')
+
+        // // Get refund
+        await campaign.connect(user1).requestRefund()
+
+        await campaign.calculateWeightedContributions()
+
+        // Try to claim yield
+        await expect(campaign.connect(user1).claimYield())
+          .to.be.revertedWithCustomError(campaign, 'CampaignError')
+          .withArgs(ERR_NO_YIELD, user1.address, 0)
+      })
+
+      it('Should revert if no yield has been generated', async function () {
+        const { campaign, mockToken1, user1, CAMPAIGN_DURATION } =
+          await loadFixture(deployCampaignFixture)
+
+        // Setup: Make contribution but don't generate yield
+        await mockToken1
+          .connect(user1)
+          .approve(await campaign.getAddress(), 100)
+        await campaign
+          .connect(user1)
+          .contribute(await mockToken1.getAddress(), 100)
+
+        // Move past campaign end
+        await ethers.provider.send('evm_increaseTime', [
+          CAMPAIGN_DURATION * 24 * 60 * 60
+        ])
+        await ethers.provider.send('evm_mine')
+
+        await campaign.calculateWeightedContributions()
+
+        await expect(campaign.connect(user1).claimYield())
+          .to.be.revertedWithCustomError(campaign, 'CampaignError')
+          .withArgs(ERR_NO_YIELD, ethers.ZeroAddress, 0)
+      })
+
+      it('Should distribute yield proportionally based on weighted contributions', async function () {
+        const {
+          campaign,
+          mockToken1,
+          user1,
+          user2,
+          mockDefiManager,
+          CAMPAIGN_DURATION
+        } = await loadFixture(deployCampaignFixture)
+
+        // First contribution
+        await mockToken1.connect(user1).approve(await campaign.getAddress(), 2)
+        await campaign
+          .connect(user1)
+          .contribute(await mockToken1.getAddress(), 2)
+
+        // Advance time by 1/4 of campaign duration
+        await ethers.provider.send('evm_increaseTime', [
+          (CAMPAIGN_DURATION * 24 * 60 * 60) / 4
+        ])
+        await ethers.provider.send('evm_mine')
+
+        // Second contribution
+        await mockToken1.connect(user2).approve(await campaign.getAddress(), 2)
+        await campaign
+          .connect(user2)
+          .contribute(await mockToken1.getAddress(), 2)
+
+        await mockToken1.mint(await campaign.getAddress(), 146)
+
+        // Generate yield
+        await campaign.depositToYieldProtocol(
+          await mockToken1.getAddress(),
+          150
+        )
+        const yieldAmount = 40 // 20% yield
+        await mockToken1.mint(await mockDefiManager.getAddress(), yieldAmount)
+        await campaign.harvestYield(await mockToken1.getAddress())
+
+        // Move past campaign end
+        await ethers.provider.send('evm_increaseTime', [
+          CAMPAIGN_DURATION * 24 * 60 * 60
+        ])
+        await ethers.provider.send('evm_mine')
+
+        await campaign.calculateWeightedContributions()
+
+        // Get initial balances
+        const user1BalanceBefore = await mockToken1.balanceOf(user1.address)
+        const user2BalanceBefore = await mockToken1.balanceOf(user2.address)
+
+        // Claim yield for both users
+        await campaign.connect(user1).claimYield()
+        await campaign.connect(user2).claimYield()
+
+        const user1YieldAmount =
+          (await mockToken1.balanceOf(user1.address)) - user1BalanceBefore
+        const user2YieldAmount =
+          (await mockToken1.balanceOf(user2.address)) - user2BalanceBefore
+
+        // User1 should receive more yield due to earlier contribution
+        expect(user1YieldAmount).to.be.gt(user2YieldAmount)
+      })
+    })
+  })
 })
