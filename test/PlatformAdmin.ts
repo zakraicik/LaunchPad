@@ -272,12 +272,18 @@ describe('PlatformAdmin', function () {
         deployPlatformAdmin
       )
 
+      // Get the current blockchain timestamp
+      const latestBlock = await ethers.provider.getBlock('latest')
+      if (!latestBlock) {
+        throw new Error('Latest block not found')
+      }
+      const currentBlockTime = latestBlock.timestamp
+
       // Mock campaign responses
       await mockCampaign.setCampaignActive(true)
 
-      // Set campaign end time to 5 days from now
-      const currentTime = Math.floor(Date.now() / 1000)
-      const campaignEndTime = currentTime + 5 * 24 * 60 * 60
+      // Set campaign end time to 5 days from the current block time
+      const campaignEndTime = currentBlockTime + 5 * 24 * 60 * 60
       await mockCampaign.setCampaignEndTime(campaignEndTime)
 
       const [isOver, timeRemaining] = await platformAdmin.isGracePeriodOver(
@@ -287,9 +293,9 @@ describe('PlatformAdmin', function () {
       // Campaign is active, so grace period should not be over
       expect(isOver).to.be.false
 
-      // Time remaining should be approximately 5 days campaign + 7 days grace period
+      // Time remaining should be approximately 5 days campaign + GRACE_PERIOD days
       const expectedTimeRemaining = (5 + GRACE_PERIOD) * 24 * 60 * 60
-      // Allow for a small deviation due to block timestamp variations
+      // Allow for a small deviation
       expect(timeRemaining).to.be.closeTo(
         BigInt(expectedTimeRemaining),
         BigInt(60)
@@ -297,28 +303,34 @@ describe('PlatformAdmin', function () {
     })
 
     it('Should correctly report when a campaign is inactive but grace period is not over', async function () {
-      const { platformAdmin, mockCampaign } = await loadFixture(
+      const { platformAdmin, mockCampaign, GRACE_PERIOD } = await loadFixture(
         deployPlatformAdmin
       )
+
+      // Get the current blockchain timestamp
+      const latestBlock = await ethers.provider.getBlock('latest')
+      if (!latestBlock) {
+        throw new Error('Latest block not found')
+      }
+      const currentBlockTime = latestBlock.timestamp
 
       // Mock campaign responses
       await mockCampaign.setCampaignActive(false)
 
-      // Set campaign end time to 3 days ago
-      const currentTime = Math.floor(Date.now() / 1000)
-      const campaignEndTime = currentTime - 3 * 24 * 60 * 60
+      // Set campaign end time to 3 days ago (from blockchain perspective)
+      const campaignEndTime = currentBlockTime - 3 * 24 * 60 * 60
       await mockCampaign.setCampaignEndTime(campaignEndTime)
 
       const [isOver, timeRemaining] = await platformAdmin.isGracePeriodOver(
         await mockCampaign.getAddress()
       )
 
-      // Campaign is inactive, but only 3 days passed (out of 7 days grace period)
+      // Campaign is inactive, but only 3 days passed (out of GRACE_PERIOD days)
       expect(isOver).to.be.false
 
-      // Time remaining should be approximately 4 days (7 - 3)
-      const expectedTimeRemaining = 4 * 24 * 60 * 60
-      // Allow for a small deviation due to block timestamp variations
+      // Time remaining should be approximately (GRACE_PERIOD - 3) days
+      const expectedTimeRemaining = (GRACE_PERIOD - 3) * 24 * 60 * 60
+      // Allow for a small deviation
       expect(timeRemaining).to.be.closeTo(
         BigInt(expectedTimeRemaining),
         BigInt(60)

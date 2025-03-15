@@ -35,7 +35,7 @@ describe('Campaign', function () {
     const CAMPAIGN_DURATION = 30
     const GRACE_PERIOD = 7 // 7 days grace period
 
-    const [owner, user1, user2, platformTreasury, otherAdmin] =
+    const [owner, user1, user2, user3, user4, platformTreasury, otherAdmin] =
       await ethers.getSigners()
 
     // Deploy mock token
@@ -114,13 +114,20 @@ describe('Campaign', function () {
     // Transfer tokens to users
     await mockToken1.transfer(user1.address, ethers.parseUnits('10'))
     await mockToken1.transfer(user2.address, ethers.parseUnits('10'))
+    await mockToken1.transfer(user3.address, ethers.parseUnits('10'))
+    await mockToken1.transfer(user4.address, ethers.parseUnits('10'))
+
     await mockToken2.transfer(user1.address, ethers.parseUnits('10'))
     await mockToken2.transfer(user2.address, ethers.parseUnits('10'))
+    await mockToken2.transfer(user3.address, ethers.parseUnits('10'))
+    await mockToken2.transfer(user4.address, ethers.parseUnits('10'))
 
     return {
       owner,
       user1,
       user2,
+      user3,
+      user4,
       platformTreasury,
       platformAdmin,
       mockToken1,
@@ -2973,6 +2980,315 @@ describe('Campaign', function () {
 
         // Verify the rates match
         expect(actualRate).to.equal(expectedRate)
+      })
+    })
+  })
+
+  describe('Weighted Contribution Calculations', function () {
+    describe('calculateWeightedContributions', function () {
+      it('Should calculate weighted contributions correctly for all contributors', async function () {
+        const { campaign, mockToken1, user1, user2, CAMPAIGN_DURATION } =
+          await loadFixture(deployCampaignFixture)
+
+        // First contribution
+        await mockToken1.connect(user1).approve(await campaign.getAddress(), 2)
+        await campaign
+          .connect(user1)
+          .contribute(await mockToken1.getAddress(), 2)
+
+        // Advance time by 1/4 of campaign duration
+        await ethers.provider.send('evm_increaseTime', [
+          (CAMPAIGN_DURATION * 24 * 60 * 60) / 4
+        ])
+        await ethers.provider.send('evm_mine')
+
+        // Second contribution
+        await mockToken1.connect(user2).approve(await campaign.getAddress(), 2)
+        await campaign
+          .connect(user2)
+          .contribute(await mockToken1.getAddress(), 2)
+
+        // Move past campaign end
+        await ethers.provider.send('evm_increaseTime', [
+          CAMPAIGN_DURATION * 24 * 60 * 60
+        ])
+        await ethers.provider.send('evm_mine')
+
+        // Calculate weighted contributions
+        await expect(campaign.calculateWeightedContributions())
+          .to.emit(campaign, 'YieldSharesCalculationUpdate')
+          .withArgs(2, true, 2) // 2 contributors processed, calculation complete, 2 total processed
+
+        // Early contributor should have higher weight
+        const user1Weight = await campaign.weightedContributions(user1.address)
+        const user2Weight = await campaign.weightedContributions(user2.address)
+        expect(user1Weight).to.be.gt(user2Weight)
+
+        expect(await campaign.weightedContributionsCalculated()).to.be.true
+        expect(await campaign.totalWeightedContributions()).to.equal(
+          user1Weight + user2Weight
+        )
+      })
+
+      it('Should revert if campaign is still active', async function () {
+        const { campaign, mockToken1, user1 } = await loadFixture(
+          deployCampaignFixture
+        )
+
+        await mockToken1
+          .connect(user1)
+          .approve(await campaign.getAddress(), 100)
+        await campaign
+          .connect(user1)
+          .contribute(await mockToken1.getAddress(), 100)
+
+        await expect(campaign.calculateWeightedContributions())
+          .to.be.revertedWithCustomError(campaign, 'CampaignError')
+          .withArgs(ERR_CAMPAIGN_STILL_ACTIVE, ethers.ZeroAddress, 0)
+      })
+
+      it('Should revert if calculation is already complete', async function () {
+        const { campaign, mockToken1, user1, CAMPAIGN_DURATION } =
+          await loadFixture(deployCampaignFixture)
+
+        await mockToken1
+          .connect(user1)
+          .approve(await campaign.getAddress(), 100)
+        await campaign
+          .connect(user1)
+          .contribute(await mockToken1.getAddress(), 100)
+
+        // Move past campaign end
+        await ethers.provider.send('evm_increaseTime', [
+          CAMPAIGN_DURATION * 24 * 60 * 60
+        ])
+        await ethers.provider.send('evm_mine')
+
+        // First calculation
+        await campaign.calculateWeightedContributions()
+
+        // Second calculation should fail
+        await expect(campaign.calculateWeightedContributions())
+          .to.be.revertedWithCustomError(campaign, 'CampaignError')
+          .withArgs(ERR_CALCULATION_COMPLETE, ethers.ZeroAddress, 0)
+      })
+    })
+
+    describe('calculateWeightedContributionsBatch', function () {
+      it('Should process contributions in batches', async function () {
+        const { campaign, mockToken1, user1, user2, CAMPAIGN_DURATION } =
+          await loadFixture(deployCampaignFixture)
+
+        // Setup multiple contributions
+        await mockToken1.connect(user1).approve(await campaign.getAddress(), 2)
+        await campaign
+          .connect(user1)
+          .contribute(await mockToken1.getAddress(), 2)
+
+        await mockToken1.connect(user2).approve(await campaign.getAddress(), 2)
+        await campaign
+          .connect(user2)
+          .contribute(await mockToken1.getAddress(), 2)
+
+        // Move past campaign end
+        await ethers.provider.send('evm_increaseTime', [
+          CAMPAIGN_DURATION * 24 * 60 * 60
+        ])
+        await ethers.provider.send('evm_mine')
+
+        // Process first batch
+        const batchSize = 1
+        const result1 =
+          await campaign.calculateWeightedContributionsBatch.staticCall(
+            batchSize
+          )
+        const isComplete1 = result1[0]
+        const processed1 = result1[1]
+        await campaign.calculateWeightedContributionsBatch(batchSize)
+        expect(isComplete1).to.be.false
+        expect(processed1).to.equal(1)
+
+        // Process second batch
+        const result2 =
+          await campaign.calculateWeightedContributionsBatch.staticCall(
+            batchSize
+          )
+        const isComplete2 = result2[0]
+        const processed2 = result2[1]
+        await campaign.calculateWeightedContributionsBatch(batchSize)
+        expect(isComplete2).to.be.true
+        expect(processed2).to.equal(1)
+
+        expect(await campaign.weightedContributionsCalculated()).to.be.true
+      })
+
+      it('Should revert batch calculation when campaign is active', async function () {
+        const { campaign, mockToken1, user1 } = await loadFixture(
+          deployCampaignFixture
+        )
+
+        await mockToken1
+          .connect(user1)
+          .approve(await campaign.getAddress(), 100)
+        await campaign
+          .connect(user1)
+          .contribute(await mockToken1.getAddress(), 100)
+
+        await expect(campaign.calculateWeightedContributionsBatch(1))
+          .to.be.revertedWithCustomError(campaign, 'CampaignError')
+          .withArgs(ERR_CAMPAIGN_STILL_ACTIVE, ethers.ZeroAddress, 0)
+      })
+
+      it('Should revert batch calculation when already complete', async function () {
+        const { campaign, mockToken1, user1, CAMPAIGN_DURATION } =
+          await loadFixture(deployCampaignFixture)
+
+        await mockToken1
+          .connect(user1)
+          .approve(await campaign.getAddress(), 100)
+        await campaign
+          .connect(user1)
+          .contribute(await mockToken1.getAddress(), 100)
+
+        // Move past campaign end
+        await ethers.provider.send('evm_increaseTime', [
+          CAMPAIGN_DURATION * 24 * 60 * 60
+        ])
+        await ethers.provider.send('evm_mine')
+
+        // Complete calculation
+        await campaign.calculateWeightedContributions()
+
+        // Try batch calculation after completion
+        await expect(campaign.calculateWeightedContributionsBatch(1))
+          .to.be.revertedWithCustomError(campaign, 'CampaignError')
+          .withArgs(ERR_CALCULATION_COMPLETE, ethers.ZeroAddress, 0)
+      })
+    })
+
+    describe('resetWeightedContributionsCalculation', function () {
+      it('Should allow platform admin to reset calculation', async function () {
+        const {
+          campaign,
+          mockToken1,
+          user1,
+          user2,
+          user3,
+          user4,
+          CAMPAIGN_DURATION,
+          otherAdmin
+        } = await loadFixture(deployCampaignFixture)
+
+        // Make multiple contributions to ensure we have enough contributors
+        // for the batch calculation to not complete in one go
+        await mockToken1.connect(user1).approve(await campaign.getAddress(), 1)
+        await campaign
+          .connect(user1)
+          .contribute(await mockToken1.getAddress(), 1)
+
+        await mockToken1.connect(user2).approve(await campaign.getAddress(), 1)
+        await campaign
+          .connect(user2)
+          .contribute(await mockToken1.getAddress(), 1)
+
+        await mockToken1.connect(user3).approve(await campaign.getAddress(), 1)
+        await campaign
+          .connect(user3)
+          .contribute(await mockToken1.getAddress(), 1)
+
+        await mockToken1.connect(user4).approve(await campaign.getAddress(), 1)
+        await campaign
+          .connect(user4)
+          .contribute(await mockToken1.getAddress(), 1)
+
+        // Move past campaign end
+        await ethers.provider.send('evm_increaseTime', [
+          CAMPAIGN_DURATION * 24 * 60 * 60
+        ])
+        await ethers.provider.send('evm_mine')
+
+        // Start batch calculation with a small batch size to ensure it doesn't complete
+        const batchSize = 1
+        const result =
+          await campaign.calculateWeightedContributionsBatch.staticCall(
+            batchSize
+          )
+        const isComplete = result[0]
+
+        // Execute the batch calculation (should process just one contributor)
+        await campaign.calculateWeightedContributionsBatch(batchSize)
+
+        // Verify the calculation isn't complete
+        expect(await campaign.weightedContributionsCalculated()).to.be.false
+
+        // Verify there is a current processing contributor (not zero address)
+        const currentContributor = await campaign.currentProcessingContributor()
+        expect(currentContributor).to.not.equal(ethers.ZeroAddress)
+
+        // Reset calculation as platform admin
+        await campaign
+          .connect(otherAdmin)
+          .resetWeightedContributionsCalculation()
+
+        // Verify reset was successful
+        expect(await campaign.currentProcessingContributor()).to.equal(
+          ethers.ZeroAddress
+        )
+        expect(await campaign.weightedContributionsCalculated()).to.be.false
+      })
+
+      it('Should revert reset when calculation is complete', async function () {
+        const { campaign, mockToken1, user1, CAMPAIGN_DURATION, otherAdmin } =
+          await loadFixture(deployCampaignFixture)
+
+        await mockToken1
+          .connect(user1)
+          .approve(await campaign.getAddress(), 100)
+        await campaign
+          .connect(user1)
+          .contribute(await mockToken1.getAddress(), 100)
+
+        // Move past campaign end
+        await ethers.provider.send('evm_increaseTime', [
+          CAMPAIGN_DURATION * 24 * 60 * 60
+        ])
+        await ethers.provider.send('evm_mine')
+
+        // Complete calculation
+        await campaign.calculateWeightedContributions()
+
+        // Try to reset
+        await expect(
+          campaign.connect(otherAdmin).resetWeightedContributionsCalculation()
+        )
+          .to.be.revertedWithCustomError(campaign, 'CampaignError')
+          .withArgs(ERR_CALCULATION_COMPLETE, ethers.ZeroAddress, 0)
+      })
+
+      it('Should revert reset when called by non-admin', async function () {
+        const { campaign, mockToken1, user1, CAMPAIGN_DURATION } =
+          await loadFixture(deployCampaignFixture)
+
+        await mockToken1
+          .connect(user1)
+          .approve(await campaign.getAddress(), 100)
+        await campaign
+          .connect(user1)
+          .contribute(await mockToken1.getAddress(), 100)
+
+        // Move past campaign end
+        await ethers.provider.send('evm_increaseTime', [
+          CAMPAIGN_DURATION * 24 * 60 * 60
+        ])
+        await ethers.provider.send('evm_mine')
+
+        // Start batch calculation
+        await campaign.calculateWeightedContributionsBatch(1)
+
+        // Try to reset as non-admin
+        await expect(
+          campaign.connect(user1).resetWeightedContributionsCalculation()
+        ).to.be.revertedWithCustomError(campaign, 'NotAuthorizedAdmin')
       })
     })
   })
