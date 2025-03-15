@@ -25,21 +25,22 @@ library CampaignLibrary {
         uint256 campaignDurationSoFar = contributionTime - campaignStartTime;
         uint256 totalDuration = campaignEndTime - campaignStartTime;
 
-        // Optimize with bitshift instead of multiplication by 100
+        // Keep using the bit shift but ensure it's properly scaled
+        // Using 7 bits (128) for percentage calculation
         uint256 percentageThrough = (campaignDurationSoFar << 7) /
             totalDuration;
 
         if (percentageThrough < 32) {
             // ~25% of 128
-            return 150; // 1.5x weight
+            return 15000; // 1.5x weight (scaled by 10000)
         } else if (percentageThrough < 64) {
             // ~50% of 128
-            return 125; // 1.25x weight
+            return 12500; // 1.25x weight (scaled by 10000)
         } else if (percentageThrough < 96) {
             // ~75% of 128
-            return 110; // 1.1x weight
+            return 11000; // 1.1x weight (scaled by 10000)
         } else {
-            return 100; // 1.0x weight (no bonus)
+            return 10000; // 1.0x weight (scaled by 10000)
         }
     }
 

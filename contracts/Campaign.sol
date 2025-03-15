@@ -387,7 +387,7 @@ contract Campaign is Ownable, ReentrancyGuard, PlatformAdminAccessControl {
                     campaignEndTime
                 );
                 uint256 weighted = (contributions[currentContributor] *
-                    timeWeight) / 100;
+                    timeWeight) / 10000;
                 weightedContributions[currentContributor] = weighted;
                 unchecked {
                     totalWeightedContributions += weighted;
@@ -431,7 +431,7 @@ contract Campaign is Ownable, ReentrancyGuard, PlatformAdminAccessControl {
                 );
                 uint256 weighted = (contributions[
                     currentProcessingContributor
-                ] * timeWeight) / 100;
+                ] * timeWeight) / 10000;
                 weightedContributions[currentProcessingContributor] = weighted;
                 unchecked {
                     totalWeightedContributions += weighted;
