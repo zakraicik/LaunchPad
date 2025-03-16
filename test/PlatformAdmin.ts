@@ -5,6 +5,18 @@ import { ethers } from 'hardhat'
 import { loadFixture } from '@nomicfoundation/hardhat-network-helpers'
 
 describe('PlatformAdmin', function () {
+  const OP_ADMIN_ADDED = 1
+  const OP_ADMIN_REMOVED = 2
+  const OP_GRACE_PERIOD_UPDATED = 3
+
+  // Error codes for consolidated errors
+  const ERR_NOT_AUTHORIZED = 1
+  const ERR_INVALID_ADDRESS = 2
+  const ERR_INVALID_GRACE_PERIOD = 3
+  const ERR_ADMIN_NOT_EXISTS = 4
+  const ERR_ADMIN_ALREADY_EXISTS = 5
+  const ERR_CANT_REMOVE_OWNER = 6
+
   async function deployPlatformAdmin () {
     const CAMPAIGN_GOAL_AMOUNT = 5
     const CAMPAIGN_DURATION = 30
@@ -67,12 +79,12 @@ describe('PlatformAdmin', function () {
         'PlatformAdmin'
       )
 
-      await expect(
-        PlatformAdminFactory.deploy(0, owner.address)
-      ).to.be.revertedWithCustomError(
-        PlatformAdminFactory,
-        'InvalidGracePeriod'
-      )
+      await expect(PlatformAdminFactory.deploy(0, owner.address))
+        .to.be.revertedWithCustomError(
+          PlatformAdminFactory,
+          'PlatformAdminError'
+        )
+        .withArgs(ERR_INVALID_GRACE_PERIOD, ethers.ZeroAddress, 0)
     })
   })
 
@@ -85,8 +97,8 @@ describe('PlatformAdmin', function () {
       expect(await platformAdmin.platformAdmins(otherAdmin.address)).to.be.false
 
       await expect(platformAdmin.addPlatformAdmin(otherAdmin.address))
-        .to.emit(platformAdmin, 'AdminAdded')
-        .withArgs(otherAdmin.address)
+        .to.emit(platformAdmin, 'PlatformAdminOperation')
+        .withArgs(OP_ADMIN_ADDED, otherAdmin.address, 0, 0)
 
       expect(await platformAdmin.platformAdmins(otherAdmin.address)).to.be.true
     })
@@ -94,17 +106,17 @@ describe('PlatformAdmin', function () {
     it('Should revert when adding an admin that already exists', async function () {
       const { platformAdmin, owner } = await loadFixture(deployPlatformAdmin)
 
-      await expect(
-        platformAdmin.addPlatformAdmin(owner.address)
-      ).to.be.revertedWithCustomError(platformAdmin, 'AdminAlreadyExists')
+      await expect(platformAdmin.addPlatformAdmin(owner.address))
+        .to.be.revertedWithCustomError(platformAdmin, 'PlatformAdminError')
+        .withArgs(ERR_ADMIN_ALREADY_EXISTS, owner.address, 0)
     })
 
     it('Should revert when adding zero address as admin', async function () {
-      const { platformAdmin } = await loadFixture(deployPlatformAdmin)
+      const { platformAdmin, owner } = await loadFixture(deployPlatformAdmin)
 
-      await expect(
-        platformAdmin.addPlatformAdmin(ethers.ZeroAddress)
-      ).to.be.revertedWithCustomError(platformAdmin, 'InvalidAddress')
+      await expect(platformAdmin.addPlatformAdmin(ethers.ZeroAddress))
+        .to.be.revertedWithCustomError(platformAdmin, 'PlatformAdminError')
+        .withArgs(ERR_INVALID_ADDRESS, ethers.ZeroAddress, 0)
     })
 
     it('Should allow an admin to add another admin', async function () {
@@ -119,8 +131,8 @@ describe('PlatformAdmin', function () {
       await expect(
         platformAdmin.connect(otherAdmin).addPlatformAdmin(user1.address)
       )
-        .to.emit(platformAdmin, 'AdminAdded')
-        .withArgs(user1.address)
+        .to.emit(platformAdmin, 'PlatformAdminOperation')
+        .withArgs(OP_ADMIN_ADDED, user1.address, 0, 0)
 
       expect(await platformAdmin.platformAdmins(user1.address)).to.be.true
     })
@@ -131,8 +143,8 @@ describe('PlatformAdmin', function () {
       )
 
       await expect(platformAdmin.connect(user1).addPlatformAdmin(user2.address))
-        .to.be.revertedWithCustomError(platformAdmin, 'NotAuthorizedAdmin')
-        .withArgs(user1.address)
+        .to.be.revertedWithCustomError(platformAdmin, 'PlatformAdminError')
+        .withArgs(ERR_NOT_AUTHORIZED, user1.address, 0)
     })
 
     it('Should allow removing an admin', async function () {
@@ -146,8 +158,8 @@ describe('PlatformAdmin', function () {
 
       // Then remove the admin
       await expect(platformAdmin.removePlatformAdmin(otherAdmin.address))
-        .to.emit(platformAdmin, 'AdminRemoved')
-        .withArgs(otherAdmin.address)
+        .to.emit(platformAdmin, 'PlatformAdminOperation')
+        .withArgs(OP_ADMIN_REMOVED, otherAdmin.address, 0, 0)
 
       expect(await platformAdmin.platformAdmins(otherAdmin.address)).to.be.false
     })
@@ -155,9 +167,9 @@ describe('PlatformAdmin', function () {
     it('Should revert when removing an admin that does not exist', async function () {
       const { platformAdmin, user1 } = await loadFixture(deployPlatformAdmin)
 
-      await expect(
-        platformAdmin.removePlatformAdmin(user1.address)
-      ).to.be.revertedWithCustomError(platformAdmin, 'AdminDoesNotExist')
+      await expect(platformAdmin.removePlatformAdmin(user1.address))
+        .to.be.revertedWithCustomError(platformAdmin, 'PlatformAdminError')
+        .withArgs(ERR_ADMIN_NOT_EXISTS, user1.address, 0)
     })
 
     it('Should revert when non-admin tries to remove an admin', async function () {
@@ -168,8 +180,8 @@ describe('PlatformAdmin', function () {
       await expect(
         platformAdmin.connect(user1).removePlatformAdmin(owner.address)
       )
-        .to.be.revertedWithCustomError(platformAdmin, 'NotAuthorizedAdmin')
-        .withArgs(user1.address)
+        .to.be.revertedWithCustomError(platformAdmin, 'PlatformAdminError')
+        .withArgs(ERR_NOT_AUTHORIZED, user1.address, 0)
     })
 
     it('Should revert when trying to remove the owner', async function () {
@@ -183,7 +195,9 @@ describe('PlatformAdmin', function () {
       // Try to remove the owner
       await expect(
         platformAdmin.connect(otherAdmin).removePlatformAdmin(owner.address)
-      ).to.be.revertedWithCustomError(platformAdmin, 'AdminDoesNotExist')
+      )
+        .to.be.revertedWithCustomError(platformAdmin, 'PlatformAdminError')
+        .withArgs(ERR_CANT_REMOVE_OWNER, owner.address, 0)
     })
 
     it('Should allow an admin to remove another admin', async function () {
@@ -199,8 +213,8 @@ describe('PlatformAdmin', function () {
       await expect(
         platformAdmin.connect(otherAdmin).removePlatformAdmin(user1.address)
       )
-        .to.emit(platformAdmin, 'AdminRemoved')
-        .withArgs(user1.address)
+        .to.emit(platformAdmin, 'PlatformAdminOperation')
+        .withArgs(OP_ADMIN_REMOVED, user1.address, 0, 0)
 
       expect(await platformAdmin.platformAdmins(user1.address)).to.be.false
     })
@@ -208,15 +222,20 @@ describe('PlatformAdmin', function () {
 
   describe('Grace Period Management', function () {
     it('Should allow owner to update grace period', async function () {
-      const { platformAdmin, GRACE_PERIOD } = await loadFixture(
+      const { platformAdmin, GRACE_PERIOD, owner } = await loadFixture(
         deployPlatformAdmin
       )
 
       const newGracePeriod = 14
 
       await expect(platformAdmin.updateGracePeriod(newGracePeriod))
-        .to.emit(platformAdmin, 'GracePeriodUpdated')
-        .withArgs(GRACE_PERIOD, newGracePeriod)
+        .to.emit(platformAdmin, 'PlatformAdminOperation')
+        .withArgs(
+          OP_GRACE_PERIOD_UPDATED,
+          ethers.ZeroAddress,
+          GRACE_PERIOD,
+          newGracePeriod
+        )
 
       expect(await platformAdmin.gracePeriod()).to.equal(newGracePeriod)
     })
@@ -224,9 +243,9 @@ describe('PlatformAdmin', function () {
     it('Should revert when setting grace period to zero', async function () {
       const { platformAdmin } = await loadFixture(deployPlatformAdmin)
 
-      await expect(
-        platformAdmin.updateGracePeriod(0)
-      ).to.be.revertedWithCustomError(platformAdmin, 'InvalidGracePeriod')
+      await expect(platformAdmin.updateGracePeriod(0))
+        .to.be.revertedWithCustomError(platformAdmin, 'PlatformAdminError')
+        .withArgs(ERR_INVALID_GRACE_PERIOD, ethers.ZeroAddress, 0)
     })
 
     it('Should revert when non-owner tries to update grace period', async function () {
@@ -253,12 +272,18 @@ describe('PlatformAdmin', function () {
         deployPlatformAdmin
       )
 
+      // Get the current blockchain timestamp
+      const latestBlock = await ethers.provider.getBlock('latest')
+      if (!latestBlock) {
+        throw new Error('Latest block not found')
+      }
+      const currentBlockTime = latestBlock.timestamp
+
       // Mock campaign responses
       await mockCampaign.setCampaignActive(true)
 
-      // Set campaign end time to 5 days from now
-      const currentTime = Math.floor(Date.now() / 1000)
-      const campaignEndTime = currentTime + 5 * 24 * 60 * 60
+      // Set campaign end time to 5 days from the current block time
+      const campaignEndTime = currentBlockTime + 5 * 24 * 60 * 60
       await mockCampaign.setCampaignEndTime(campaignEndTime)
 
       const [isOver, timeRemaining] = await platformAdmin.isGracePeriodOver(
@@ -268,9 +293,9 @@ describe('PlatformAdmin', function () {
       // Campaign is active, so grace period should not be over
       expect(isOver).to.be.false
 
-      // Time remaining should be approximately 5 days campaign + 7 days grace period
+      // Time remaining should be approximately 5 days campaign + GRACE_PERIOD days
       const expectedTimeRemaining = (5 + GRACE_PERIOD) * 24 * 60 * 60
-      // Allow for a small deviation due to block timestamp variations
+      // Allow for a small deviation
       expect(timeRemaining).to.be.closeTo(
         BigInt(expectedTimeRemaining),
         BigInt(60)
@@ -278,28 +303,34 @@ describe('PlatformAdmin', function () {
     })
 
     it('Should correctly report when a campaign is inactive but grace period is not over', async function () {
-      const { platformAdmin, mockCampaign } = await loadFixture(
+      const { platformAdmin, mockCampaign, GRACE_PERIOD } = await loadFixture(
         deployPlatformAdmin
       )
+
+      // Get the current blockchain timestamp
+      const latestBlock = await ethers.provider.getBlock('latest')
+      if (!latestBlock) {
+        throw new Error('Latest block not found')
+      }
+      const currentBlockTime = latestBlock.timestamp
 
       // Mock campaign responses
       await mockCampaign.setCampaignActive(false)
 
-      // Set campaign end time to 3 days ago
-      const currentTime = Math.floor(Date.now() / 1000)
-      const campaignEndTime = currentTime - 3 * 24 * 60 * 60
+      // Set campaign end time to 3 days ago (from blockchain perspective)
+      const campaignEndTime = currentBlockTime - 3 * 24 * 60 * 60
       await mockCampaign.setCampaignEndTime(campaignEndTime)
 
       const [isOver, timeRemaining] = await platformAdmin.isGracePeriodOver(
         await mockCampaign.getAddress()
       )
 
-      // Campaign is inactive, but only 3 days passed (out of 7 days grace period)
+      // Campaign is inactive, but only 3 days passed (out of GRACE_PERIOD days)
       expect(isOver).to.be.false
 
-      // Time remaining should be approximately 4 days (7 - 3)
-      const expectedTimeRemaining = 4 * 24 * 60 * 60
-      // Allow for a small deviation due to block timestamp variations
+      // Time remaining should be approximately (GRACE_PERIOD - 3) days
+      const expectedTimeRemaining = (GRACE_PERIOD - 3) * 24 * 60 * 60
+      // Allow for a small deviation
       expect(timeRemaining).to.be.closeTo(
         BigInt(expectedTimeRemaining),
         BigInt(60)

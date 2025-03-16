@@ -4,12 +4,30 @@ import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import "./abstracts/PlatformAdminAccessControl.sol";
+import "./libraries/TokenRegistryLibary.sol";
 
 contract TokenRegistry is Ownable, PlatformAdminAccessControl {
-    constructor(
-        address _owner,
-        address _platformAdmin
-    ) Ownable(_owner) PlatformAdminAccessControl(_platformAdmin) {}
+    // Use the TokenRegistryLibrary
+    using TokenRegistryLibrary for *;
+
+    // Operation types for events
+    uint8 private constant OP_TOKEN_ADDED = 1;
+    uint8 private constant OP_TOKEN_REMOVED = 2;
+    uint8 private constant OP_TOKEN_SUPPORT_DISABLED = 3;
+    uint8 private constant OP_TOKEN_SUPPORT_ENABLED = 4;
+    uint8 private constant OP_MIN_CONTRIBUTION_UPDATED = 5;
+
+    // Error codes for consolidated errors
+    uint8 private constant ERR_INVALID_ADDRESS = 1;
+    uint8 private constant ERR_INVALID_TOKEN = 2;
+    uint8 private constant ERR_TOKEN_ALREADY_IN_REGISTRY = 3;
+    uint8 private constant ERR_TOKEN_NOT_IN_REGISTRY = 4;
+    uint8 private constant ERR_TOKEN_SUPPORT_ALREADY_ENABLED = 5;
+    uint8 private constant ERR_TOKEN_SUPPORT_ALREADY_DISABLED = 6;
+    uint8 private constant ERR_NOT_A_CONTRACT = 7;
+    uint8 private constant ERR_NOT_ERC20_COMPLIANT = 8;
+    uint8 private constant ERR_INVALID_MIN_CONTRIBUTION = 9;
+    uint8 private constant ERR_OVERFLOW = 10;
 
     struct TokenConfig {
         bool isSupported;
@@ -17,84 +35,30 @@ contract TokenRegistry is Ownable, PlatformAdminAccessControl {
         uint256 minimumContributionAmount;
     }
 
+    // State variables
     mapping(address => TokenConfig) public tokenConfigs;
     mapping(address => bool) private tokenExists;
     address[] public supportedTokens;
 
-    error InvalidAddress();
-    error InvalidToken(address _token);
-    error TokenAlreadyInRegistry(address _token);
-    error TokenNotInRegistry(address _token);
-    error TokenSupportAlreadyEnabled(address _token);
-    error TokenSupportAlreadyDisabled(address _token);
-    error NotAContract(address providedAddress);
-    error NotERC20Compliant(address providedAddress);
-    error InvalidMinimumContribution();
-    error Overflow();
+    // Consolidated error with error code
+    error TokenRegistryError(uint8 code, address token, uint256 value);
 
-    event TokenAdded(
+    // Consolidated event
+    event TokenRegistryOperation(
+        uint8 opType,
         address indexed token,
-        uint256 minimumContributionAmount,
+        uint256 value,
         uint8 decimals
     );
-    event TokenRemovedFromRegistry(address indexed token);
-    event TokenSupportDisabled(address indexed token);
-    event TokenSupportEnabled(address indexed token);
-    event TokenMinimumContributionUpdated(
-        address indexed token,
-        uint256 minimumContributionAmount
-    );
 
-    function _convertToSmallestUnit(
-        uint256 amount,
-        uint8 decimals
-    ) internal pure returns (uint256) {
-        if (amount > type(uint256).max / (10 ** decimals)) {
-            revert Overflow();
-        }
-        return amount * (10 ** decimals);
-    }
-
-    function _convertFromSmallestUnit(
-        uint256 amount,
-        uint8 decimals
-    ) internal pure returns (uint256) {
-        return amount / (10 ** decimals);
-    }
-
-    function _validateAndGetDecimals(
-        address _token
-    ) internal view returns (uint8) {
-        if (_token == address(0)) {
-            revert InvalidToken(_token);
-        }
-
-        uint256 codeSize;
-        assembly {
-            codeSize := extcodesize(_token)
-        }
-        if (codeSize == 0) {
-            revert NotAContract(_token);
-        }
-
-        try IERC20Metadata(_token).decimals() returns (uint8 decimals) {
-            return decimals;
-        } catch {
-            revert NotERC20Compliant(_token);
-        }
-    }
-
-    function _tokenExists(address token) internal view returns (bool) {
-        return tokenExists[token];
-    }
-
-    function _tokenSupported(address token) internal view returns (bool) {
-        return tokenConfigs[token].isSupported;
-    }
+    constructor(
+        address _owner,
+        address _platformAdmin
+    ) Ownable(_owner) PlatformAdminAccessControl(_platformAdmin) {}
 
     function isTokenSupported(address token) external view returns (bool) {
-        if (!_tokenExists(token)) {
-            revert TokenNotInRegistry(token);
+        if (!tokenExists[token]) {
+            revert TokenRegistryError(ERR_TOKEN_NOT_IN_REGISTRY, token, 0);
         }
 
         return tokenConfigs[token].isSupported;
@@ -104,15 +68,45 @@ contract TokenRegistry is Ownable, PlatformAdminAccessControl {
         address _token,
         uint256 _minimumContributionInWholeTokens
     ) external onlyPlatformAdmin {
-        if (_tokenExists(_token)) {
-            revert TokenAlreadyInRegistry(_token);
+        if (tokenExists[_token]) {
+            revert TokenRegistryError(ERR_TOKEN_ALREADY_IN_REGISTRY, _token, 0);
         }
 
-        uint8 decimals = _validateAndGetDecimals(_token);
-        uint256 minimumContributionInSmallestUnit = _convertToSmallestUnit(
-            _minimumContributionInWholeTokens,
-            decimals
-        );
+        // Use library function to validate token and get decimals
+        (uint8 decimals, bool isValid) = TokenRegistryLibrary
+            .validateAndGetDecimals(_token);
+
+        if (!isValid) {
+            if (_token == address(0)) {
+                revert TokenRegistryError(ERR_INVALID_ADDRESS, _token, 0);
+            }
+
+            uint256 codeSize;
+            assembly {
+                codeSize := extcodesize(_token)
+            }
+            if (codeSize == 0) {
+                revert TokenRegistryError(ERR_NOT_A_CONTRACT, _token, 0);
+            }
+
+            revert TokenRegistryError(ERR_NOT_ERC20_COMPLIANT, _token, 0);
+        }
+
+        // Use library function to convert the amount
+        uint256 minimumContributionInSmallestUnit = TokenRegistryLibrary
+            .convertToSmallestUnit(_minimumContributionInWholeTokens, decimals);
+
+        // Check for overflow
+        if (
+            minimumContributionInSmallestUnit == 0 &&
+            _minimumContributionInWholeTokens > 0
+        ) {
+            revert TokenRegistryError(
+                ERR_OVERFLOW,
+                _token,
+                _minimumContributionInWholeTokens
+            );
+        }
 
         tokenConfigs[_token] = TokenConfig({
             isSupported: true,
@@ -123,100 +117,112 @@ contract TokenRegistry is Ownable, PlatformAdminAccessControl {
         tokenExists[_token] = true;
         supportedTokens.push(_token);
 
-        emit TokenAdded(_token, minimumContributionInSmallestUnit, decimals);
+        emit TokenRegistryOperation(
+            OP_TOKEN_ADDED,
+            _token,
+            minimumContributionInSmallestUnit,
+            decimals
+        );
     }
 
     function removeToken(address _token) external onlyPlatformAdmin {
-        if (!_tokenExists(_token)) {
-            revert TokenNotInRegistry(_token);
+        if (!tokenExists[_token]) {
+            revert TokenRegistryError(ERR_TOKEN_NOT_IN_REGISTRY, _token, 0);
         }
 
         delete tokenConfigs[_token];
         delete tokenExists[_token];
 
-        if (supportedTokens.length > 0) {
-            for (uint256 i = 0; i < supportedTokens.length; i++) {
-                if (supportedTokens[i] == _token) {
-                    supportedTokens[i] = supportedTokens[
-                        supportedTokens.length - 1
-                    ];
-                    supportedTokens.pop();
-                    break;
-                }
-            }
-        }
+        // Use library function to remove from array
+        TokenRegistryLibrary.removeFromArray(supportedTokens, _token);
 
-        emit TokenRemovedFromRegistry(_token);
+        emit TokenRegistryOperation(OP_TOKEN_REMOVED, _token, 0, 0);
     }
 
     function disableTokenSupport(address _token) external onlyPlatformAdmin {
-        if (!_tokenExists(_token)) {
-            revert TokenNotInRegistry(_token);
+        if (!tokenExists[_token]) {
+            revert TokenRegistryError(ERR_TOKEN_NOT_IN_REGISTRY, _token, 0);
         }
 
-        if (!_tokenSupported(_token)) {
-            revert TokenSupportAlreadyDisabled(_token);
+        if (!tokenConfigs[_token].isSupported) {
+            revert TokenRegistryError(
+                ERR_TOKEN_SUPPORT_ALREADY_DISABLED,
+                _token,
+                0
+            );
         }
 
         tokenConfigs[_token].isSupported = false;
 
-        if (supportedTokens.length > 0) {
-            for (uint256 i = 0; i < supportedTokens.length; i++) {
-                if (supportedTokens[i] == _token) {
-                    supportedTokens[i] = supportedTokens[
-                        supportedTokens.length - 1
-                    ];
-                    supportedTokens.pop();
-                    break;
-                }
-            }
-        }
+        // Use library function to remove from array
+        TokenRegistryLibrary.removeFromArray(supportedTokens, _token);
 
-        emit TokenSupportDisabled(_token);
+        emit TokenRegistryOperation(OP_TOKEN_SUPPORT_DISABLED, _token, 0, 0);
     }
 
     function enableTokenSupport(address _token) external onlyPlatformAdmin {
-        if (!_tokenExists(_token)) {
-            revert TokenNotInRegistry(_token);
+        if (!tokenExists[_token]) {
+            revert TokenRegistryError(ERR_TOKEN_NOT_IN_REGISTRY, _token, 0);
         }
 
-        if (_tokenSupported(_token)) {
-            revert TokenSupportAlreadyEnabled(_token);
+        if (tokenConfigs[_token].isSupported) {
+            revert TokenRegistryError(
+                ERR_TOKEN_SUPPORT_ALREADY_ENABLED,
+                _token,
+                0
+            );
         }
 
         tokenConfigs[_token].isSupported = true;
         supportedTokens.push(_token);
 
-        emit TokenSupportEnabled(_token);
+        emit TokenRegistryOperation(OP_TOKEN_SUPPORT_ENABLED, _token, 0, 0);
     }
 
     function updateTokenMinimumContribution(
         address _token,
         uint256 _minimumContributionInWholeTokens
     ) external onlyPlatformAdmin {
-        if (!_tokenExists(_token)) {
-            revert TokenNotInRegistry(_token);
+        if (!tokenExists[_token]) {
+            revert TokenRegistryError(ERR_TOKEN_NOT_IN_REGISTRY, _token, 0);
         }
 
         TokenConfig storage config = tokenConfigs[_token];
-        uint256 minimumContributionInSmallestUnit = _convertToSmallestUnit(
-            _minimumContributionInWholeTokens,
-            config.decimals
-        );
+
+        // Use library function to convert the amount
+        uint256 minimumContributionInSmallestUnit = TokenRegistryLibrary
+            .convertToSmallestUnit(
+                _minimumContributionInWholeTokens,
+                config.decimals
+            );
+
+        // Check for overflow
+        if (
+            minimumContributionInSmallestUnit == 0 &&
+            _minimumContributionInWholeTokens > 0
+        ) {
+            revert TokenRegistryError(
+                ERR_OVERFLOW,
+                _token,
+                _minimumContributionInWholeTokens
+            );
+        }
 
         config.minimumContributionAmount = minimumContributionInSmallestUnit;
 
-        emit TokenMinimumContributionUpdated(
+        emit TokenRegistryOperation(
+            OP_MIN_CONTRIBUTION_UPDATED,
             _token,
-            minimumContributionInSmallestUnit
+            minimumContributionInSmallestUnit,
+            0
         );
     }
 
     function getMinContributionAmount(
         address token
     ) external view returns (uint256 minimumAmount, uint8 decimals) {
-        if (!_tokenExists(token)) {
-            revert TokenNotInRegistry(token);
+        if (!tokenExists[token]) {
+            revert TokenRegistryError(ERR_TOKEN_NOT_IN_REGISTRY, token, 0);
         }
         TokenConfig memory config = tokenConfigs[token];
         return (config.minimumContributionAmount, config.decimals);
@@ -227,8 +233,8 @@ contract TokenRegistry is Ownable, PlatformAdminAccessControl {
     }
 
     function getTokenDecimals(address token) external view returns (uint8) {
-        if (!_tokenExists(token)) {
-            revert TokenNotInRegistry(token);
+        if (!tokenExists[token]) {
+            revert TokenRegistryError(ERR_TOKEN_NOT_IN_REGISTRY, token, 0);
         }
         return tokenConfigs[token].decimals;
     }
@@ -237,6 +243,6 @@ contract TokenRegistry is Ownable, PlatformAdminAccessControl {
         uint256 amount,
         uint8 decimals
     ) public pure returns (uint256) {
-        return _convertFromSmallestUnit(amount, decimals);
+        return TokenRegistryLibrary.convertFromSmallestUnit(amount, decimals);
     }
 }

@@ -5,6 +5,23 @@ const { ethers } = require('hardhat')
 const { loadFixture } = require('@nomicfoundation/hardhat-network-helpers')
 
 describe('TokenRegistry', function () {
+  const OP_TOKEN_ADDED = 1
+  const OP_TOKEN_REMOVED = 2
+  const OP_TOKEN_SUPPORT_DISABLED = 3
+  const OP_TOKEN_SUPPORT_ENABLED = 4
+  const OP_MIN_CONTRIBUTION_UPDATED = 5
+
+  const ERR_INVALID_ADDRESS = 1
+  const ERR_INVALID_TOKEN = 2
+  const ERR_TOKEN_ALREADY_IN_REGISTRY = 3
+  const ERR_TOKEN_NOT_IN_REGISTRY = 4
+  const ERR_TOKEN_SUPPORT_ALREADY_ENABLED = 5
+  const ERR_TOKEN_SUPPORT_ALREADY_DISABLED = 6
+  const ERR_NOT_A_CONTRACT = 7
+  const ERR_NOT_ERC20_COMPLIANT = 8
+  const ERR_INVALID_MIN_CONTRIBUTION = 9
+  const ERR_OVERFLOW = 10
+
   async function deployTokenRegistryFixture () {
     const [owner, user1, user2, otherAdmin] = await ethers.getSigners()
 
@@ -80,8 +97,8 @@ describe('TokenRegistry', function () {
       const mockToken1Address = await mockToken1.getAddress()
 
       await expect(tokenRegistry.addToken(mockToken1Address, 0))
-        .to.emit(tokenRegistry, 'TokenAdded')
-        .withArgs(mockToken1Address, 0, 18)
+        .to.emit(tokenRegistry, 'TokenRegistryOperation')
+        .withArgs(OP_TOKEN_ADDED, mockToken1Address, 0, 18)
 
       expect(await tokenRegistry.getAllSupportedTokens()).to.have.lengthOf(1)
 
@@ -102,8 +119,8 @@ describe('TokenRegistry', function () {
       const mockToken2Address = await mockToken2.getAddress()
 
       await expect(tokenRegistry.addToken(mockToken1Address, 0))
-        .to.emit(tokenRegistry, 'TokenAdded')
-        .withArgs(mockToken1Address, 0, 18)
+        .to.emit(tokenRegistry, 'TokenRegistryOperation')
+        .withArgs(OP_TOKEN_ADDED, mockToken1Address, 0, 18)
 
       expect(await tokenRegistry.getAllSupportedTokens()).to.have.lengthOf(1)
 
@@ -115,8 +132,8 @@ describe('TokenRegistry', function () {
       expect(config1.decimals).to.equal(18)
 
       await expect(tokenRegistry.addToken(mockToken2Address, 0))
-        .to.emit(tokenRegistry, 'TokenAdded')
-        .withArgs(mockToken2Address, 0, 18)
+        .to.emit(tokenRegistry, 'TokenRegistryOperation')
+        .withArgs(OP_TOKEN_ADDED, mockToken2Address, 0, 18)
 
       expect(await tokenRegistry.getAllSupportedTokens()).to.have.lengthOf(2)
 
@@ -138,8 +155,8 @@ describe('TokenRegistry', function () {
       const expectedSmallestUnit = ethers.parseUnits('5', 18)
 
       await expect(tokenRegistry.addToken(mockToken1Address, wholeTokenAmount))
-        .to.emit(tokenRegistry, 'TokenAdded')
-        .withArgs(mockToken1Address, expectedSmallestUnit, 18)
+        .to.emit(tokenRegistry, 'TokenRegistryOperation')
+        .withArgs(OP_TOKEN_ADDED, mockToken1Address, expectedSmallestUnit, 18)
 
       const config = await tokenRegistry.tokenConfigs(mockToken1Address)
       expect(config.isSupported).to.be.true
@@ -162,16 +179,16 @@ describe('TokenRegistry', function () {
       expect(await tokenRegistry.isTokenSupported(mockToken1Address)).to.be.true
 
       await expect(tokenRegistry.addToken(mockToken1Address, 0))
-        .to.be.revertedWithCustomError(tokenRegistry, 'TokenAlreadyInRegistry')
-        .withArgs(mockToken1Address)
+        .to.be.revertedWithCustomError(tokenRegistry, 'TokenRegistryError')
+        .withArgs(ERR_TOKEN_ALREADY_IN_REGISTRY, mockToken1Address, 0)
     })
 
     it('Should revert when trying to add token with 0 address', async function () {
       const { tokenRegistry } = await loadFixture(deployTokenRegistryFixture)
 
       await expect(tokenRegistry.addToken(ethers.ZeroAddress, 0))
-        .to.be.revertedWithCustomError(tokenRegistry, 'InvalidToken')
-        .withArgs(ethers.ZeroAddress)
+        .to.be.revertedWithCustomError(tokenRegistry, 'TokenRegistryError')
+        .withArgs(ERR_INVALID_ADDRESS, ethers.ZeroAddress, 0)
     })
 
     it('Should revert when trying to add a non-contract address', async function () {
@@ -180,8 +197,8 @@ describe('TokenRegistry', function () {
       )
 
       await expect(tokenRegistry.addToken(user1.address, 0))
-        .to.be.revertedWithCustomError(tokenRegistry, 'NotAContract')
-        .withArgs(user1.address)
+        .to.be.revertedWithCustomError(tokenRegistry, 'TokenRegistryError')
+        .withArgs(ERR_NOT_A_CONTRACT, user1.address, 0)
     })
 
     it('Should revert when trying to add a non-ERC20 compliant contract', async function () {
@@ -196,8 +213,8 @@ describe('TokenRegistry', function () {
       const nonCompliantAddress = await nonCompliantToken.getAddress()
 
       await expect(tokenRegistry.addToken(nonCompliantAddress, 0))
-        .to.be.revertedWithCustomError(tokenRegistry, 'NotERC20Compliant')
-        .withArgs(nonCompliantAddress)
+        .to.be.revertedWithCustomError(tokenRegistry, 'TokenRegistryError')
+        .withArgs(ERR_NOT_ERC20_COMPLIANT, nonCompliantAddress, 0)
     })
 
     it('Should revert when non-owner tries to add tokens', async function () {
@@ -212,8 +229,8 @@ describe('TokenRegistry', function () {
 
       expect(await tokenRegistry.getAllSupportedTokens()).to.have.lengthOf(0)
       await expect(tokenRegistry.isTokenSupported(mockToken1Address))
-        .to.be.revertedWithCustomError(tokenRegistry, 'TokenNotInRegistry')
-        .withArgs(mockToken1Address)
+        .to.be.revertedWithCustomError(tokenRegistry, 'TokenRegistryError')
+        .withArgs(ERR_TOKEN_NOT_IN_REGISTRY, mockToken1Address, 0)
     })
 
     it('Should revert when minimum contribution amount would cause overflow', async function () {
@@ -224,9 +241,9 @@ describe('TokenRegistry', function () {
 
       const tooLargeAmount = ethers.parseUnits('1', 60)
 
-      await expect(
-        tokenRegistry.addToken(mockToken1Address, tooLargeAmount)
-      ).to.be.revertedWithCustomError(tokenRegistry, 'Overflow')
+      await expect(tokenRegistry.addToken(mockToken1Address, tooLargeAmount))
+        .to.be.revertedWithCustomError(tokenRegistry, 'TokenRegistryError')
+        .withArgs(ERR_OVERFLOW, mockToken1Address, tooLargeAmount)
     })
 
     it('Should allow other admin to add ERC20 token', async function () {
@@ -239,8 +256,8 @@ describe('TokenRegistry', function () {
       await expect(
         tokenRegistry.connect(otherAdmin).addToken(mockToken1Address, 0)
       )
-        .to.emit(tokenRegistry, 'TokenAdded')
-        .withArgs(mockToken1Address, 0, 18)
+        .to.emit(tokenRegistry, 'TokenRegistryOperation')
+        .withArgs(OP_TOKEN_ADDED, mockToken1Address, 0, 18)
 
       expect(await tokenRegistry.getAllSupportedTokens()).to.have.lengthOf(1)
 
@@ -266,14 +283,14 @@ describe('TokenRegistry', function () {
       expect(await tokenRegistry.getAllSupportedTokens()).to.have.lengthOf(1)
 
       await expect(tokenRegistry.removeToken(mockToken1Address))
-        .to.emit(tokenRegistry, 'TokenRemovedFromRegistry')
-        .withArgs(mockToken1Address)
+        .to.emit(tokenRegistry, 'TokenRegistryOperation')
+        .withArgs(OP_TOKEN_REMOVED, mockToken1Address, 0, 0)
 
       expect(await tokenRegistry.getAllSupportedTokens()).to.have.lengthOf(0)
 
       await expect(tokenRegistry.isTokenSupported(mockToken1Address))
-        .to.be.revertedWithCustomError(tokenRegistry, 'TokenNotInRegistry')
-        .withArgs(mockToken1Address)
+        .to.be.revertedWithCustomError(tokenRegistry, 'TokenRegistryError')
+        .withArgs(ERR_TOKEN_NOT_IN_REGISTRY, mockToken1Address, 0)
     })
 
     it('Should allow other admin to remove a token from the registry', async function () {
@@ -290,14 +307,14 @@ describe('TokenRegistry', function () {
       await expect(
         tokenRegistry.connect(otherAdmin).removeToken(mockToken1Address)
       )
-        .to.emit(tokenRegistry, 'TokenRemovedFromRegistry')
-        .withArgs(mockToken1Address)
+        .to.emit(tokenRegistry, 'TokenRegistryOperation')
+        .withArgs(OP_TOKEN_REMOVED, mockToken1Address, 0, 0)
 
       expect(await tokenRegistry.getAllSupportedTokens()).to.have.lengthOf(0)
 
       await expect(tokenRegistry.isTokenSupported(mockToken1Address))
-        .to.be.revertedWithCustomError(tokenRegistry, 'TokenNotInRegistry')
-        .withArgs(mockToken1Address)
+        .to.be.revertedWithCustomError(tokenRegistry, 'TokenRegistryError')
+        .withArgs(ERR_TOKEN_NOT_IN_REGISTRY, mockToken1Address, 0)
     })
 
     it('Should properly clean up all token data when removed', async function () {
@@ -309,16 +326,16 @@ describe('TokenRegistry', function () {
       await tokenRegistry.addToken(mockToken1Address, 5)
 
       await expect(tokenRegistry.removeToken(mockToken1Address))
-        .to.emit(tokenRegistry, 'TokenRemovedFromRegistry')
-        .withArgs(mockToken1Address)
+        .to.emit(tokenRegistry, 'TokenRegistryOperation')
+        .withArgs(OP_TOKEN_REMOVED, mockToken1Address, 0, 0)
 
       const config = await tokenRegistry.tokenConfigs(mockToken1Address)
       expect(config.isSupported).to.equal(false)
       expect(config.minimumContributionAmount).to.equal(0)
       expect(config.decimals).to.equal(0)
-      await expect(
-        tokenRegistry.isTokenSupported(mockToken1Address)
-      ).to.be.revertedWithCustomError(tokenRegistry, 'TokenNotInRegistry')
+      await expect(tokenRegistry.isTokenSupported(mockToken1Address))
+        .to.be.revertedWithCustomError(tokenRegistry, 'TokenRegistryError')
+        .withArgs(ERR_TOKEN_NOT_IN_REGISTRY, mockToken1Address, 0)
     })
 
     it('Should revert when removing a token not in registry', async function () {
@@ -329,8 +346,8 @@ describe('TokenRegistry', function () {
       const mockToken1Address = await mockToken1.getAddress()
 
       await expect(tokenRegistry.removeToken(mockToken1Address))
-        .to.be.revertedWithCustomError(tokenRegistry, 'TokenNotInRegistry')
-        .withArgs(mockToken1Address)
+        .to.be.revertedWithCustomError(tokenRegistry, 'TokenRegistryError')
+        .withArgs(ERR_TOKEN_NOT_IN_REGISTRY, mockToken1Address, 0)
     })
 
     it('Should revert when non-owner tries to remove tokens', async function () {
@@ -401,8 +418,8 @@ describe('TokenRegistry', function () {
       expect(await tokenRegistry.getAllSupportedTokens()).to.have.lengthOf(0)
 
       await expect(tokenRegistry.enableTokenSupport(mockToken1Address))
-        .to.emit(tokenRegistry, 'TokenSupportEnabled')
-        .withArgs(mockToken1Address)
+        .to.emit(tokenRegistry, 'TokenRegistryOperation')
+        .withArgs(OP_TOKEN_SUPPORT_ENABLED, mockToken1Address, 0, 0)
 
       expect(await tokenRegistry.isTokenSupported(mockToken1Address)).to.be.true
 
@@ -428,8 +445,8 @@ describe('TokenRegistry', function () {
       await expect(
         tokenRegistry.connect(otherAdmin).enableTokenSupport(mockToken1Address)
       )
-        .to.emit(tokenRegistry, 'TokenSupportEnabled')
-        .withArgs(mockToken1Address)
+        .to.emit(tokenRegistry, 'TokenRegistryOperation')
+        .withArgs(OP_TOKEN_SUPPORT_ENABLED, mockToken1Address, 0, 0)
 
       expect(await tokenRegistry.isTokenSupported(mockToken1Address)).to.be.true
 
@@ -450,11 +467,8 @@ describe('TokenRegistry', function () {
       expect(await tokenRegistry.getAllSupportedTokens()).to.have.lengthOf(1)
 
       await expect(tokenRegistry.enableTokenSupport(mockToken1Address))
-        .to.be.revertedWithCustomError(
-          tokenRegistry,
-          'TokenSupportAlreadyEnabled'
-        )
-        .withArgs(mockToken1Address)
+        .to.be.revertedWithCustomError(tokenRegistry, 'TokenRegistryError')
+        .withArgs(ERR_TOKEN_SUPPORT_ALREADY_ENABLED, mockToken1Address, 0)
 
       expect(await tokenRegistry.isTokenSupported(mockToken1Address)).to.be.true
 
@@ -469,8 +483,8 @@ describe('TokenRegistry', function () {
       const mockToken1Address = await mockToken1.getAddress()
 
       await expect(tokenRegistry.enableTokenSupport(mockToken1Address))
-        .to.be.revertedWithCustomError(tokenRegistry, 'TokenNotInRegistry')
-        .withArgs(mockToken1Address)
+        .to.be.revertedWithCustomError(tokenRegistry, 'TokenRegistryError')
+        .withArgs(ERR_TOKEN_NOT_IN_REGISTRY, mockToken1Address, 0)
     })
 
     it('Should revert when non-owner tries to enable support for disabled token', async function () {
@@ -516,8 +530,8 @@ describe('TokenRegistry', function () {
       expect(await tokenRegistry.getAllSupportedTokens()).to.have.lengthOf(1)
 
       await expect(tokenRegistry.disableTokenSupport(mockToken1Address))
-        .to.emit(tokenRegistry, 'TokenSupportDisabled')
-        .withArgs(mockToken1Address)
+        .to.emit(tokenRegistry, 'TokenRegistryOperation')
+        .withArgs(OP_TOKEN_SUPPORT_DISABLED, mockToken1Address, 0, 0)
 
       expect(await tokenRegistry.isTokenSupported(mockToken1Address)).to.be
         .false
@@ -541,8 +555,8 @@ describe('TokenRegistry', function () {
       await expect(
         tokenRegistry.connect(otherAdmin).disableTokenSupport(mockToken1Address)
       )
-        .to.emit(tokenRegistry, 'TokenSupportDisabled')
-        .withArgs(mockToken1Address)
+        .to.emit(tokenRegistry, 'TokenRegistryOperation')
+        .withArgs(OP_TOKEN_SUPPORT_DISABLED, mockToken1Address, 0, 0)
 
       expect(await tokenRegistry.isTokenSupported(mockToken1Address)).to.be
         .false
@@ -562,11 +576,8 @@ describe('TokenRegistry', function () {
       await tokenRegistry.disableTokenSupport(mockToken1Address)
 
       await expect(tokenRegistry.disableTokenSupport(mockToken1Address))
-        .to.be.revertedWithCustomError(
-          tokenRegistry,
-          'TokenSupportAlreadyDisabled'
-        )
-        .withArgs(mockToken1Address)
+        .to.be.revertedWithCustomError(tokenRegistry, 'TokenRegistryError')
+        .withArgs(ERR_TOKEN_SUPPORT_ALREADY_DISABLED, mockToken1Address, 0)
     })
 
     it('Should revert when trying to disable support for token not in registry', async function () {
@@ -577,8 +588,8 @@ describe('TokenRegistry', function () {
       const mockToken1Address = await mockToken1.getAddress()
 
       await expect(tokenRegistry.disableTokenSupport(mockToken1Address))
-        .to.be.revertedWithCustomError(tokenRegistry, 'TokenNotInRegistry')
-        .withArgs(mockToken1Address)
+        .to.be.revertedWithCustomError(tokenRegistry, 'TokenRegistryError')
+        .withArgs(ERR_TOKEN_NOT_IN_REGISTRY, mockToken1Address, 0)
     })
 
     it('Should revert when non-owner tries to disable support for enabled token', async function () {
@@ -628,8 +639,13 @@ describe('TokenRegistry', function () {
           newMinContribution
         )
       )
-        .to.emit(tokenRegistry, 'TokenMinimumContributionUpdated')
-        .withArgs(mockToken1Address, expectedSmallestUnit)
+        .to.emit(tokenRegistry, 'TokenRegistryOperation')
+        .withArgs(
+          OP_MIN_CONTRIBUTION_UPDATED,
+          mockToken1Address,
+          expectedSmallestUnit,
+          0
+        )
 
       const updatedConfig = await tokenRegistry.tokenConfigs(mockToken1Address)
       expect(updatedConfig.minimumContributionAmount).to.equal(
@@ -660,8 +676,13 @@ describe('TokenRegistry', function () {
           .connect(otherAdmin)
           .updateTokenMinimumContribution(mockToken1Address, newMinContribution)
       )
-        .to.emit(tokenRegistry, 'TokenMinimumContributionUpdated')
-        .withArgs(mockToken1Address, expectedSmallestUnit)
+        .to.emit(tokenRegistry, 'TokenRegistryOperation')
+        .withArgs(
+          OP_MIN_CONTRIBUTION_UPDATED,
+          mockToken1Address,
+          expectedSmallestUnit,
+          0
+        )
 
       const updatedConfig = await tokenRegistry.tokenConfigs(mockToken1Address)
       expect(updatedConfig.minimumContributionAmount).to.equal(
@@ -688,8 +709,8 @@ describe('TokenRegistry', function () {
           newMinContribution
         )
       )
-        .to.be.revertedWithCustomError(tokenRegistry, 'TokenNotInRegistry')
-        .withArgs(mockToken1Address)
+        .to.be.revertedWithCustomError(tokenRegistry, 'TokenRegistryError')
+        .withArgs(ERR_TOKEN_NOT_IN_REGISTRY, mockToken1Address, 0)
     })
 
     it('Should revert when non-owner tries to update minimum contribution amount', async function () {
@@ -739,8 +760,8 @@ describe('TokenRegistry', function () {
       expect(decimals).to.equal(18)
 
       await expect(tokenRegistry.getMinContributionAmount(ethers.ZeroAddress))
-        .to.be.revertedWithCustomError(tokenRegistry, 'TokenNotInRegistry')
-        .withArgs(ethers.ZeroAddress)
+        .to.be.revertedWithCustomError(tokenRegistry, 'TokenRegistryError')
+        .withArgs(ERR_TOKEN_NOT_IN_REGISTRY, ethers.ZeroAddress, 0)
     })
 
     it('getTokenDecimals() returns correct decimals', async function () {
@@ -756,8 +777,8 @@ describe('TokenRegistry', function () {
       )
 
       await expect(tokenRegistry.getTokenDecimals(ethers.ZeroAddress))
-        .to.be.revertedWithCustomError(tokenRegistry, 'TokenNotInRegistry')
-        .withArgs(ethers.ZeroAddress)
+        .to.be.revertedWithCustomError(tokenRegistry, 'TokenRegistryError')
+        .withArgs(ERR_TOKEN_NOT_IN_REGISTRY, ethers.ZeroAddress, 0)
     })
 
     it('getAllSupportedTokens() returns correct array', async function () {
@@ -794,8 +815,8 @@ describe('TokenRegistry', function () {
       const mockToken1Address = await mockToken1.getAddress()
 
       await expect(tokenRegistry.isTokenSupported(mockToken1Address))
-        .to.be.revertedWithCustomError(tokenRegistry, 'TokenNotInRegistry')
-        .withArgs(mockToken1Address)
+        .to.be.revertedWithCustomError(tokenRegistry, 'TokenRegistryError')
+        .withArgs(ERR_TOKEN_NOT_IN_REGISTRY, mockToken1Address, 0)
 
       await tokenRegistry.addToken(mockToken1Address, 0)
       expect(await tokenRegistry.isTokenSupported(mockToken1Address)).to.be.true
@@ -809,8 +830,8 @@ describe('TokenRegistry', function () {
 
       await tokenRegistry.removeToken(mockToken1Address)
       await expect(tokenRegistry.isTokenSupported(mockToken1Address))
-        .to.be.revertedWithCustomError(tokenRegistry, 'TokenNotInRegistry')
-        .withArgs(mockToken1Address)
+        .to.be.revertedWithCustomError(tokenRegistry, 'TokenRegistryError')
+        .withArgs(ERR_TOKEN_NOT_IN_REGISTRY, mockToken1Address, 0)
     })
 
     it('_convertFromSmallestUnit() correctly converts from smallest unit to whole tokens', async function () {

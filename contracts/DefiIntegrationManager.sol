@@ -11,6 +11,7 @@ import "./interfaces/IAavePool.sol";
 import "./interfaces/ISwapRouter.sol";
 import "./interfaces/IQuoter.sol";
 import "./abstracts/PlatformAdminAccessControl.sol";
+import "./libraries/DefiLibrary.sol";
 
 contract DefiIntegrationManager is
     Ownable,
@@ -18,69 +19,65 @@ contract DefiIntegrationManager is
     PlatformAdminAccessControl
 {
     using SafeERC20 for IERC20;
+    using DefiLibrary for *;
 
+    // Operation types for events
+    uint8 private constant OP_YIELD_DEPOSITED = 1;
+    uint8 private constant OP_YIELD_WITHDRAWN = 2;
+    uint8 private constant OP_YIELD_HARVESTED = 3;
+    uint8 private constant OP_TOKEN_SWAPPED = 4;
+    uint8 private constant OP_CONFIG_UPDATED = 5;
+
+    // Error codes
+    uint8 private constant ERR_UNAUTHORIZED = 1;
+    uint8 private constant ERR_ZERO_AMOUNT = 2;
+    uint8 private constant ERR_INSUFFICIENT_DEPOSIT = 3;
+    uint8 private constant ERR_TOKEN_NOT_SUPPORTED = 4;
+    uint8 private constant ERR_SLIPPAGE_EXCEEDED = 5;
+    uint8 private constant ERR_YIELD_DEPOSIT_FAILED = 6;
+    uint8 private constant ERR_YIELD_WITHDRAWAL_FAILED = 7;
+    uint8 private constant ERR_INVALID_ADDRESS = 8;
+    uint8 private constant ERR_INVALID_CONSTRUCTOR = 9;
+    uint8 private constant ERR_NO_YIELD = 10;
+    uint8 private constant ERR_WITHDRAWAL_MISMATCH = 11;
+    uint8 private constant ERR_FAILED_GET_ATOKEN = 12;
+    uint8 private constant ERR_TOKENS_SAME = 13;
+    uint8 private constant ERR_SWAP_QUOTE_INVALID = 14;
+    uint8 private constant ERR_SWAP_FAILED = 15;
+
+    // External contracts
     IAavePool public aavePool;
     ISwapRouter public uniswapRouter;
     IQuoter public uniswapQuoter;
     ITokenRegistry public tokenRegistry;
     IYieldDistributor public yieldDistributor;
 
+    // Constants
     uint24 public constant UNISWAP_FEE_TIER = 3000; // 0.3%
-    uint16 public constant SLIPPAGE_TOLERANCE = 50; // Changed from uint256 to uint16
+    uint16 public constant SLIPPAGE_TOLERANCE = 50; // 0.5%
 
+    // Storage
     mapping(address => mapping(address => uint256)) public aaveDeposits;
 
-    error UnauthorizedAddress();
-    error ZeroAmount(uint256 amount);
-    error InsufficientDeposit(
-        address token,
-        uint256 requested,
-        uint256 available
-    );
-    error TokenNotSupported(address token);
-    error SlippageExceeded(uint256 expected, uint256 received);
-    error YieldDepositFailed(string reason);
-    error YieldwithdrawalFailed(string reason);
-    error InvalidAddress();
-    error InvalidConstructorInput(uint8, address);
-    error NoYield(address token);
-    error WithdrawalAmountMismatch(
-        uint256 requestedAmount,
-        uint256 withdrawAmount
-    );
-    error FailedToGetATokenAddress();
-    error TokensAreTheSame(address fromToken, address outToken);
-    error SwapQuoteInvalid();
-    error SwapFailed(string reason);
+    // Consolidated error
+    error DefiError(uint8 code, address addr, uint256 value);
 
-    event YieldDeposited(
-        address indexed campaign,
+    // Consolidated event
+    event DefiOperation(
+        uint8 opType,
+        address indexed sender,
         address indexed token,
-        uint256 amount
+        address indexed secondToken,
+        uint256 amount,
+        uint256 secondAmount
     );
-    event YieldWithdrawn(
-        address indexed campaign,
-        address indexed token,
-        uint256 amount
+
+    // Configuration update event
+    event ConfigUpdated(
+        uint8 configType,
+        address oldAddress,
+        address newAddress
     );
-    event YieldHarvested(
-        address indexed campaign,
-        address indexed token,
-        uint256 totalYield,
-        uint256 creatorShare,
-        uint256 platformShare
-    );
-    event TokenSwapped(
-        address indexed fromToken,
-        address indexed toToken,
-        uint256 amountIn,
-        uint256 amountOut
-    );
-    event AavePoolUpdated(address oldAddress, address newAddress);
-    event TokenRegistryUpdated(address oldAddress, address newAddress);
-    event YieldDistributorUpdated(address oldAddress, address newAddress);
-    event UniswapRouterUpdated(address oldAddress, address newAddress);
-    event UniswapQuoterUpdated(address oldAddress, address newAddress);
 
     constructor(
         address _aavePool,
@@ -92,23 +89,23 @@ contract DefiIntegrationManager is
         address _owner
     ) Ownable(_owner) PlatformAdminAccessControl(_platformAdmin) {
         if (_aavePool == address(0)) {
-            revert InvalidConstructorInput(0, _aavePool);
+            revert DefiError(ERR_INVALID_CONSTRUCTOR, _aavePool, 0);
         }
 
         if (_uniswapRouter == address(0)) {
-            revert InvalidConstructorInput(1, _uniswapRouter);
+            revert DefiError(ERR_INVALID_CONSTRUCTOR, _uniswapRouter, 1);
         }
 
         if (_uniswapQuoter == address(0)) {
-            revert InvalidConstructorInput(2, _uniswapQuoter);
+            revert DefiError(ERR_INVALID_CONSTRUCTOR, _uniswapQuoter, 2);
         }
 
         if (_tokenRegistry == address(0)) {
-            revert InvalidConstructorInput(3, _tokenRegistry);
+            revert DefiError(ERR_INVALID_CONSTRUCTOR, _tokenRegistry, 3);
         }
 
         if (_yieldDistributor == address(0)) {
-            revert InvalidConstructorInput(4, _yieldDistributor);
+            revert DefiError(ERR_INVALID_CONSTRUCTOR, _yieldDistributor, 4);
         }
 
         aavePool = IAavePool(_aavePool);
@@ -122,60 +119,63 @@ contract DefiIntegrationManager is
         address _tokenRegistry
     ) external onlyPlatformAdmin {
         if (_tokenRegistry == address(0)) {
-            revert InvalidAddress();
+            revert DefiError(ERR_INVALID_ADDRESS, _tokenRegistry, 0);
         }
 
         address oldRegistry = address(tokenRegistry);
         tokenRegistry = ITokenRegistry(_tokenRegistry);
 
-        emit TokenRegistryUpdated(oldRegistry, _tokenRegistry);
+        emit ConfigUpdated(1, oldRegistry, _tokenRegistry);
     }
 
     function setYieldDistributor(
         address _yieldDistributor
     ) external onlyPlatformAdmin {
         if (_yieldDistributor == address(0)) {
-            revert InvalidAddress();
+            revert DefiError(ERR_INVALID_ADDRESS, _yieldDistributor, 0);
         }
 
         address oldDistributor = address(yieldDistributor);
         yieldDistributor = IYieldDistributor(_yieldDistributor);
 
-        emit YieldDistributorUpdated(oldDistributor, _yieldDistributor);
+        emit ConfigUpdated(2, oldDistributor, _yieldDistributor);
     }
 
     function setAavePool(address _aavePool) external onlyPlatformAdmin {
         if (_aavePool == address(0)) {
-            revert InvalidAddress();
+            revert DefiError(ERR_INVALID_ADDRESS, _aavePool, 0);
         }
 
         address oldAavePool = address(aavePool);
         aavePool = IAavePool(_aavePool);
-        emit AavePoolUpdated(oldAavePool, _aavePool);
+
+        emit ConfigUpdated(3, oldAavePool, _aavePool);
     }
 
     function setUniswapRouter(
         address _uniswapRouter
     ) external onlyPlatformAdmin {
         if (_uniswapRouter == address(0)) {
-            revert InvalidAddress();
+            revert DefiError(ERR_INVALID_ADDRESS, _uniswapRouter, 0);
         }
 
         address oldUniswapRouter = address(uniswapRouter);
         uniswapRouter = ISwapRouter(_uniswapRouter);
-        emit UniswapRouterUpdated(oldUniswapRouter, _uniswapRouter);
+
+        emit ConfigUpdated(4, oldUniswapRouter, _uniswapRouter);
     }
 
     function setUniswapQuoter(
         address _uniswapQuoter
     ) external onlyPlatformAdmin {
         if (_uniswapQuoter == address(0)) {
-            revert InvalidAddress();
+            revert DefiError(ERR_INVALID_ADDRESS, _uniswapQuoter, 0);
         }
 
         address oldUniswapQuoter = address(uniswapQuoter);
         uniswapQuoter = IQuoter(_uniswapQuoter);
-        emit UniswapQuoterUpdated(oldUniswapQuoter, _uniswapQuoter);
+
+        emit ConfigUpdated(5, oldUniswapQuoter, _uniswapQuoter);
     }
 
     function depositToYieldProtocol(
@@ -183,11 +183,11 @@ contract DefiIntegrationManager is
         uint256 _amount
     ) external nonReentrant {
         if (_amount <= 0) {
-            revert ZeroAmount(_amount);
+            revert DefiError(ERR_ZERO_AMOUNT, _token, _amount);
         }
 
         if (!tokenRegistry.isTokenSupported(_token)) {
-            revert TokenNotSupported(_token);
+            revert DefiError(ERR_TOKEN_NOT_SUPPORTED, _token, 0);
         }
 
         IERC20(_token).safeTransferFrom(msg.sender, address(this), _amount);
@@ -195,11 +195,17 @@ contract DefiIntegrationManager is
 
         try aavePool.supply(_token, _amount, address(this), 0) {
             aaveDeposits[msg.sender][_token] += _amount;
-            emit YieldDeposited(msg.sender, _token, _amount);
-        } catch Error(string memory reason) {
-            revert YieldDepositFailed(reason);
+
+            emit DefiOperation(
+                OP_YIELD_DEPOSITED,
+                msg.sender,
+                _token,
+                address(0),
+                _amount,
+                0
+            );
         } catch {
-            revert YieldDepositFailed("Aave deposit failed");
+            revert DefiError(ERR_YIELD_DEPOSIT_FAILED, _token, _amount);
         }
     }
 
@@ -208,30 +214,36 @@ contract DefiIntegrationManager is
         uint256 _amount
     ) external nonReentrant returns (uint256) {
         if (_amount <= 0) {
-            revert ZeroAmount(_amount);
+            revert DefiError(ERR_ZERO_AMOUNT, _token, _amount);
         }
 
         uint256 deposited = aaveDeposits[msg.sender][_token];
         if (_amount > deposited) {
-            revert InsufficientDeposit(_token, _amount, deposited);
+            revert DefiError(ERR_INSUFFICIENT_DEPOSIT, _token, _amount);
         }
 
         try aavePool.withdraw(_token, _amount, address(this)) returns (
             uint256 withdrawn
         ) {
             if (withdrawn != _amount) {
-                revert WithdrawalAmountMismatch(_amount, withdrawn);
+                revert DefiError(ERR_WITHDRAWAL_MISMATCH, _token, _amount);
             }
 
             aaveDeposits[msg.sender][_token] -= _amount;
             IERC20(_token).safeTransfer(msg.sender, withdrawn);
-            emit YieldWithdrawn(msg.sender, _token, withdrawn);
+
+            emit DefiOperation(
+                OP_YIELD_WITHDRAWN,
+                msg.sender,
+                _token,
+                address(0),
+                withdrawn,
+                0
+            );
 
             return withdrawn;
-        } catch Error(string memory reason) {
-            revert YieldwithdrawalFailed(reason);
         } catch {
-            revert YieldwithdrawalFailed("Aave withdrawal failed.");
+            revert DefiError(ERR_YIELD_WITHDRAWAL_FAILED, _token, _amount);
         }
     }
 
@@ -241,25 +253,31 @@ contract DefiIntegrationManager is
         uint256 amount = aaveDeposits[msg.sender][_token];
 
         if (amount <= 0) {
-            revert ZeroAmount(amount);
+            revert DefiError(ERR_ZERO_AMOUNT, _token, amount);
         }
 
         try aavePool.withdraw(_token, amount, address(this)) returns (
             uint256 withdrawn
         ) {
             if (withdrawn != amount) {
-                revert WithdrawalAmountMismatch(amount, withdrawn);
+                revert DefiError(ERR_WITHDRAWAL_MISMATCH, _token, amount);
             }
 
             aaveDeposits[msg.sender][_token] = 0;
             IERC20(_token).safeTransfer(msg.sender, withdrawn);
-            emit YieldWithdrawn(msg.sender, _token, withdrawn);
+
+            emit DefiOperation(
+                OP_YIELD_WITHDRAWN,
+                msg.sender,
+                _token,
+                address(0),
+                withdrawn,
+                0
+            );
 
             return withdrawn;
-        } catch Error(string memory reason) {
-            revert YieldwithdrawalFailed(reason);
         } catch {
-            revert YieldwithdrawalFailed("Aave withdrawal failed.");
+            revert DefiError(ERR_YIELD_WITHDRAWAL_FAILED, _token, amount);
         }
     }
 
@@ -272,7 +290,7 @@ contract DefiIntegrationManager is
     {
         uint256 deposited = aaveDeposits[msg.sender][_token];
         if (deposited <= 0) {
-            revert NoYield(_token);
+            revert DefiError(ERR_INSUFFICIENT_DEPOSIT, _token, 0);
         }
 
         address aToken;
@@ -281,16 +299,16 @@ contract DefiIntegrationManager is
         ) {
             aToken = data.aTokenAddress;
         } catch {
-            revert FailedToGetATokenAddress();
+            revert DefiError(ERR_FAILED_GET_ATOKEN, _token, 0);
         }
 
         if (aToken == address(0)) {
-            revert InvalidAddress();
+            revert DefiError(ERR_INVALID_ADDRESS, aToken, 0);
         }
 
         uint256 aTokenBalance = IERC20(aToken).balanceOf(address(this));
         if (aTokenBalance <= deposited) {
-            revert NoYield(_token);
+            revert DefiError(ERR_NO_YIELD, _token, 0);
         }
 
         uint256 totalYield = aTokenBalance - deposited;
@@ -299,7 +317,7 @@ contract DefiIntegrationManager is
             uint256 withdrawn
         ) {
             if (withdrawn != totalYield) {
-                revert WithdrawalAmountMismatch(totalYield, withdrawn);
+                revert DefiError(ERR_WITHDRAWAL_MISMATCH, _token, totalYield);
             }
 
             (creatorYield, platformYield) = yieldDistributor
@@ -310,18 +328,18 @@ contract DefiIntegrationManager is
             address treasury = yieldDistributor.getPlatformTreasury();
             IERC20(_token).safeTransfer(treasury, platformYield);
 
-            emit YieldHarvested(
+            emit DefiOperation(
+                OP_YIELD_HARVESTED,
                 msg.sender,
                 _token,
-                withdrawn,
+                treasury,
                 creatorYield,
                 platformYield
             );
+
             return (creatorYield, platformYield);
-        } catch Error(string memory reason) {
-            revert YieldwithdrawalFailed(reason);
         } catch {
-            revert YieldwithdrawalFailed("Yield withdrawal failed.");
+            revert DefiError(ERR_YIELD_WITHDRAWAL_FAILED, _token, totalYield);
         }
     }
 
@@ -331,7 +349,7 @@ contract DefiIntegrationManager is
         address _toToken
     ) public view returns (uint256) {
         if (_fromToken == _toToken) {
-            revert TokensAreTheSame(_fromToken, _toToken);
+            revert DefiError(ERR_TOKENS_SAME, _fromToken, 0);
         }
 
         try
@@ -355,19 +373,19 @@ contract DefiIntegrationManager is
         address _toToken
     ) external nonReentrant returns (uint256) {
         if (_amount <= 0) {
-            revert ZeroAmount(_amount);
+            revert DefiError(ERR_ZERO_AMOUNT, _fromToken, _amount);
         }
 
         if (!tokenRegistry.isTokenSupported(_fromToken)) {
-            revert TokenNotSupported(_fromToken);
+            revert DefiError(ERR_TOKEN_NOT_SUPPORTED, _fromToken, 0);
         }
 
         if (!tokenRegistry.isTokenSupported(_toToken)) {
-            revert TokenNotSupported(_toToken);
+            revert DefiError(ERR_TOKEN_NOT_SUPPORTED, _toToken, 0);
         }
 
         if (_fromToken == _toToken) {
-            revert TokensAreTheSame(_fromToken, _toToken);
+            revert DefiError(ERR_TOKENS_SAME, _fromToken, 0);
         }
 
         uint256 expectedOut = getTargetTokenEquivalent(
@@ -376,11 +394,14 @@ contract DefiIntegrationManager is
             _toToken
         );
         if (expectedOut == 0) {
-            revert SwapQuoteInvalid();
+            revert DefiError(ERR_SWAP_QUOTE_INVALID, _fromToken, _amount);
         }
 
-        uint256 minAmountOut = (expectedOut * (10000 - SLIPPAGE_TOLERANCE)) /
-            10000;
+        // Use library to calculate minimum output
+        uint256 minAmountOut = DefiLibrary.calculateMinOutput(
+            expectedOut,
+            SLIPPAGE_TOLERANCE
+        );
 
         IERC20(_fromToken).safeTransferFrom(msg.sender, address(this), _amount);
         IERC20(_fromToken).safeIncreaseAllowance(
@@ -388,31 +409,35 @@ contract DefiIntegrationManager is
             _amount
         );
 
-        ISwapRouter.ExactInputSingleParams memory params = ISwapRouter
-            .ExactInputSingleParams({
-                tokenIn: _fromToken,
-                tokenOut: _toToken,
-                fee: UNISWAP_FEE_TIER,
-                recipient: address(this),
-                deadline: block.timestamp + 15 minutes,
-                amountIn: _amount,
-                amountOutMinimum: minAmountOut,
-                sqrtPriceLimitX96: 0
-            });
+        // Use library to create swap parameters
+        ISwapRouter.ExactInputSingleParams memory params = DefiLibrary
+            .createSwapParams(
+                _fromToken,
+                _toToken,
+                UNISWAP_FEE_TIER,
+                _amount,
+                minAmountOut
+            );
 
         try uniswapRouter.exactInputSingle(params) returns (uint256 received) {
             if (received < minAmountOut) {
-                revert SlippageExceeded(minAmountOut, received);
+                revert DefiError(ERR_SLIPPAGE_EXCEEDED, _toToken, received);
             }
 
             IERC20(_toToken).safeTransfer(msg.sender, received);
-            emit TokenSwapped(_fromToken, _toToken, _amount, received);
+
+            emit DefiOperation(
+                OP_TOKEN_SWAPPED,
+                msg.sender,
+                _fromToken,
+                _toToken,
+                _amount,
+                received
+            );
 
             return received;
-        } catch Error(string memory reason) {
-            revert SwapFailed(reason);
         } catch {
-            revert SwapFailed("Uniswap swap failed.");
+            revert DefiError(ERR_SWAP_FAILED, _fromToken, _amount);
         }
     }
 
