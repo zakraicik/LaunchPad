@@ -37,11 +37,19 @@ export default function Navbar () {
             </Link>
             <Link
               href='/about'
-              className={`text-gray-600 hover:text-blue-600 transition-colors ${
-                router.pathname === '/about' ? 'text-blue-600 font-medium' : ''
+              className={`text-gray-700 hover:text-blue-600 px-3 py-2 rounded-md text-sm font-medium ${
+                router.pathname === '/about' ? 'text-blue-600' : ''
               }`}
             >
               About
+            </Link>
+            <Link
+              href='/faq'
+              className={`text-gray-700 hover:text-blue-600 px-3 py-2 rounded-md text-sm font-medium ${
+                router.pathname === '/faq' ? 'text-blue-600' : ''
+              }`}
+            >
+              FAQ
             </Link>
           </div>
 
