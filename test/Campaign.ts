@@ -1,5 +1,5 @@
 import { token } from '../typechain-types/@openzeppelin/contracts'
-
+import { Campaign } from '../typechain-types/contracts/Campaign'
 import { expect } from 'chai'
 import { ethers } from 'hardhat'
 import { loadFixture } from '@nomicfoundation/hardhat-network-helpers'
@@ -2829,6 +2829,81 @@ describe('Campaign', function () {
         expect(platformTreasuryBalanceAfter).to.equal(
           platformTreasuryBalanceBefore
         )
+      })
+    })
+
+    describe('Admin Override Functions', function () {
+      it('Should allow other platform admin to set admin override', async function () {
+        const { campaign, platformAdmin, otherAdmin } = await loadFixture(
+          deployCampaignFixture
+        )
+
+        // Initially campaign should be active
+        expect(await campaign.isCampaignActive()).to.be.true
+        expect(await campaign.adminOverride()).to.be.false
+
+        // Set admin override to true
+
+        await expect(campaign.connect(otherAdmin).setAdminOverride(true))
+          .to.emit(campaign, 'AdminOverrideSet')
+          .withArgs(true, otherAdmin.address)
+
+        // Campaign should now be inactive due to override
+        expect(await campaign.isCampaignActive()).to.be.false
+        expect(await campaign.adminOverride()).to.be.true
+      })
+
+      it('Should revert when non-admin tries to set admin override', async function () {
+        const { campaign, user1 } = await loadFixture(deployCampaignFixture)
+
+        await expect(
+          campaign.connect(user1).setAdminOverride(true)
+        ).to.be.revertedWithCustomError(campaign, 'NotAuthorizedAdmin')
+      })
+
+      it('Should prevent contributions when admin override is active', async function () {
+        const { campaign, mockToken1, user1, platformAdmin, otherAdmin } =
+          await loadFixture(deployCampaignFixture)
+
+        await campaign.connect(otherAdmin).setAdminOverride(true)
+
+        // Try to contribute
+        await mockToken1
+          .connect(user1)
+          .approve(await campaign.getAddress(), 100)
+        await expect(
+          campaign.connect(user1).contribute(await mockToken1.getAddress(), 100)
+        )
+          .to.be.revertedWithCustomError(campaign, 'CampaignError')
+          .withArgs(ERR_CAMPAIGN_NOT_ACTIVE, ethers.ZeroAddress, 0)
+      })
+
+      it('Should allow admin to reactivate campaign by removing override', async function () {
+        const { campaign, mockToken1, user1, platformAdmin, otherAdmin } =
+          await loadFixture(deployCampaignFixture)
+
+        // Set admin override to true
+
+        await campaign.connect(otherAdmin).setAdminOverride(true)
+        expect(await campaign.isCampaignActive()).to.be.false
+
+        // Remove override
+        await expect(campaign.connect(otherAdmin).setAdminOverride(false))
+          .to.emit(campaign, 'AdminOverrideSet')
+          .withArgs(false, otherAdmin.address)
+
+        // Campaign should be active again
+        expect(await campaign.isCampaignActive()).to.be.true
+
+        // Should allow contributions
+        await mockToken1
+          .connect(user1)
+          .approve(await campaign.getAddress(), 100)
+        await expect(
+          campaign.connect(user1).contribute(await mockToken1.getAddress(), 100)
+        )
+          .to.emit(campaign, 'Contribution')
+          .withArgs(user1.address, 100)
       })
     })
   })

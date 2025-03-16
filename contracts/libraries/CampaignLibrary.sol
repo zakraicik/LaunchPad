@@ -72,8 +72,12 @@ library CampaignLibrary {
     function isCampaignActive(
         uint256 currentTime,
         uint256 startTime,
-        uint256 endTime
+        uint256 endTime,
+        bool adminOverride
     ) internal pure returns (bool) {
+        if (adminOverride) {
+            return false;
+        }
         return (currentTime >= startTime && currentTime < endTime);
     }
 
