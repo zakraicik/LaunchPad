@@ -81,11 +81,13 @@ contract Campaign is Ownable, ReentrancyGuard, PlatformAdminAccessControl {
     uint256 public totalWeightedContributions;
     mapping(address => uint256) public weightedContributions;
     bool public weightedContributionsCalculated;
+    bool public adminOverride;
 
     // Events
     event Contribution(address indexed contributor, uint256 amount);
     event RefundIssued(address indexed contributor, uint256 amount);
     event FundsClaimed(address indexed owner, uint256 amount);
+    event AdminOverrideSet(bool indexed status, address indexed admin);
 
     // Enhanced with operation details while maintaining single event definition
     event FundsOperation(
@@ -524,7 +526,8 @@ contract Campaign is Ownable, ReentrancyGuard, PlatformAdminAccessControl {
             CampaignLibrary.isCampaignActive(
                 block.timestamp,
                 campaignStartTime,
-                campaignEndTime
+                campaignEndTime,
+                adminOverride
             );
     }
 
@@ -544,5 +547,18 @@ contract Campaign is Ownable, ReentrancyGuard, PlatformAdminAccessControl {
 
     function getContributorsCount() external view returns (uint256) {
         return contributorsCount;
+    }
+
+    function getAdminOverride() external view returns (bool) {
+        return adminOverride;
+    }
+
+    /**
+     * @dev Allows platform admin to override campaign status
+     * @param _adminOverride If true, forces campaign to inactive state
+     */
+    function setAdminOverride(bool _adminOverride) external onlyPlatformAdmin {
+        adminOverride = _adminOverride;
+        emit AdminOverrideSet(_adminOverride, msg.sender);
     }
 }

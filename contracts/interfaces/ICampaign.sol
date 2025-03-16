@@ -43,4 +43,8 @@ interface ICampaign {
     function getDepositedAmount(address token) external view returns (uint256);
 
     function getCurrentYieldRate(address token) external view returns (uint256);
+
+    function setAdminOverride(bool _adminOverride) external;
+
+    function getAdminOverride() external view returns (bool);
 }
