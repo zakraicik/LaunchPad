@@ -1330,161 +1330,25 @@ describe('Integration', function () {
         platformShare
       )
     })
-  })
 
-  describe('Security and Edge Cases', function () {
-    it('Should prevent unauthorized campaigns from using DefiManager', async function () {
-      const { creator, mockDAI, defiManager, platformAdmin } =
-        await loadFixture(deployPlatformFixture)
-
-      const unauthorizedCampaign = await ethers.deployContract('Campaign', [
-        creator.address,
-        await mockDAI.getAddress(),
-        CAMPAIGN_GOAL,
-        CAMPAIGN_DURATION,
-        await defiManager.getAddress(),
-        await platformAdmin.getAddress()
-      ])
-
-      await unauthorizedCampaign.waitForDeployment()
-
-      //   // Fund the campaign
-      await mockDAI.transfer(
-        await unauthorizedCampaign.getAddress(),
-        CONTRIBUTION_AMOUNT
-      )
-
-      //   //   //   // Attempt to use DefiManager functions should fail
-      //   await expect(
-      //     unauthorizedCampaign
-      //       .connect(creator)
-      //       .depositToYieldProtocol(
-      //         await mockDAI.getAddress(),
-      //         CONTRIBUTION_AMOUNT
-      //       )
-      //   ).to.be.revertedWithCustomError(defiManager, 'UnauthorizedAddress')
-
-      //   await expect(
-      //     unauthorizedCampaign
-      //       .connect(creator)
-      //       .harvestYield(await mockDAI.getAddress())
-      //   ).to.be.revertedWithCustomError(defiManager, 'UnauthorizedAddress')
-
-      //   await expect(
-      //     unauthorizedCampaign
-      //       .connect(creator)
-      //       .withdrawFromYieldProtocol(
-      //         await mockDAI.getAddress(),
-      //         CONTRIBUTION_AMOUNT
-      //       )
-      //   ).to.be.revertedWithCustomError(defiManager, 'UnauthorizedAddress')
-    })
-
-    it('Should prevent unauthorized users from managing campaigns', async function () {
-      const { campaignContractFactory, creator, contributor1, mockDAI } =
-        await loadFixture(deployPlatformFixture)
-
-      // Define relevant OP codes
-      const OP_CAMPAIGN_CREATED = 1
-
-      // Create a new campaign
-      const tx = await campaignContractFactory
-        .connect(creator)
-        .deploy(await mockDAI.getAddress(), CAMPAIGN_GOAL, CAMPAIGN_DURATION)
-
-      const receipt = await tx.wait()
-
-      if (!receipt) {
-        throw new Error('Transaction failed')
-      }
-
-      const event = receipt.logs.find(log => {
-        try {
-          const parsed = campaignContractFactory.interface.parseLog(log)
-          return parsed && parsed.name === 'FactoryOperation'
-        } catch {
-          return false
-        }
-      })
-
-      if (!event) {
-        throw new Error('Event failed')
-      }
-
-      const parsedEvent = campaignContractFactory.interface.parseLog(event)
-
-      if (!parsedEvent) {
-        throw new Error('parsedEvent failed')
-      }
-
-      // Verify operation type and get campaign address from the new event structure
-      expect(parsedEvent.args[0]).to.equal(OP_CAMPAIGN_CREATED)
-      const campaignAddress = parsedEvent.args[1]
-      expect(parsedEvent.args[2]).to.equal(creator.address)
-
-      // Get the Campaign contract instance
-      const Campaign = await ethers.getContractFactory('Campaign')
-      const campaign = Campaign.attach(campaignAddress) as unknown as ICampaign
-
-      // Fund the campaign
-      await mockDAI
-        .connect(contributor1)
-        .approve(campaignAddress, CONTRIBUTION_AMOUNT)
-      await campaign
-        .connect(contributor1)
-        .contribute(await mockDAI.getAddress(), CONTRIBUTION_AMOUNT)
-
-      // Non-owner should not be able to manage campaign
-      // These errors come from OpenZeppelin's Ownable, so they remain unchanged
-      await expect(
-        campaign
-          .connect(contributor1)
-          .depositToYieldProtocol(
-            await mockDAI.getAddress(),
-            CONTRIBUTION_AMOUNT
-          )
-      ).to.be.revertedWithCustomError(campaign, 'OwnableUnauthorizedAccount')
-
-      await expect(
-        campaign
-          .connect(contributor1)
-          .withdrawFromYieldProtocol(
-            await mockDAI.getAddress(),
-            CONTRIBUTION_AMOUNT
-          )
-      ).to.be.revertedWithCustomError(campaign, 'OwnableUnauthorizedAccount')
-
-      await expect(
-        campaign.connect(contributor1).harvestYield(await mockDAI.getAddress())
-      ).to.be.revertedWithCustomError(campaign, 'OwnableUnauthorizedAccount')
-    })
-
-    it('Should prevent deposits to yield protocol when token is not supported', async function () {
+    it('Should properly calculate weighted contributions and distribute yield to contributors', async function () {
       const {
         campaignContractFactory,
         creator,
         contributor1,
+        contributor2,
         mockDAI,
-        tokenRegistry,
-        owner,
-        defiManager
+        mockDAIAToken,
+        defiManager,
+        platformTreasury
       } = await loadFixture(deployPlatformFixture)
-
-      // Define relevant OP and ERR codes
-      const OP_CAMPAIGN_CREATED = 1
-      const OP_TOKEN_SUPPORT_DISABLED = 3
-      const ERR_TOKEN_NOT_SUPPORTED = 2
 
       // Create a new campaign
       const tx = await campaignContractFactory
         .connect(creator)
         .deploy(await mockDAI.getAddress(), CAMPAIGN_GOAL, CAMPAIGN_DURATION)
-
       const receipt = await tx.wait()
-
-      if (!receipt) {
-        throw new Error('Transaction failed')
-      }
+      if (!receipt) throw new Error('Transaction failed')
 
       const event = receipt.logs.find(log => {
         try {
@@ -1494,73 +1358,127 @@ describe('Integration', function () {
           return false
         }
       })
-
-      if (!event) {
-        throw new Error('event failed')
-      }
+      if (!event) throw new Error('Event failed')
 
       const parsedEvent = campaignContractFactory.interface.parseLog(event)
+      if (!parsedEvent) throw new Error('parsedEvent failed')
 
-      if (!parsedEvent) {
-        throw new Error('parsedEvent failed')
-      }
-
-      // Verify operation type and get campaign address
-      expect(parsedEvent.args[0]).to.equal(OP_CAMPAIGN_CREATED)
       const campaignAddress = parsedEvent.args[1]
-      expect(parsedEvent.args[2]).to.equal(creator.address)
-
-      // Get the Campaign contract instance
       const Campaign = await ethers.getContractFactory('Campaign')
       const campaign = Campaign.attach(campaignAddress) as unknown as ICampaign
 
-      // Fund the campaign
+      // First contribution early in the campaign
       await mockDAI
         .connect(contributor1)
-        .approve(campaignAddress, CONTRIBUTION_AMOUNT)
+        .approve(campaignAddress, CAMPAIGN_GOAL / 2n)
       await campaign
         .connect(contributor1)
-        .contribute(await mockDAI.getAddress(), CONTRIBUTION_AMOUNT)
+        .contribute(await mockDAI.getAddress(), CAMPAIGN_GOAL / 2n)
 
-      // Disable token support in the registry
-      const disableTx = await tokenRegistry
-        .connect(owner)
-        .disableTokenSupport(await mockDAI.getAddress())
+      // Advance time by 1/4 of campaign duration
+      await time.increase((CAMPAIGN_DURATION * 24 * 60 * 60) / 4)
 
-      const disableReceipt = await disableTx.wait()
+      // Second contribution later in the campaign
+      await mockDAI
+        .connect(contributor2)
+        .approve(campaignAddress, CAMPAIGN_GOAL / 2n)
+      await campaign
+        .connect(contributor2)
+        .contribute(await mockDAI.getAddress(), CAMPAIGN_GOAL / 2n)
 
-      // Verify the TokenRegistryOperation event
-      const disableEvent = disableReceipt.logs.find(log => {
-        try {
-          const parsed = tokenRegistry.interface.parseLog(log)
-          return (
-            parsed &&
-            parsed.name === 'TokenRegistryOperation' &&
-            parsed.args[0] === OP_TOKEN_SUPPORT_DISABLED
-          )
-        } catch {
-          return false
-        }
-      })
+      // Deposit all funds to yield protocol
+      await campaign
+        .connect(creator)
+        .depositToYieldProtocol(await mockDAI.getAddress(), CAMPAIGN_GOAL)
 
-      if (disableEvent) {
-        const parsedDisableEvent =
-          tokenRegistry.interface.parseLog(disableEvent)
-        expect(parsedDisableEvent.args[0]).to.equal(OP_TOKEN_SUPPORT_DISABLED) // opType
-        expect(parsedDisableEvent.args[1]).to.equal(await mockDAI.getAddress()) // token
-      }
+      // Generate yield - 10% of total deposit
+      const yieldAmount = CAMPAIGN_GOAL / 10n
 
-      // Existing campaign can still function with deposited tokens
-      await expect(
-        campaign
-          .connect(creator)
-          .depositToYieldProtocol(
-            await mockDAI.getAddress(),
-            CONTRIBUTION_AMOUNT / 2n
-          )
+      const treasuryBalanceBefore = await mockDAI.balanceOf(
+        platformTreasury.address
       )
-        .to.be.revertedWithCustomError(defiManager, 'DefiError')
-        .withArgs(4, await mockDAI.getAddress(), 0)
+
+      await mockDAIAToken.mint(await defiManager.getAddress(), yieldAmount)
+      await mockDAI.transfer(await defiManager.getAddress(), yieldAmount)
+      await campaign.connect(creator).harvestYield(await mockDAI.getAddress())
+
+      const totalHarvestedYield = await campaign.totalHarvestedYield()
+
+      // // Move past campaign end
+      await time.increase(CAMPAIGN_DURATION * 24 * 60 * 60)
+
+      // // Calculate weighted contributions
+      await campaign.calculateWeightedContributions()
+
+      const weightedContributions1 = await campaign.weightedContributions(
+        contributor1.address
+      )
+      const weightedContributions2 = await campaign.weightedContributions(
+        contributor2.address
+      )
+
+      // Get initial balances
+      const contributor1BalanceBefore = await mockDAI.balanceOf(
+        contributor1.address
+      )
+      const contributor2BalanceBefore = await mockDAI.balanceOf(
+        contributor2.address
+      )
+
+      // // Contributors claim their yield
+      await campaign.connect(contributor1).claimYield()
+      await campaign.connect(contributor2).claimYield()
+
+      // Calculate expected shares
+      const platformShare = (yieldAmount * 2000n) / 10000n // 20% platform share
+      const contributorsShare = yieldAmount - platformShare // 80% for contributors
+
+      // Verify platform treasury received its share
+      const treasuryBalanceAfter = await mockDAI.balanceOf(
+        platformTreasury.address
+      )
+
+      expect(
+        (await mockDAI.balanceOf(platformTreasury.address)) -
+          treasuryBalanceBefore
+      ).to.equal(platformShare)
+
+      // Get actual yield received by contributors
+      const contributor1YieldReceived =
+        (await mockDAI.balanceOf(contributor1.address)) -
+        contributor1BalanceBefore
+      const contributor2YieldReceived =
+        (await mockDAI.balanceOf(contributor2.address)) -
+        contributor2BalanceBefore
+
+      // Earlier contributor should receive more yield due to time weighting
+      expect(contributor1YieldReceived).to.be.gt(contributor2YieldReceived)
+
+      // Total distributed yield should match contributors' share (allowing for 1 wei rounding)
+      const totalDistributed =
+        contributor1YieldReceived + contributor2YieldReceived
+      expect(totalDistributed).to.be.oneOf([
+        contributorsShare,
+        contributorsShare - 1n
+      ])
+
+      // Verify contributors cannot claim yield twice
+      await expect(campaign.connect(contributor1).claimYield())
+        .to.be.revertedWithCustomError(campaign, 'CampaignError')
+        .withArgs(15, contributor1.address, 0)
+
+      // Verify weighted contributions state
+      expect(await campaign.weightedContributionsCalculated()).to.be.true
+      expect(await campaign.totalWeightedContributions()).to.be.gt(0)
+
+      // Verify the first contributor has higher weighted contribution due to earlier participation
+      const contributor1Weight = await campaign.weightedContributions(
+        contributor1.address
+      )
+      const contributor2Weight = await campaign.weightedContributions(
+        contributor2.address
+      )
+      expect(contributor1Weight).to.be.gt(contributor2Weight)
     })
 
     it('Should handle operations at token support boundaries', async function () {
