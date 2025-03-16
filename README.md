@@ -17,6 +17,13 @@ The platform consists of six main smart contracts:
 5. `TokenRegistry`: Manages supported tokens and their configurations
 6. `YieldDistributor`: Controls yield distribution between creators and platform
 
+The system also includes supporting contracts in the following directories:
+
+- `abstracts/`: Abstract contracts providing base functionality
+- `interfaces/`: Contract interfaces defining standard interactions
+- `libraries/`: Utility libraries for common functions
+- `mocks/`: Mock contracts for testing purposes
+
 ## Contract Details
 
 ### Campaign
@@ -28,6 +35,7 @@ The `Campaign` contract represents an individual fundraising campaign.
 - Fundraising with a goal amount and time limit
 - Support for contributions in multiple tokens
 - DeFi yield generation on contributed funds
+- Weighted contribution calculations for fair yield distribution
 - Automatic refunds if the goal is not reached
 - Platform administration safety measures
 
@@ -39,6 +47,10 @@ The `Campaign` contract represents an individual fundraising campaign.
 - `depositToYieldProtocol()`: Deposit funds to earn yield
 - `harvestYield()`: Collect generated yield
 - `withdrawFromYieldProtocol()`: Withdraw funds from yield protocol
+- `calculateWeightedContributions()`: Calculate weighted contributions for all contributors
+- `calculateWeightedContributionsBatch(uint256 batchSize)`: Process weighted contributions in batches
+- `claimYield()`: Allow contributors to claim their share of generated yield
+- `resetWeightedContributionsCalculation()`: Reset the weighted contribution calculation state
 
 ### CampaignContractFactory
 
@@ -49,16 +61,19 @@ Factory contract for deploying new campaign instances.
 - Creates standardized campaign contracts
 - Maintains registry of deployed campaigns
 - Associates campaigns with their creators
+- Validates campaign parameters before deployment
 
 **Key Functions:**
 
 - `deploy(address _campaignToken, uint256 _campaignGoalAmount, uint16 _campaignDuration)`: Deploy a new campaign
 - `getAllCampaigns()`: Get all deployed campaigns
 - `getCampaignsByCreator(address _creator)`: Get campaigns by a specific creator
+- `getCampaignsCount()`: Get total number of deployed campaigns
+- `getCreatorCampaignsCount(address _creator)`: Get number of campaigns by a creator
 
 ### DefiIntegrationManager
 
-Manages all interactions with external DeFi protocols (Aave for yield, Uniswap for swaps).
+Manages all interactions with external DeFi protocols.
 
 **Features:**
 
@@ -66,6 +81,7 @@ Manages all interactions with external DeFi protocols (Aave for yield, Uniswap f
 - Token swaps via Uniswap
 - Yield calculation and distribution
 - Slippage protection for swaps
+- Configurable protocol integrations
 
 **Key Functions:**
 
@@ -74,6 +90,7 @@ Manages all interactions with external DeFi protocols (Aave for yield, Uniswap f
 - `harvestYield(address _token)`: Harvest and distribute yield
 - `swapTokenForTarget(address _fromToken, uint256 _amount, address _toToken)`: Swap tokens via Uniswap
 - `getCurrentYieldRate(address token)`: Get current yield rate from Aave
+- `getDepositedAmount(address campaign, address token)`: Get amount deposited by a campaign
 
 ### PlatformAdmin
 
@@ -84,6 +101,7 @@ Handles platform administration and emergency access control.
 - Multi-admin support
 - Grace period management for emergency interventions
 - Campaign status monitoring
+- Secure access control
 
 **Key Functions:**
 
@@ -91,6 +109,7 @@ Handles platform administration and emergency access control.
 - `removePlatformAdmin(address _admin)`: Remove a platform administrator
 - `updateGracePeriod(uint256 _gracePeriod)`: Update the grace period
 - `isGracePeriodOver(address _campaign)`: Check if grace period is over for a campaign
+- `isPlatformAdmin(address account)`: Check if an address is a platform admin
 
 ### TokenRegistry
 
@@ -101,6 +120,7 @@ Manages the registry of supported tokens and their configurations.
 - Token support management
 - Minimum contribution amounts
 - Token validation
+- Decimal handling for different token standards
 
 **Key Functions:**
 
@@ -109,6 +129,8 @@ Manages the registry of supported tokens and their configurations.
 - `enableTokenSupport(address _token)`: Enable support for a token
 - `disableTokenSupport(address _token)`: Disable support for a token
 - `updateTokenMinimumContribution(address _token, uint256 _minimumContributionInWholeTokens)`: Update minimum contribution
+- `getMinContributionAmount(address token)`: Get minimum contribution amount and decimals
+- `getAllSupportedTokens()`: Get list of all supported tokens
 
 ### YieldDistributor
 
@@ -119,12 +141,15 @@ Manages yield distribution between creators and the platform.
 - Configurable platform yield share
 - Treasury management
 - Safe math for yield calculations
+- Maximum yield share limits
 
 **Key Functions:**
 
 - `calculateYieldShares(uint256 totalYield)`: Calculate creator and platform shares
 - `updatePlatformTreasury(address _platformTreasury)`: Update platform treasury address
 - `updatePlatformYieldShare(uint256 _platformYieldShare)`: Update platform's yield share percentage
+- `getPlatformTreasury()`: Get current platform treasury address
+- `getPlatformYieldShare()`: Get current platform yield share percentage
 
 ## System Flow
 
