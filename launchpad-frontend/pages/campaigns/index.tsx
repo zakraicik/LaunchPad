@@ -5,7 +5,7 @@ import CampaignCard from '../../components/campaigns/CampaignCard'
 import CampaignFilters from '../../components/campaigns/CampaignFilters'
 
 // Dummy data - replace with real data later
-const dummyCampaigns = [
+export const dummyCampaigns = [
   {
     id: 1,
     title: 'Clean Energy Initiative',
