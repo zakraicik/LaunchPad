@@ -44,20 +44,26 @@ export default function HowItWorks () {
           </p>
         </div>
 
-        <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8'>
+        <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 relative'>
           {steps.map((step, index) => (
             <div key={step.title} className='relative'>
-              {/* Connector line between steps */}
+              {/* Connector line */}
               {index < steps.length - 1 && (
-                <div className='hidden lg:block absolute top-1/4 right-0 w-full h-0.5 bg-blue-200 transform translate-y-2' />
+                <div
+                  className='hidden lg:block absolute left-1/2 right-0 top-12 h-0.5 bg-blue-200 -translate-y-1/2 transform'
+                  style={{ width: '100%' }}
+                />
               )}
 
-              <div className='relative z-10 p-6'>
-                <div className='flex items-center justify-center mb-4'>
+              <div className='relative z-10 flex flex-col items-center'>
+                {/* Icon container with background */}
+                <div className='mb-6 bg-white p-2 rounded-full'>
                   <div className='p-3 rounded-full bg-blue-100'>
                     <step.icon className='w-8 h-8 text-blue-600' />
                   </div>
                 </div>
+
+                {/* Content */}
                 <h3 className='text-xl font-semibold text-center mb-2'>
                   {step.title}
                 </h3>

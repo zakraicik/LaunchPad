@@ -6,6 +6,7 @@ import {
   ComputerDesktopIcon,
   BuildingOfficeIcon
 } from '@heroicons/react/24/outline'
+import Link from 'next/link'
 
 const categories = [
   {
@@ -61,17 +62,25 @@ export default function CampaignCategories () {
         </h2>
         <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6'>
           {categories.map(category => (
-            <div key={category.name} className='relative group cursor-pointer'>
+            <Link
+              key={category.name}
+              href={`/campaigns?category=${encodeURIComponent(category.name)}`}
+              className='relative group cursor-pointer h-full'
+            >
               <div
-                className={`p-6 rounded-lg ${category.color} transition-all duration-300 hover:scale-105`}
+                className={`p-6 rounded-lg ${category.color} transition-all duration-300 hover:scale-105 h-full flex flex-col`}
               >
-                <category.icon
-                  className={`w-12 h-12 ${category.textColor} mb-4`}
-                />
-                <h3 className='text-xl font-semibold mb-2'>{category.name}</h3>
-                <p className='text-gray-600'>{category.description}</p>
+                <div className='flex flex-col items-start flex-grow'>
+                  <category.icon
+                    className={`w-12 h-12 ${category.textColor} mb-4`}
+                  />
+                  <h3 className='text-xl font-semibold mb-2'>
+                    {category.name}
+                  </h3>
+                  <p className='text-gray-600'>{category.description}</p>
+                </div>
               </div>
-            </div>
+            </Link>
           ))}
         </div>
       </div>

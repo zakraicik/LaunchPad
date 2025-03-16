@@ -5,6 +5,7 @@ import { WagmiProvider } from 'wagmi'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { config } from '../config/web3'
 import '../styles/globals.css'
+import Layout from '../components/Layout'
 
 const queryClient = new QueryClient()
 
@@ -13,7 +14,9 @@ export default function App ({ Component, pageProps }: AppProps) {
     <WagmiProvider config={config}>
       <QueryClientProvider client={queryClient}>
         <RainbowKitProvider>
-          <Component {...pageProps} />
+          <Layout>
+            <Component {...pageProps} />
+          </Layout>
         </RainbowKitProvider>
       </QueryClientProvider>
     </WagmiProvider>

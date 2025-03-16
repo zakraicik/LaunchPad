@@ -1,8 +1,8 @@
-import ConnectButton from '../components/ConnectButton'
 import FeaturedCampaigns from '../components/home/FeaturedCampaigns'
 import CampaignCategories from '../components/home/CampaignCategories'
 import Statistics from '../components/home/Statistics'
 import HowItWorks from '../components/home/HowItWorks'
+import Link from 'next/link'
 
 export default function Home () {
   return (
@@ -18,7 +18,12 @@ export default function Home () {
               Support meaningful causes while generating sustainable yields.
               Your contribution keeps on giving.
             </p>
-            <ConnectButton />
+            <Link
+              href='/campaigns'
+              className='inline-flex items-center px-6 py-3 bg-blue-600 text-white hover:bg-blue-700 rounded-lg font-medium transition-colors'
+            >
+              Discover Campaigns
+            </Link>
           </div>
         </div>
       </section>

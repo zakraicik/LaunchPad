@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { ChevronLeftIcon, ChevronRightIcon } from '@heroicons/react/24/outline'
+import Link from 'next/link'
 
 // Dummy data - replace with real data later
 const dummyCampaigns = [
@@ -59,8 +60,12 @@ export default function FeaturedCampaigns () {
             style={{ transform: `translateX(-${currentIndex * 100}%)` }}
           >
             {dummyCampaigns.map(campaign => (
-              <div key={campaign.id} className='w-full flex-shrink-0 px-4'>
-                <div className='bg-white rounded-lg shadow-lg overflow-hidden'>
+              <Link
+                key={campaign.id}
+                href={`/campaigns?id=${campaign.id}`}
+                className='w-full flex-shrink-0 px-4 cursor-pointer'
+              >
+                <div className='bg-white rounded-lg shadow-lg overflow-hidden hover:shadow-xl transition-shadow'>
                   <div className='aspect-w-16 aspect-h-9 bg-gray-200'>
                     {/* Replace with actual Image component when images are available */}
                     <div className='w-full h-64 bg-gray-200'></div>
@@ -88,7 +93,7 @@ export default function FeaturedCampaigns () {
                     </div>
                   </div>
                 </div>
-              </div>
+              </Link>
             ))}
           </div>
 
@@ -105,6 +110,16 @@ export default function FeaturedCampaigns () {
           >
             <ChevronRightIcon className='h-6 w-6' />
           </button>
+        </div>
+
+        {/* View All Campaigns Button */}
+        <div className='mt-8 text-center'>
+          <Link
+            href='/campaigns'
+            className='inline-flex items-center px-6 py-3 bg-blue-600 text-white hover:bg-blue-700 rounded-lg font-medium transition-colors'
+          >
+            View All Campaigns
+          </Link>
         </div>
       </div>
     </section>
