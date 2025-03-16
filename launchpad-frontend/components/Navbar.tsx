@@ -4,6 +4,7 @@ import ConnectButton from './ConnectButton'
 
 export default function Navbar () {
   const router = useRouter()
+  const currentPath = router.pathname
 
   return (
     <nav className='bg-white shadow-sm'>
@@ -33,6 +34,14 @@ export default function Navbar () {
               }`}
             >
               Discover Campaigns
+            </Link>
+            <Link
+              href='/about'
+              className={`text-gray-600 hover:text-blue-600 transition-colors ${
+                router.pathname === '/about' ? 'text-blue-600 font-medium' : ''
+              }`}
+            >
+              About
             </Link>
           </div>
 
