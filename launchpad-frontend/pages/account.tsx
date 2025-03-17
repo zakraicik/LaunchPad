@@ -22,6 +22,9 @@ import {
   Tooltip,
   ResponsiveContainer
 } from 'recharts'
+import { GetServerSideProps } from 'next'
+import { createPublicClient, http } from 'viem'
+import { mainnet } from 'viem/chains'
 
 interface NotificationPreferences {
   yieldEarned: boolean
@@ -54,6 +57,15 @@ interface Contribution {
   yieldEarned: number
   txHash: string
   apy: number
+}
+
+export const getServerSideProps: GetServerSideProps = async context => {
+  // Since wallet connection state is client-side,
+  // we'll handle the actual protection in the ProtectedRoute component
+  // This is just to help with SEO and initial page load
+  return {
+    props: {}
+  }
 }
 
 export default function Account () {
@@ -666,19 +678,22 @@ export default function Account () {
                   </div>
                 </button>
 
-                <button
-                  onClick={() => setActiveTab('settings')}
-                  className={`py-4 px-1 border-b-2 font-medium text-sm ${
-                    activeTab === 'settings'
-                      ? 'border-blue-500 text-blue-600'
-                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                  }`}
-                >
-                  <div className='flex items-center'>
-                    <UserCircleIcon className='w-5 h-5 mr-2' />
-                    Account Settings
-                  </div>
-                </button>
+                {address && (
+                  <button
+                    onClick={() => setActiveTab('settings')}
+                    className={`py-4 px-1 border-b-2 font-medium text-sm ${
+                      activeTab === 'settings'
+                        ? 'border-blue-500 text-blue-600 bg-blue-50'
+                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 hover:bg-blue-50'
+                    } rounded-t-lg flex items-center space-x-2`}
+                  >
+                    <div className='flex items-center'>
+                      <UserCircleIcon className='w-5 h-5 mr-2' />
+                      <span>Account</span>
+                      <WalletIcon className='w-4 h-4 ml-2 text-blue-500' />
+                    </div>
+                  </button>
+                )}
               </nav>
             </div>
 

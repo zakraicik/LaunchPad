@@ -3,7 +3,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/router'
 import { useAccount } from 'wagmi'
 import { ConnectButton } from '@rainbow-me/rainbowkit'
-import { LockClosedIcon } from '@heroicons/react/24/outline'
+import { WalletIcon } from '@heroicons/react/24/outline'
 
 export default function Navbar () {
   const router = useRouter()
@@ -50,22 +50,19 @@ export default function Navbar () {
             ))}
 
             {/* Account Link with Protected State */}
-            <Link
-              href={shouldShowAccount ? '/account' : '#'}
-              onClick={e => {
-                if (!shouldShowAccount) {
-                  e.preventDefault()
-                }
-              }}
-              className={`inline-flex items-center text-gray-600 hover:text-blue-600 transition-colors ${
-                isActive('/account') ? 'text-blue-600 font-medium' : ''
-              } ${!shouldShowAccount && 'cursor-not-allowed opacity-50'}`}
-            >
-              <span>Account</span>
-              {!shouldShowAccount && (
-                <LockClosedIcon className='w-4 h-4 ml-1 inline-block' />
-              )}
-            </Link>
+            {shouldShowAccount && (
+              <Link
+                href='/account'
+                className={`inline-flex items-center px-3 py-1.5 rounded-lg bg-blue-50 transition-colors ${
+                  isActive('/account')
+                    ? 'text-blue-600 font-medium'
+                    : 'text-gray-600 hover:text-blue-600'
+                }`}
+              >
+                <WalletIcon className='w-4 h-4 mr-2' />
+                <span>Account</span>
+              </Link>
+            )}
           </div>
 
           {/* Connect Button */}
