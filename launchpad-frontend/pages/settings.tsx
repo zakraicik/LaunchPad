@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useAccount, useDisconnect } from 'wagmi'
 import { ConnectButton } from '@rainbow-me/rainbowkit'
 import {
@@ -8,6 +8,7 @@ import {
   CheckCircleIcon
 } from '@heroicons/react/24/outline'
 import ProtectedRoute from '../components/auth/ProtectedRoute'
+import { useRouter } from 'next/router'
 
 interface NotificationPreferences {
   yieldEarned: boolean
@@ -23,7 +24,8 @@ interface UserProfile {
 }
 
 export default function Settings () {
-  const { address } = useAccount()
+  const router = useRouter()
+  const { address, isConnected } = useAccount()
   const { disconnect } = useDisconnect()
   const [activeTab, setActiveTab] = useState<
     'profile' | 'wallet' | 'notifications'
@@ -45,6 +47,17 @@ export default function Settings () {
 
   const [isSaving, setIsSaving] = useState(false)
   const [savedMessage, setSavedMessage] = useState('')
+
+  // Redirect to home if not connected
+  useEffect(() => {
+    if (!isConnected) {
+      router.push('/')
+    }
+  }, [isConnected, router])
+
+  if (!isConnected) {
+    return null
+  }
 
   const handleNotificationToggle = (key: keyof NotificationPreferences) => {
     setNotificationPreferences(prev => ({
