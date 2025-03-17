@@ -9,7 +9,8 @@ export const config = getDefaultConfig({
   transports: {
     [baseSepolia.id]: http(),
     [baseMainnet.id]: http()
-  }
+  },
+  ssr: true // Enable server-side rendering
 })
 
 export const { chains, publicClient, webSocketPublicClient } = config
