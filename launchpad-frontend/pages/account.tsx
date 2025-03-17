@@ -10,7 +10,9 @@ import {
   FolderIcon,
   ChevronDownIcon,
   ChevronUpIcon,
-  ArrowTopRightOnSquareIcon
+  ArrowTopRightOnSquareIcon,
+  PlusCircleIcon,
+  PlusIcon
 } from '@heroicons/react/24/outline'
 import ProtectedRoute from '../components/auth/ProtectedRoute'
 import {

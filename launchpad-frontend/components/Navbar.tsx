@@ -4,6 +4,7 @@ import { useRouter } from 'next/router'
 import { useAccount } from 'wagmi'
 import { ConnectButton } from '@rainbow-me/rainbowkit'
 import { WalletIcon } from '@heroicons/react/24/outline'
+import { PlusCircleIcon } from '@heroicons/react/24/outline'
 
 export default function Navbar () {
   const router = useRouter()
@@ -51,17 +52,30 @@ export default function Navbar () {
 
             {/* Account Link with Protected State */}
             {shouldShowAccount && (
-              <Link
-                href='/account'
-                className={`inline-flex items-center px-3 py-1.5 rounded-lg bg-blue-50 transition-colors ${
-                  isActive('/account')
-                    ? 'text-blue-600 font-medium'
-                    : 'text-gray-600 hover:text-blue-600'
-                }`}
-              >
-                <WalletIcon className='w-4 h-4 mr-2' />
-                <span>Contributions</span>
-              </Link>
+              <>
+                <Link
+                  href='/account'
+                  className={`inline-flex items-center px-3 py-1.5 rounded-lg bg-blue-50 transition-colors ${
+                    isActive('/account')
+                      ? 'text-blue-600 font-medium'
+                      : 'text-gray-600 hover:text-blue-600'
+                  }`}
+                >
+                  <WalletIcon className='w-4 h-4 mr-2' />
+                  <span>Contributions</span>
+                </Link>
+                <Link
+                  href='/campaigns/manage'
+                  className={`inline-flex items-center px-3 py-1.5 rounded-lg bg-blue-50 transition-colors ${
+                    isActive('/campaigns/manage')
+                      ? 'text-blue-600 font-medium'
+                      : 'text-gray-600 hover:text-blue-600'
+                  }`}
+                >
+                  <PlusCircleIcon className='w-4 h-4 mr-2' />
+                  <span>Campaigns</span>
+                </Link>
+              </>
             )}
           </div>
 
