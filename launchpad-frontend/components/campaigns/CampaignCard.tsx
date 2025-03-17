@@ -1,9 +1,7 @@
-import {
-  ClockIcon,
-  UserGroupIcon,
-  ChartBarIcon
-} from '@heroicons/react/24/outline'
+import Image from 'next/image'
 import Link from 'next/link'
+import { formatNumber } from '../../utils/format'
+import CampaignTimer from './CampaignTimer'
 
 interface Campaign {
   id: number
@@ -13,7 +11,9 @@ interface Campaign {
   category: string
   target: number
   raised: number
-  daysLeft: number
+  startTime: number
+  endTime: number
+  duration: number
   backers: number
   avgYield: number
 }
@@ -26,66 +26,68 @@ export default function CampaignCard ({ campaign }: CampaignCardProps) {
   const progress = (campaign.raised / campaign.target) * 100
 
   return (
-    <Link href={`/campaigns/${campaign.id}`} className='block'>
-      <div className='bg-white rounded-lg shadow-sm overflow-hidden hover:shadow-md transition-shadow'>
+    <Link href={`/campaigns/${campaign.id}`}>
+      <div className='bg-white rounded-lg shadow-sm hover:shadow-md transition-shadow duration-200'>
         {/* Campaign Image */}
-        <div className='aspect-w-16 aspect-h-9 bg-gray-200'>
-          {/* Replace with actual Image component when images are available */}
-          <div className='w-full h-48 bg-gray-200'></div>
-        </div>
-
-        {/* Campaign Info */}
-        <div className='p-4'>
-          {/* Category Badge */}
-          <div className='mb-2'>
-            <span className='inline-block px-2 py-1 text-sm font-medium text-blue-600 bg-blue-50 rounded-full'>
+        <div className='relative h-48 w-full rounded-t-lg overflow-hidden'>
+          <Image
+            src={campaign.image}
+            alt={campaign.title}
+            fill
+            className='object-cover'
+          />
+          <div className='absolute top-4 right-4 bg-white/90 px-3 py-1 rounded-full'>
+            <span className='text-sm font-medium text-gray-900'>
               {campaign.category}
             </span>
           </div>
+        </div>
 
-          {/* Title and Description */}
-          <h3 className='text-lg font-semibold mb-2 line-clamp-1'>
+        <div className='p-6'>
+          {/* Campaign Title and Description */}
+          <h3 className='text-xl font-semibold text-gray-900 mb-2'>
             {campaign.title}
           </h3>
-          <p className='text-gray-600 text-sm mb-4 line-clamp-2 min-h-[40px]'>
+          <p className='text-gray-600 text-sm mb-4 line-clamp-2'>
             {campaign.description}
           </p>
 
+          {/* Campaign Timer */}
+          <div className='mb-4'>
+            <CampaignTimer
+              startTime={campaign.startTime}
+              endTime={campaign.endTime}
+              duration={campaign.duration}
+            />
+          </div>
+
           {/* Progress Bar */}
           <div className='mb-4'>
-            <div className='w-full bg-gray-200 rounded-full h-2'>
-              <div
-                className='bg-blue-600 h-2 rounded-full'
-                style={{ width: `${progress}%` }}
-              />
+            <div className='flex justify-between text-sm mb-1'>
+              <span className='font-medium text-gray-900'>
+                {formatNumber(campaign.raised)} USDC
+              </span>
+              <span className='text-gray-600'>
+                {progress.toFixed(1)}% of {formatNumber(campaign.target)} USDC
+              </span>
             </div>
-            <div className='flex justify-between text-sm mt-2'>
-              <span className='text-gray-600'>
-                ${campaign.raised.toLocaleString()} raised
-              </span>
-              <span className='text-gray-600'>
-                ${campaign.target.toLocaleString()} goal
-              </span>
+            <div className='h-2 bg-gray-200 rounded-full overflow-hidden'>
+              <div
+                className='h-full bg-blue-500 rounded-full'
+                style={{ width: `${Math.min(progress, 100)}%` }}
+              />
             </div>
           </div>
 
           {/* Campaign Metrics */}
-          <div className='grid grid-cols-3 gap-2 pt-4 border-t'>
-            <div className='flex items-center justify-center'>
-              <ClockIcon className='h-4 w-4 text-gray-400 mr-1' />
-              <span className='text-sm text-gray-600'>
-                {campaign.daysLeft}d left
-              </span>
+          <div className='grid grid-cols-2 gap-4 text-sm'>
+            <div>
+              <span className='text-gray-600'>Backers</span>
+              <p className='font-medium text-gray-900'>{campaign.backers}</p>
             </div>
-            <div className='flex items-center justify-center'>
-              <UserGroupIcon className='h-4 w-4 text-gray-400 mr-1' />
-              <span className='text-sm text-gray-600'>{campaign.backers}</span>
-            </div>
-            <div className='flex items-center justify-center'>
-              <ChartBarIcon className='h-4 w-4 text-gray-400 mr-1' />
-              <span className='text-sm text-gray-600'>
-                {campaign.avgYield}% APY
-              </span>
+            <div>
+              <span className='text-gray-600'>Avg. Yield</span>
+              <p className='font-medium text-gray-900'>{campaign.avgYield}%</p>
             </div>
           </div>
         </div>

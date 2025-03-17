@@ -2,24 +2,23 @@ interface CampaignFiltersProps {
   selectedCategory: string
   setSelectedCategory: (category: string) => void
   sortBy: string
-  setSortBy: (sort: string) => void
+  setSortBy: (sortBy: string) => void
 }
 
 const categories = [
-  'All',
-  'Science & Research',
-  'Education',
-  'Environment',
-  'Healthcare',
-  'Technology',
-  'Infrastructure'
+  { id: 'all', name: 'All Categories' },
+  { id: 'Environment', name: 'Environment' },
+  { id: 'Education', name: 'Education' },
+  { id: 'Healthcare', name: 'Healthcare' },
+  { id: 'Technology', name: 'Technology' },
+  { id: 'Social', name: 'Social Impact' }
 ]
 
 const sortOptions = [
-  { value: 'newest', label: 'Newest First' },
-  { value: 'progress', label: 'Most Progress' },
-  { value: 'timeLeft', label: 'Time Remaining' },
-  { value: 'mostFunded', label: 'Most Funded' }
+  { id: 'newest', name: 'Newest First' },
+  { id: 'endingSoon', name: 'Ending Soon' },
+  { id: 'mostFunded', name: 'Most Funded' },
+  { id: 'mostBackers', name: 'Most Backers' }
 ]
 
 export default function CampaignFilters ({
@@ -29,47 +28,49 @@ export default function CampaignFilters ({
   setSortBy
 }: CampaignFiltersProps) {
   return (
-    <div className='mt-4 pt-4 border-t border-gray-200'>
-      <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
-        {/* Category Filter */}
-        <div>
-          <label className='block text-sm font-medium text-gray-700 mb-2'>
-            Category
-          </label>
-          <div className='flex flex-wrap gap-2'>
-            {categories.map(category => (
-              <button
-                key={category}
-                onClick={() => setSelectedCategory(category)}
-                className={`px-3 py-1 rounded-full text-sm ${
-                  selectedCategory === category
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                }`}
-              >
-                {category}
-              </button>
-            ))}
-          </div>
-        </div>
+    <div className='mt-4 flex flex-col sm:flex-row gap-4'>
+      {/* Category Filter */}
+      <div className='flex-1'>
+        <label
+          htmlFor='category'
+          className='block text-sm font-medium text-gray-700 mb-1'
+        >
+          Category
+        </label>
+        <select
+          id='category'
+          value={selectedCategory}
+          onChange={e => setSelectedCategory(e.target.value)}
+          className='w-full rounded-lg border border-gray-300 py-2 px-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500'
+        >
+          {categories.map(category => (
+            <option key={category.id} value={category.id}>
+              {category.name}
+            </option>
+          ))}
+        </select>
+      </div>
 
-        {/* Sort Options */}
-        <div>
-          <label className='block text-sm font-medium text-gray-700 mb-2'>
-            Sort By
-          </label>
-          <select
-            value={sortBy}
-            onChange={e => setSortBy(e.target.value)}
-            className='w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500'
-          >
-            {sortOptions.map(option => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        </div>
+      {/* Sort Filter */}
+      <div className='flex-1'>
+        <label
+          htmlFor='sort'
+          className='block text-sm font-medium text-gray-700 mb-1'
+        >
+          Sort By
+        </label>
+        <select
+          id='sort'
+          value={sortBy}
+          onChange={e => setSortBy(e.target.value)}
+          className='w-full rounded-lg border border-gray-300 py-2 px-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500'
+        >
+          {sortOptions.map(option => (
+            <option key={option.id} value={option.id}>
+              {option.name}
+            </option>
+          ))}
+        </select>
       </div>
     </div>
   )

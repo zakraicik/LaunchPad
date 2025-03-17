@@ -2,9 +2,17 @@ import { useRouter } from 'next/router'
 import { useState } from 'react'
 import { ShareIcon } from '@heroicons/react/24/outline'
 import Contributors from '../../components/campaigns/Contributors'
+import { formatNumber } from '../../utils/format'
 
 // We'll move this to a proper data fetching solution later
 import { dummyCampaigns } from './index'
+
+// Helper function to calculate days left
+const getDaysLeft = (endTime: number): number => {
+  const now = Math.floor(Date.now() / 1000)
+  const secondsLeft = endTime - now
+  return Math.max(0, Math.floor(secondsLeft / (24 * 60 * 60)))
+}
 
 // Sample contributors data
 const sampleContributors = [
@@ -59,6 +67,7 @@ export default function CampaignDetail () {
   }
 
   const progress = (campaign.raised / campaign.target) * 100
+  const daysLeft = getDaysLeft(campaign.endTime)
 
   return (
     <div className='min-h-screen bg-gray-50 py-8'>
@@ -97,14 +106,14 @@ export default function CampaignDetail () {
               <div className='flex justify-between items-center mt-4'>
                 <div>
                   <p className='text-2xl font-bold'>
-                    ${campaign.raised.toLocaleString()}
+                    {formatNumber(campaign.raised)} USDC
                   </p>
                   <p className='text-sm text-gray-600'>
-                    raised of ${campaign.target.toLocaleString()}
+                    raised of {formatNumber(campaign.target)} USDC
                   </p>
                 </div>
                 <div className='text-right'>
-                  <p className='text-2xl font-bold'>{campaign.daysLeft}</p>
+                  <p className='text-2xl font-bold'>{daysLeft}</p>
                   <p className='text-sm text-gray-600'>days left</p>
                 </div>
               </div>

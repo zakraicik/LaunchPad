@@ -1,20 +1,63 @@
-import { useState, useEffect } from 'react'
-import { useRouter } from 'next/router'
+import { useState } from 'react'
 import { MagnifyingGlassIcon, FunnelIcon } from '@heroicons/react/24/outline'
 import CampaignCard from '../../components/campaigns/CampaignCard'
 import CampaignFilters from '../../components/campaigns/CampaignFilters'
 
+interface Campaign {
+  id: number
+  title: string
+  description: string
+  image: string
+  category: string
+  target: number
+  raised: number
+  startTime: number
+  endTime: number
+  duration: number
+  backers: number
+  avgYield: number
+}
+
+// Helper function to generate timestamps
+const getTimestamps = (durationInDays: number, isStarted: boolean = true) => {
+  const now = Math.floor(Date.now() / 1000)
+  const day = 24 * 60 * 60 // seconds in a day
+
+  if (isStarted) {
+    const startTime = now - 2 * day // Started 2 days ago
+    return {
+      startTime,
+      endTime: startTime + durationInDays * day,
+      duration: durationInDays
+    }
+  } else {
+    const startTime = now + day // Starts in 1 day
+    return {
+      startTime,
+      endTime: startTime + durationInDays * day,
+      duration: durationInDays
+    }
+  }
+}
+
+// Helper function to calculate days left
+const getDaysLeft = (endTime: number): number => {
+  const now = Math.floor(Date.now() / 1000)
+  const secondsLeft = endTime - now
+  return Math.max(0, Math.floor(secondsLeft / (24 * 60 * 60)))
+}
+
 // Dummy data - replace with real data later
-export const dummyCampaigns = [
+export const dummyCampaigns: Campaign[] = [
   {
     id: 1,
     title: 'Clean Energy Initiative',
     description: 'Supporting renewable energy projects with yield generation',
-    image: '/images/placeholder1.jpg',
+    image: '/placeholder.svg',
     category: 'Environment',
     target: 100000,
     raised: 75000,
-    daysLeft: 15,
+    ...getTimestamps(30), // 30-day campaign
     backers: 156,
     avgYield: 8.5
   },
@@ -22,11 +65,11 @@ export const dummyCampaigns = [
     id: 2,
     title: 'Education for All',
     description: 'Providing educational resources through sustainable funding',
-    image: '/images/placeholder2.jpg',
+    image: '/placeholder.svg',
     category: 'Education',
     target: 50000,
     raised: 35000,
-    daysLeft: 25,
+    ...getTimestamps(45, false), // 45-day campaign, not started yet
     backers: 89,
     avgYield: 7.8
   },
@@ -34,11 +77,11 @@ export const dummyCampaigns = [
     id: 3,
     title: 'Ocean Cleanup Project',
     description: 'Leveraging yield farming to fund ocean cleanup initiatives',
-    image: '/images/placeholder3.jpg',
+    image: '/placeholder.svg',
     category: 'Environment',
     target: 75000,
     raised: 45000,
-    daysLeft: 20,
+    ...getTimestamps(60), // 60-day campaign
     backers: 112,
     avgYield: 8.2
   },
@@ -46,11 +89,11 @@ export const dummyCampaigns = [
     id: 4,
     title: 'Medical Research Fund',
     description: 'Accelerating breakthrough medical research through DeFi',
-    image: '/images/placeholder4.jpg',
+    image: '/placeholder.svg',
     category: 'Healthcare',
     target: 200000,
     raised: 120000,
-    daysLeft: 45,
+    ...getTimestamps(90), // 90-day campaign
     backers: 234,
     avgYield: 9.1
   },
@@ -58,11 +101,11 @@ export const dummyCampaigns = [
     id: 5,
     title: 'AI for Good',
     description: 'Developing ethical AI solutions for social impact',
-    image: '/images/placeholder5.jpg',
+    image: '/placeholder.svg',
     category: 'Technology',
     target: 150000,
     raised: 85000,
-    daysLeft: 30,
+    ...getTimestamps(45), // 45-day campaign
     backers: 167,
     avgYield: 8.7
   },
@@ -70,11 +113,11 @@ export const dummyCampaigns = [
     id: 6,
     title: 'Sustainable Housing',
     description: 'Building eco-friendly affordable housing communities',
-    image: '/images/placeholder6.jpg',
+    image: '/placeholder.svg',
     category: 'Infrastructure',
     target: 300000,
     raised: 195000,
-    daysLeft: 60,
+    ...getTimestamps(120), // 120-day campaign
     backers: 312,
     avgYield: 7.9
   },
@@ -82,11 +125,11 @@ export const dummyCampaigns = [
     id: 7,
     title: 'Quantum Computing Research',
     description: 'Advancing quantum computing technology for public benefit',
-    image: '/images/placeholder7.jpg',
+    image: '/placeholder.svg',
     category: 'Science & Research',
     target: 250000,
     raised: 125000,
-    daysLeft: 40,
+    ...getTimestamps(75), // 75-day campaign
     backers: 178,
     avgYield: 8.9
   },
@@ -94,11 +137,11 @@ export const dummyCampaigns = [
     id: 8,
     title: 'Urban Farming Initiative',
     description: 'Creating sustainable urban farming solutions',
-    image: '/images/placeholder8.jpg',
+    image: '/placeholder.svg',
     category: 'Environment',
     target: 80000,
     raised: 52000,
-    daysLeft: 35,
+    ...getTimestamps(30), // 30-day campaign
     backers: 145,
     avgYield: 8.3
   },
@@ -106,76 +149,51 @@ export const dummyCampaigns = [
     id: 9,
     title: 'Digital Literacy Program',
     description: 'Bringing technology education to underserved communities',
-    image: '/images/placeholder9.jpg',
+    image: '/placeholder.svg',
     category: 'Education',
     target: 60000,
     raised: 42000,
-    daysLeft: 28,
+    ...getTimestamps(45, false), // 45-day campaign, not started yet
     backers: 98,
     avgYield: 7.6
   }
 ]
 
 export default function CampaignsDiscovery () {
-  const router = useRouter()
   const [searchQuery, setSearchQuery] = useState('')
-  const [showFilters, setShowFilters] = useState(false)
-  const [selectedCategory, setSelectedCategory] = useState('All')
+  const [selectedCategory, setSelectedCategory] = useState('all')
   const [sortBy, setSortBy] = useState('newest')
+  const [showFilters, setShowFilters] = useState(false)
 
-  // Handle category from URL parameter
-  useEffect(() => {
-    if (router.query.category) {
-      setSelectedCategory(decodeURIComponent(router.query.category as string))
-    }
-  }, [router.query.category])
-
-  // Update URL when category changes
   const handleCategoryChange = (category: string) => {
     setSelectedCategory(category)
-    if (category === 'All') {
-      const { category, ...rest } = router.query
-      router.push(
-        {
-          pathname: router.pathname,
-          query: rest
-        },
-        undefined,
-        { shallow: true }
-      )
-    } else {
-      router.push(
-        {
-          pathname: router.pathname,
-          query: { ...router.query, category }
-        },
-        undefined,
-        { shallow: true }
-      )
-    }
   }
 
-  // Filter campaigns based on search query and filters
+  // Filter campaigns based on search query and category
   const filteredCampaigns = dummyCampaigns.filter(campaign => {
     const matchesSearch =
       campaign.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
       campaign.description.toLowerCase().includes(searchQuery.toLowerCase())
+
     const matchesCategory =
-      selectedCategory === 'All' || campaign.category === selectedCategory
+      selectedCategory === 'all' || campaign.category === selectedCategory
+
     return matchesSearch && matchesCategory
   })
 
-  // Sort campaigns based on selected sorting option
+  // Sort campaigns based on selected sort option
   const sortedCampaigns = [...filteredCampaigns].sort((a, b) => {
     switch (sortBy) {
-      case 'progress':
-        return b.raised / b.target - a.raised / a.target
-      case 'timeLeft':
-        return a.daysLeft - b.daysLeft
+      case 'newest':
+        return b.startTime - a.startTime
+      case 'endingSoon':
+        return getDaysLeft(a.endTime) - getDaysLeft(b.endTime)
       case 'mostFunded':
         return b.raised - a.raised
-      default: // 'newest'
-        return b.id - a.id
+      case 'mostBackers':
+        return b.backers - a.backers
+      default:
+        return 0
     }
   })
 
