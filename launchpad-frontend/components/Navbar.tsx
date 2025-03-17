@@ -60,7 +60,7 @@ export default function Navbar () {
                 }`}
               >
                 <WalletIcon className='w-4 h-4 mr-2' />
-                <span>Account</span>
+                <span>Contributions</span>
               </Link>
             )}
           </div>

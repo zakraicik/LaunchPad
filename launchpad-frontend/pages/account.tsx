@@ -73,7 +73,7 @@ export default function Account () {
   const { disconnect } = useDisconnect()
   const [mounted, setMounted] = useState(false)
   const [activeTab, setActiveTab] = useState<
-    'campaigns' | 'analytics' | 'notifications' | 'settings'
+    'campaigns' | 'analytics' | 'notifications'
   >('campaigns')
 
   const [notificationPreferences, setNotificationPreferences] =
@@ -585,11 +585,11 @@ export default function Account () {
       <div className='min-h-screen bg-gray-50 py-8'>
         <div className='max-w-7xl mx-auto px-4 sm:px-6 lg:px-8'>
           <div className='mb-8'>
-            <h1 className='text-3xl font-bold'>Account</h1>
+            <h1 className='text-3xl font-bold'>Contributions</h1>
             <p className='text-gray-600 mt-2'>
               {address
                 ? `Welcome back, ${address.slice(0, 6)}...${address.slice(-4)}`
-                : 'Connect your wallet to view your account'}
+                : 'Connect your wallet to view your contributions'}
             </p>
           </div>
 
@@ -677,23 +677,6 @@ export default function Account () {
                     Notifications
                   </div>
                 </button>
-
-                {address && (
-                  <button
-                    onClick={() => setActiveTab('settings')}
-                    className={`py-4 px-1 border-b-2 font-medium text-sm ${
-                      activeTab === 'settings'
-                        ? 'border-blue-500 text-blue-600 bg-blue-50'
-                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 hover:bg-blue-50'
-                    } rounded-t-lg flex items-center space-x-2`}
-                  >
-                    <div className='flex items-center'>
-                      <UserCircleIcon className='w-5 h-5 mr-2' />
-                      <span>Account</span>
-                      <WalletIcon className='w-4 h-4 ml-2 text-blue-500' />
-                    </div>
-                  </button>
-                )}
               </nav>
             </div>
 
@@ -840,84 +823,8 @@ export default function Account () {
                 </div>
               )}
 
-              {/* Account Settings Tab */}
-              {activeTab === 'settings' && (
-                <div className='space-y-6'>
-                  <div>
-                    <label
-                      htmlFor='displayName'
-                      className='block text-sm font-medium text-gray-700'
-                    >
-                      Display Name
-                    </label>
-                    <input
-                      type='text'
-                      id='displayName'
-                      value={profile.displayName}
-                      onChange={e =>
-                        handleProfileChange('displayName', e.target.value)
-                      }
-                      className='mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm'
-                      placeholder='Enter your display name'
-                    />
-                  </div>
-
-                  <div>
-                    <label
-                      htmlFor='email'
-                      className='block text-sm font-medium text-gray-700'
-                    >
-                      Email Address
-                    </label>
-                    <input
-                      type='email'
-                      id='email'
-                      value={profile.email}
-                      onChange={e =>
-                        handleProfileChange('email', e.target.value)
-                      }
-                      className='mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm'
-                      placeholder='Enter your email'
-                    />
-                  </div>
-
-                  <div>
-                    <label
-                      htmlFor='bio'
-                      className='block text-sm font-medium text-gray-700'
-                    >
-                      Bio
-                    </label>
-                    <textarea
-                      id='bio'
-                      rows={3}
-                      value={profile.bio}
-                      onChange={e => handleProfileChange('bio', e.target.value)}
-                      className='mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm'
-                      placeholder='Tell us about yourself'
-                    />
-                  </div>
-
-                  <div className='border-t pt-4'>
-                    <h3 className='text-sm font-medium text-gray-900 mb-4'>
-                      Security Tips
-                    </h3>
-                    <ul className='space-y-2 text-sm text-gray-600'>
-                      <li>• Never share your private keys or seed phrase</li>
-                      <li>
-                        • Always verify transaction details before signing
-                      </li>
-                      <li>• Be cautious of phishing attempts</li>
-                      <li>
-                        • Consider using a hardware wallet for added security
-                      </li>
-                    </ul>
-                  </div>
-                </div>
-              )}
-
-              {/* Save Button for Settings and Notifications */}
-              {(activeTab === 'settings' || activeTab === 'notifications') && (
+              {/* Save Button for Notifications */}
+              {activeTab === 'notifications' && (
                 <div className='mt-6 flex items-center justify-end space-x-4'>
                   {savedMessage && (
                     <div className='flex items-center text-green-600'>
