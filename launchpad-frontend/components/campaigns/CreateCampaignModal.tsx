@@ -1,7 +1,9 @@
 import { Fragment, useState, useEffect } from 'react'
 import { Dialog, Transition } from '@headlessui/react'
-import { XMarkIcon } from '@heroicons/react/24/outline'
+import { XMarkIcon, PhotoIcon } from '@heroicons/react/24/outline'
 import { useAccount } from 'wagmi'
+import { useTokenRegistry } from '../../hooks/useTokenRegistry'
+import { type Address, zeroAddress } from 'viem'
 
 interface CreateCampaignModalProps {
   isOpen: boolean
@@ -10,9 +12,17 @@ interface CreateCampaignModalProps {
 }
 
 export interface CampaignFormData {
-  campaignToken: string
+  campaignToken: Address
   campaignGoalAmount: number
   campaignDuration: number
+  name: string
+  description: string
+  imageUrl?: string
+  status: 'draft' | 'active'
+}
+
+interface ValidationErrors {
+  [key: string]: string
 }
 
 export default function CreateCampaignModal ({
@@ -21,26 +31,75 @@ export default function CreateCampaignModal ({
   onSubmit
 }: CreateCampaignModalProps) {
   const { address } = useAccount()
+  const { supportedTokens, getMinContribution } = useTokenRegistry()
   const [mounted, setMounted] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [errors, setErrors] = useState<ValidationErrors>({})
   const [formData, setFormData] = useState<CampaignFormData>({
-    campaignToken: '',
+    campaignToken: zeroAddress,
     campaignGoalAmount: 0,
-    campaignDuration: 0
+    campaignDuration: 30,
+    name: '',
+    description: '',
+    imageUrl: '',
+    status: 'draft'
   })
 
   useEffect(() => {
     setMounted(true)
   }, [])
 
+  const validateForm = async (): Promise<boolean> => {
+    const newErrors: ValidationErrors = {}
+
+    if (!formData.name.trim()) {
+      newErrors.name = 'Campaign name is required'
+    }
+
+    if (!formData.description.trim()) {
+      newErrors.description = 'Campaign description is required'
+    }
+
+    if (formData.campaignToken === zeroAddress) {
+      newErrors.campaignToken = 'Please select a token'
+    }
+
+    if (formData.campaignGoalAmount <= 0) {
+      newErrors.campaignGoalAmount = 'Goal amount must be greater than 0'
+    } else if (formData.campaignToken !== zeroAddress) {
+      // Check minimum contribution amount
+      const minContribution = await getMinContribution(formData.campaignToken)
+      if (formData.campaignGoalAmount < minContribution) {
+        newErrors.campaignGoalAmount = `Minimum goal amount is ${minContribution}`
+      }
+    }
+
+    if (formData.campaignDuration < 1) {
+      newErrors.campaignDuration = 'Duration must be at least 1 day'
+    }
+
+    setErrors(newErrors)
+    return Object.keys(newErrors).length === 0
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsSubmitting(true)
+
     try {
+      const isValid = await validateForm()
+      if (!isValid) {
+        setIsSubmitting(false)
+        return
+      }
+
       await onSubmit(formData)
       onClose()
     } catch (error) {
       console.error('Error creating campaign:', error)
+      setErrors({
+        submit: 'Failed to create campaign. Please try again.'
+      })
     } finally {
       setIsSubmitting(false)
     }
@@ -96,6 +155,71 @@ export default function CreateCampaignModal ({
                       Create New Campaign
                     </Dialog.Title>
                     <form onSubmit={handleSubmit} className='mt-6 space-y-6'>
+                      {/* Campaign Name */}
+                      <div>
+                        <label
+                          htmlFor='name'
+                          className='block text-sm font-medium text-gray-700'
+                        >
+                          Campaign Name
+                        </label>
+                        <div className='mt-1'>
+                          <input
+                            type='text'
+                            name='name'
+                            id='name'
+                            required
+                            className='block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm'
+                            placeholder='Enter campaign name'
+                            value={formData.name}
+                            onChange={e =>
+                              setFormData({
+                                ...formData,
+                                name: e.target.value
+                              })
+                            }
+                          />
+                        </div>
+                        {errors.name && (
+                          <p className='mt-1 text-sm text-red-600'>
+                            {errors.name}
+                          </p>
+                        )}
+                      </div>
+
+                      {/* Campaign Description */}
+                      <div>
+                        <label
+                          htmlFor='description'
+                          className='block text-sm font-medium text-gray-700'
+                        >
+                          Campaign Description
+                        </label>
+                        <div className='mt-1'>
+                          <textarea
+                            name='description'
+                            id='description'
+                            rows={3}
+                            required
+                            className='block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm'
+                            placeholder='Describe your campaign'
+                            value={formData.description}
+                            onChange={e =>
+                              setFormData({
+                                ...formData,
+                                description: e.target.value
+                              })
+                            }
+                          />
+                        </div>
+                        {errors.description && (
+                          <p className='mt-1 text-sm text-red-600'>
+                            {errors.description}
+                          </p>
+                        )}
+                      </div>
+
+                      {/* Campaign Token */}
                       <div>
                         <label
                           htmlFor='campaignToken'
@@ -104,28 +228,35 @@ export default function CreateCampaignModal ({
                           Campaign Token
                         </label>
                         <div className='mt-1'>
-                          <input
-                            type='text'
+                          <select
                             name='campaignToken'
                             id='campaignToken'
                             required
                             className='block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm'
-                            placeholder='Token address'
                             value={formData.campaignToken}
                             onChange={e =>
                               setFormData({
                                 ...formData,
-                                campaignToken: e.target.value
+                                campaignToken: e.target.value as Address
                               })
                             }
-                          />
+                          >
+                            <option value={zeroAddress}>Select a token</option>
+                            {supportedTokens.map(token => (
+                              <option key={token.address} value={token.address}>
+                                {token.symbol} - {token.name}
+                              </option>
+                            ))}
+                          </select>
                         </div>
-                        <p className='mt-1 text-sm text-gray-500'>
-                          Enter the address of the token you want to raise funds
-                          in
-                        </p>
+                        {errors.campaignToken && (
+                          <p className='mt-1 text-sm text-red-600'>
+                            {errors.campaignToken}
+                          </p>
+                        )}
                       </div>
 
+                      {/* Campaign Goal Amount */}
                       <div>
                         <label
                           htmlFor='campaignGoalAmount'
@@ -152,11 +283,14 @@ export default function CreateCampaignModal ({
                             }
                           />
                         </div>
-                        <p className='mt-1 text-sm text-gray-500'>
-                          Enter the total amount you want to raise
-                        </p>
+                        {errors.campaignGoalAmount && (
+                          <p className='mt-1 text-sm text-red-600'>
+                            {errors.campaignGoalAmount}
+                          </p>
+                        )}
                       </div>
 
+                      {/* Campaign Duration */}
                       <div>
                         <label
                           htmlFor='campaignDuration'
@@ -182,10 +316,70 @@ export default function CreateCampaignModal ({
                             }
                           />
                         </div>
-                        <p className='mt-1 text-sm text-gray-500'>
-                          Enter how long the campaign should run in days
-                        </p>
+                        {errors.campaignDuration && (
+                          <p className='mt-1 text-sm text-red-600'>
+                            {errors.campaignDuration}
+                          </p>
+                        )}
                       </div>
+
+                      {/* Campaign Image */}
+                      <div>
+                        <label
+                          htmlFor='imageUrl'
+                          className='block text-sm font-medium text-gray-700'
+                        >
+                          Campaign Image URL
+                        </label>
+                        <div className='mt-1'>
+                          <input
+                            type='url'
+                            name='imageUrl'
+                            id='imageUrl'
+                            className='block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm'
+                            placeholder='https://example.com/image.jpg'
+                            value={formData.imageUrl}
+                            onChange={e =>
+                              setFormData({
+                                ...formData,
+                                imageUrl: e.target.value
+                              })
+                            }
+                          />
+                        </div>
+                      </div>
+
+                      {/* Campaign Status */}
+                      <div>
+                        <label
+                          htmlFor='status'
+                          className='block text-sm font-medium text-gray-700'
+                        >
+                          Campaign Status
+                        </label>
+                        <div className='mt-1'>
+                          <select
+                            name='status'
+                            id='status'
+                            required
+                            className='block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm'
+                            value={formData.status}
+                            onChange={e =>
+                              setFormData({
+                                ...formData,
+                                status: e.target.value as 'draft' | 'active'
+                              })
+                            }
+                          >
+                            <option value='draft'>Draft</option>
+                            <option value='active'>Active</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      {errors.submit && (
+                        <p className='text-sm text-red-600'>{errors.submit}</p>
+                      )}
 
                       <div className='mt-5 sm:mt-4 sm:flex sm:flex-row-reverse'>
                         <button
