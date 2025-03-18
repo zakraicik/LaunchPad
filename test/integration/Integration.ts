@@ -1,12 +1,25 @@
 import { expect } from 'chai'
-import { ethers } from 'hardhat'
+import { ethers, network } from 'hardhat'
+import { Contract } from 'ethers'
 
 import { time } from '@nomicfoundation/hardhat-network-helpers'
 import { loadFixture } from '@nomicfoundation/hardhat-network-helpers'
 
+import { PlatformAdmin } from '../../typechain-types'
+
 import { ICampaign } from '../interfaces/ICampaign'
 
-describe('Integration', function () {
+describe('Base Mainnet Integration Tests', function () {
+  //Whales
+  const ETH_WHALE_ADDRESS = '0xf977814e90da44bfa03b6295a0616a897441acec'
+
+  // External contracts addresses
+  const UNISWAP_QUOTER_ADDRESS = '0x3d4e44eb1374240ce5f1b871ab261cd16335b76a' //Uniswap Quoter V3
+  const UNISWAP_ROUTER_ADDRESS = '0x6ff5693b99212da76ad316178a184ab56d299b43' //uniswap Router V3
+  const AAVE_POOL_ADDRESS = '0xa238dd80c259a72e81d7e4664a9801593f98d1c5' //AAVE v3
+  const USDC_ADDRESS = '0x833589fcd6edb6e08f4c7c32d4f71b54bda02913' //USDC on Base
+  const DAI_ADDRESS = '0x50c5725949a6f0c72e6c4a641f24049a917db0cb' //DAI on Base
+
   // Constants for testing
   const TOKEN_AMOUNT = ethers.parseUnits('1000', 18)
   const CAMPAIGN_GOAL = ethers.parseUnits('500', 18)
@@ -15,204 +28,96 @@ describe('Integration', function () {
   const PLATFORM_YIELD_SHARE = 2000
   const GRACE_PERIOD = 7 // 7 days grace period
 
+  let usdc: Contract
+  let dai: Contract
+  let uniswapRouter: Contract
+  let uniswapQuoter: Contract
+  let aavePool: Contract
+  let platformAdmin: PlatformAdmin
   // Main fixture that deploys the entire platform and sets up test environment
   async function deployPlatformFixture () {
-    const [
-      owner,
-      creator,
-      contributor1,
-      contributor2,
-      platformTreasury,
-      randomAddress,
-      otherAdmin
-    ] = await ethers.getSigners()
+    // Impersonate the ETH whale
 
-    // Deploy mock tokens
-    const mockDAI = await ethers.deployContract('MockERC20', [
-      'Mock DAI',
-      'mDAI',
-      ethers.parseUnits('1000000', 18)
-    ])
-    const mockUSDC = await ethers.deployContract('MockERC20', [
-      'Mock USDC',
-      'mUSDC',
-      ethers.parseUnits('1000000', 18)
-    ])
-    await mockDAI.waitForDeployment()
-    await mockUSDC.waitForDeployment()
+    const eth_whale = await ethers.getSigner(ETH_WHALE_ADDRESS)
+    const deployer = (await ethers.getSigners())[0]
 
-    // Deploy mock AToken
-    const mockDAIAToken = await ethers.deployContract('MockAToken', [
-      'Aave DAI',
-      'aDAI',
-      await mockDAI.getAddress()
-    ])
-    const mockUSDCAToken = await ethers.deployContract('MockAToken', [
-      'Aave USDC',
-      'aUSDC',
-      await mockUSDC.getAddress()
-    ])
-    await mockDAIAToken.waitForDeployment()
-    await mockUSDCAToken.waitForDeployment()
+    const feeData = await ethers.provider.getFeeData()
+    const maxFeePerGas = feeData.maxFeePerGas
+    const maxPriorityFeePerGas = feeData.maxPriorityFeePerGas
 
-    // // Deploy mock Aave Pool
-    const mockAavePool = await ethers.deployContract('MockAavePool', [
-      await mockDAIAToken.getAddress()
-    ])
-    await mockAavePool.waitForDeployment()
+    //USDC ABI for testing
+    const ERC20_ABI = [
+      'function totalSupply() external view returns (uint256)',
+      'function decimals() external view returns (uint8)',
+      'function approve(address spender, uint256 amount) external returns (bool)',
+      'function transfer(address to, uint256 amount) external returns (bool)',
+      'function balanceOf(address account) external view returns (uint256)'
+    ]
 
-    // // Set ATokens in the mock pool
-    await mockAavePool.setAToken(
-      await mockDAI.getAddress(),
-      await mockDAIAToken.getAddress()
+    // Uniswap Router ABI for testing
+    const UNISWAP_ROUTER_ABI = [
+      'function exactInputSingle(tuple(address tokenIn, address tokenOut, uint24 fee, address recipient, uint256 deadline, uint256 amountIn, uint256 amountOutMinimum, uint160 sqrtPriceLimitX96)) external payable returns (uint256 amountOut)',
+      'function exactInput(tuple(bytes path, address recipient, uint256 deadline, uint256 amountIn, uint256 amountOutMinimum)) external payable returns (uint256 amountOut)',
+      'function getAmountsOut(uint256 amountIn, address[] memory path) external view returns (uint256[] memory amounts)'
+    ]
+
+    // Uniswap Quoter ABI for testing
+    const UNISWAP_QUOTER_ABI = [
+      'function quoteExactInputSingle(address tokenIn, address tokenOut, uint24 fee, uint256 amountIn, uint160 sqrtPriceLimitX96) external returns (uint256 amountOut)',
+      'function quoteExactInput(bytes memory path, uint256 amountIn) external returns (uint256 amountOut)'
+    ]
+
+    // Aave Pool ABI for testing
+    const AAVE_POOL_ABI = [
+      'function supply(address asset, uint256 amount, address onBehalfOf, uint16 referralCode) external',
+      'function withdraw(address asset, uint256 amount, address to) external returns (uint256)',
+      'function getReserveData(address asset) external view returns (tuple(uint256 unbacked, uint256 accruedToTreasury, uint256 totalAToken, uint256 totalStableDebt, uint256 totalVariableDebt, uint256 liquidityRate, uint256 variableBorrowRate, uint256 stableBorrowRate, uint256 averageStableBorrowRate, uint256 liquidityIndex, uint256 variableBorrowIndex, uint40 lastUpdateTimestamp))'
+    ]
+
+    // Initialize contracts with signer using getContractAt
+    usdc = await ethers.getContractAt(ERC20_ABI, USDC_ADDRESS)
+    dai = await ethers.getContractAt(ERC20_ABI, DAI_ADDRESS)
+    uniswapRouter = await ethers.getContractAt(
+      UNISWAP_ROUTER_ABI,
+      UNISWAP_ROUTER_ADDRESS
     )
-    await mockAavePool.setAToken(
-      await mockUSDC.getAddress(),
-      await mockUSDCAToken.getAddress()
+    uniswapQuoter = await ethers.getContractAt(
+      UNISWAP_QUOTER_ABI,
+      UNISWAP_QUOTER_ADDRESS
     )
+    aavePool = await ethers.getContractAt(AAVE_POOL_ABI, AAVE_POOL_ADDRESS)
 
-    // // Set liquidity rates (yield rates)
-    await mockAavePool.setLiquidityRate(
-      await mockDAI.getAddress(),
-      ethers.parseUnits('0.05', 27)
-    ) // 5% APY
-    await mockAavePool.setLiquidityRate(
-      await mockUSDC.getAddress(),
-      ethers.parseUnits('0.04', 27)
-    ) // 4% APY
-
-    // // Deploy mock Uniswap contracts
-    const mockUniswapQuoter = await ethers.deployContract('MockUniswapQuoter')
-    await mockUniswapQuoter.waitForDeployment()
-
-    const mockUniswapRouter = await ethers.deployContract('MockUniswapRouter')
-    await mockUniswapRouter.waitForDeployment()
-
-    // // Set custom swap rates
-    await mockUniswapQuoter.setCustomQuoteRate(
-      await mockDAI.getAddress(),
-      await mockUSDC.getAddress(),
-      1
-    ) // 1:1 rate
-    await mockUniswapRouter.setCustomSwapRate(
-      await mockDAI.getAddress(),
-      await mockUSDC.getAddress(),
-      1
+    platformAdmin = await ethers.deployContract(
+      'PlatformAdmin',
+      [GRACE_PERIOD, deployer.address],
+      {
+        maxFeePerGas,
+        maxPriorityFeePerGas,
+        gasLimit: 3000000
+      }
     )
 
-    // Add these two lines to your fixture:
-    await mockUniswapQuoter.setCustomQuoteRate(
-      await mockUSDC.getAddress(),
-      await mockDAI.getAddress(),
-      1
-    ) // 1:1 rate
-    await mockUniswapRouter.setCustomSwapRate(
-      await mockUSDC.getAddress(),
-      await mockDAI.getAddress(),
-      1
-    )
-
-    const platformAdmin = await ethers.deployContract('PlatformAdmin', [
-      GRACE_PERIOD,
-      owner
-    ])
-    await platformAdmin.waitForDeployment()
-
-    await platformAdmin.addPlatformAdmin(await otherAdmin.getAddress())
-
-    const platformAdminAddress = await platformAdmin.getAddress()
-
-    // // Deploy TokenRegistry
-    const tokenRegistry = await ethers.deployContract('TokenRegistry', [
-      owner.address,
-      platformAdminAddress
-    ])
-    await tokenRegistry.waitForDeployment()
-    const tokenRegistryAddress = await tokenRegistry.getAddress()
-
-    // // Add tokens to registry
-    await tokenRegistry.addToken(await mockDAI.getAddress(), 1) // 1 token minimum contribution
-    await tokenRegistry.addToken(await mockUSDC.getAddress(), 1) // 1 token minimum contribution
-
-    // // Deploy YieldDistributor
-    const yieldDistributor = await ethers.deployContract('YieldDistributor', [
-      platformTreasury.address,
-      platformAdminAddress,
-      owner.address
-    ])
-    await yieldDistributor.waitForDeployment()
-    const yieldDistributorAddress = await yieldDistributor.getAddress()
-
-    const defiManager = await ethers.deployContract('DefiIntegrationManager', [
-      await mockAavePool.getAddress(),
-      await mockUniswapRouter.getAddress(),
-      await mockUniswapQuoter.getAddress(),
-      tokenRegistryAddress,
-      yieldDistributorAddress,
-      platformAdminAddress,
-      owner.address
-    ])
-    await defiManager.waitForDeployment()
-    const defiManagerAddress = await defiManager.getAddress()
-
-    // // Deploy actual CampaignContractFactory with the correct DefiIntegrationManager
-    const campaignContractFactory = await ethers.deployContract(
-      'CampaignContractFactory',
-      [defiManagerAddress, platformAdminAddress]
-    )
-    await campaignContractFactory.waitForDeployment()
-
-    // // Distribute tokens to test accounts
-    await mockDAI.transfer(creator.address, TOKEN_AMOUNT * 10n)
-    await mockDAI.transfer(contributor1.address, TOKEN_AMOUNT * 10n)
-    await mockDAI.transfer(contributor2.address, TOKEN_AMOUNT * 10n)
-    await mockUSDC.transfer(creator.address, TOKEN_AMOUNT * 10n)
-    await mockUSDC.transfer(contributor1.address, TOKEN_AMOUNT * 10n)
-    await mockUSDC.transfer(contributor2.address, TOKEN_AMOUNT * 10n)
+    // await platformAdmin.waitForDeployment()
 
     return {
-      owner,
-      creator,
-      contributor1,
-      contributor2,
-      platformAdmin,
-      mockDAI,
-      mockUSDC,
-      mockDAIAToken,
-      mockUSDCAToken,
-      mockAavePool,
-      mockUniswapRouter,
-      mockUniswapQuoter,
-      tokenRegistry,
-      yieldDistributor,
-      defiManager,
-      campaignContractFactory,
-      CAMPAIGN_GOAL,
-      CAMPAIGN_DURATION,
-      CONTRIBUTION_AMOUNT,
-      PLATFORM_YIELD_SHARE,
-      platformTreasury
+      usdc,
+      dai,
+      deployer,
+      platformAdmin
     }
+
+    // console.log('PlatformAdmin deployed at:', await platformAdmin.getAddress())
+
+    // console.log(await platformAdmin.owner())
   }
 
-  describe('Fork', function () {
-    it('Check fork is working', async function () {
-      const USDC_ADDRESS = '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913'
-      const USDC_ABI = [
-        'function decimals() view returns (uint8)',
-        'function totalSupply() view returns (uint256)'
-      ]
-
-      const usdc = await ethers.getContractAt(USDC_ABI, USDC_ADDRESS)
-
-      const decimals = await usdc.decimals()
-      const totalSupply = await usdc.totalSupply()
-
-      console.log(
-        `USDC Total Supply: ${ethers.formatUnits(totalSupply, decimals)} USDC`
+  describe('Base Mainnet Fork Tests', function () {
+    it('Deploy Launchpad', async function () {
+      const { platformAdmin, deployer } = await loadFixture(
+        deployPlatformFixture
       )
 
-      expect(totalSupply).to.be.gt(0n)
+      expect(await platformAdmin.owner()).to.equal(deployer.address)
     })
   })
 

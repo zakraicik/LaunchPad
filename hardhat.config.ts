@@ -1,3 +1,4 @@
+// hardhat.config.ts
 import { HardhatUserConfig } from 'hardhat/config'
 import '@nomicfoundation/hardhat-toolbox'
 import 'hardhat-gas-reporter'
@@ -14,12 +15,17 @@ const config: HardhatUserConfig = {
   },
   networks: {
     hardhat: {
-      // This is the default network for unit tests
-    },
-    baseMainnetFork: {
-      url: 'https://mainnet.base.org',
       forking: {
-        url: 'https://mainnet.base.org'
+        url: 'https://base-mainnet.g.alchemy.com/v2/A8wE4FsZsP3eTlR0DSDh3w5nU7wdPyUG',
+        blockNumber: 27769750 // Use a recent block number
+      },
+      chains: {
+        8453: {
+          hardforkHistory: {
+            shanghai: 0, // Base launched with Shanghai already active
+            cancun: 5691340 // Base's Cancun upgrade block
+          }
+        }
       }
     },
     baseSepolia: {
