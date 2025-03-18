@@ -27,7 +27,6 @@ describe('Campaign', function () {
   const ERR_NO_YIELD = 14
   const ERR_YIELD_CLAIMED = 15
   const ERR_CALCULATION_COMPLETE = 16
-  const ERR_CALCULATION_IN_PROGRESS = 17
   const ERR_WEIGHTED_NOT_CALCULATED = 18
 
   async function deployCampaignFixture () {

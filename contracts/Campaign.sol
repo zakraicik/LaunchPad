@@ -22,6 +22,7 @@ contract Campaign is Ownable, ReentrancyGuard, PlatformAdminAccessControl {
     uint8 private constant OP_HARVEST = 2;
     uint8 private constant OP_WITHDRAW = 3;
     uint8 private constant OP_WITHDRAW_ALL = 4;
+    uint8 private constant OP_RESET_WEIGHTED_CONTRIBUTIONS_CALCULATION = 5;
 
     // Error codes - more specific but still compact
     uint8 private constant ERR_INVALID_ADDRESS = 1;
@@ -486,6 +487,14 @@ contract Campaign is Ownable, ReentrancyGuard, PlatformAdminAccessControl {
         if (weightedContributionsCalculated)
             revert CampaignError(ERR_CALCULATION_COMPLETE, address(0), 0);
         currentProcessingContributor = address(0);
+
+        emit FundsOperation(
+            campaignToken,
+            0,
+            OP_RESET_WEIGHTED_CONTRIBUTIONS_CALCULATION,
+            0,
+            msg.sender
+        );
     }
 
     function calculateYieldShare(

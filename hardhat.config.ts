@@ -12,6 +12,21 @@ const config: HardhatUserConfig = {
       }
     }
   },
+  networks: {
+    hardhat: {
+      // This is the default network for unit tests
+    },
+    baseMainnetFork: {
+      url: 'https://mainnet.base.org',
+      forking: {
+        url: 'https://mainnet.base.org'
+      }
+    },
+    baseSepolia: {
+      url: 'https://sepolia.base.org',
+      chainId: 84532
+    }
+  },
   gasReporter: {
     enabled: true,
     currency: 'USD',
