@@ -46,5 +46,5 @@ interface ICampaign {
 
     function setAdminOverride(bool _adminOverride) external;
 
-    function getAdminOverride() external view returns (bool);
+    function adminOverride() external view returns (bool);
 }

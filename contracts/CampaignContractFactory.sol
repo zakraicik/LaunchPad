@@ -126,6 +126,10 @@ contract CampaignContractFactory {
     function getCampaignsByCreator(
         address _creator
     ) external view returns (address[] memory) {
+        if (_creator == address(0)) {
+            revert FactoryError(ERR_INVALID_ADDRESS, _creator, 0);
+        }
+
         return creatorToCampaigns[_creator];
     }
 
@@ -136,6 +140,10 @@ contract CampaignContractFactory {
     function getCreatorCampaignsCount(
         address _creator
     ) external view returns (uint256) {
+        if (_creator == address(0)) {
+            revert FactoryError(ERR_INVALID_ADDRESS, _creator, 0);
+        }
+
         return creatorToCampaigns[_creator].length;
     }
 }

@@ -545,18 +545,6 @@ contract Campaign is Ownable, ReentrancyGuard, PlatformAdminAccessControl {
         return defiManager.getCurrentYieldRate(token);
     }
 
-    function getContributorsCount() external view returns (uint256) {
-        return contributorsCount;
-    }
-
-    function getAdminOverride() external view returns (bool) {
-        return adminOverride;
-    }
-
-    /**
-     * @dev Allows platform admin to override campaign status
-     * @param _adminOverride If true, forces campaign to inactive state
-     */
     function setAdminOverride(bool _adminOverride) external onlyPlatformAdmin {
         adminOverride = _adminOverride;
         emit AdminOverrideSet(_adminOverride, msg.sender);

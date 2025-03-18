@@ -325,7 +325,7 @@ contract DefiIntegrationManager is
 
             IERC20(_token).safeTransfer(msg.sender, creatorYield);
 
-            address treasury = yieldDistributor.getPlatformTreasury();
+            address treasury = yieldDistributor.platformTreasury();
             IERC20(_token).safeTransfer(treasury, platformYield);
 
             emit DefiOperation(
@@ -457,10 +457,18 @@ contract DefiIntegrationManager is
         address campaign,
         address token
     ) external view returns (uint256 amount) {
-        return aaveDeposits[campaign][token];
-    }
+        if (campaign == address(0)) {
+            revert DefiError(ERR_INVALID_ADDRESS, campaign, 0);
+        }
 
-    function getTokenRegistry() external view returns (ITokenRegistry) {
-        return tokenRegistry;
+        if (token == address(0)) {
+            revert DefiError(ERR_INVALID_ADDRESS, token, 0);
+        }
+
+        if (!tokenRegistry.isTokenSupported(token)) {
+            revert DefiError(ERR_TOKEN_NOT_SUPPORTED, token, 0);
+        }
+
+        return aaveDeposits[campaign][token];
     }
 }

@@ -228,15 +228,15 @@ contract TokenRegistry is Ownable, PlatformAdminAccessControl {
         return (config.minimumContributionAmount, config.decimals);
     }
 
-    function getAllSupportedTokens() external view returns (address[] memory) {
-        return supportedTokens;
-    }
-
     function getTokenDecimals(address token) external view returns (uint8) {
         if (!tokenExists[token]) {
             revert TokenRegistryError(ERR_TOKEN_NOT_IN_REGISTRY, token, 0);
         }
         return tokenConfigs[token].decimals;
+    }
+
+    function getAllSupportedTokens() external view returns (address[] memory) {
+        return supportedTokens;
     }
 
     function testConvertFromSmallestUnit(

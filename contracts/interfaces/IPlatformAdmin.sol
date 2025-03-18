@@ -19,4 +19,6 @@ interface IPlatformAdmin {
     function isGracePeriodOver(
         address _campaign
     ) external view returns (bool, uint256);
+
+    function isPlatformAdmin(address account) external view returns (bool);
 }

@@ -1272,7 +1272,7 @@ describe('Integration', function () {
       }
 
       // Verify the share was updated
-      expect(await yieldDistributor.getPlatformYieldShare()).to.equal(
+      expect(await yieldDistributor.platformYieldShare()).to.equal(
         newPlatformShare
       )
 
@@ -1905,7 +1905,7 @@ describe('Integration', function () {
       }
 
       // Verify treasury was updated
-      expect(await yieldDistributor.getPlatformTreasury()).to.equal(
+      expect(await yieldDistributor.platformTreasury()).to.equal(
         newTreasury.address
       )
 

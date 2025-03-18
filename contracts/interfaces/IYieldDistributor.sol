@@ -2,8 +2,17 @@
 pragma solidity ^0.8.28;
 
 interface IYieldDistributor {
-    function calculateYieldShares(uint256 totalYield) external view returns (uint256 creatorShare, uint256 platformShare);
-    function getPlatformTreasury() external view returns (address);
-    function getPlatformYieldShare() external view returns (uint256);
-    function getYieldSplitPreview(uint256 yieldAmount) external view returns (uint256 creatorAmount, uint256 platformAmount);
+    function calculateYieldShares(
+        uint256 totalYield
+    ) external view returns (uint256 creatorShare, uint256 platformShare);
+
+    function updatePlatformTreasury(address _platformTreasury) external;
+
+    function updatePlatformYieldShare(uint256 _platformYieldShare) external;
+
+    function platformTreasury() external view returns (address);
+
+    function platformYieldShare() external view returns (uint16);
+
+    function maximumYieldShare() external view returns (uint16);
 }

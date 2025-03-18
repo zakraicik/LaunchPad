@@ -77,19 +77,30 @@ contract YieldDistributor is Ownable, PlatformAdminAccessControl {
     function updatePlatformYieldShare(
         uint256 _platformYieldShare
     ) external onlyPlatformAdmin {
-        // Use library to validate share
-        if (
-            !YieldLibrary.isValidShare(_platformYieldShare, maximumYieldShare)
-        ) {
-            if (_platformYieldShare > maximumYieldShare) {
-                revert YieldDistributorError(
-                    ERR_SHARE_EXCEEDS_MAXIMUM,
-                    address(0),
-                    _platformYieldShare
-                );
-            }
+        // Use the updated library function that returns two validation results
+        (bool isWithinRange, bool fitsUint16) = YieldLibrary.validateShare(
+            _platformYieldShare,
+            maximumYieldShare
+        );
+
+        // Handle each validation case separately
+        if (!fitsUint16) {
+            revert YieldDistributorError(
+                ERR_INVALID_SHARE,
+                address(0),
+                _platformYieldShare
+            );
         }
 
+        if (!isWithinRange) {
+            revert YieldDistributorError(
+                ERR_SHARE_EXCEEDS_MAXIMUM,
+                address(0),
+                _platformYieldShare
+            );
+        }
+
+        // At this point, we know the value is valid and can be safely cast
         uint16 newShare = uint16(_platformYieldShare);
         uint256 oldShare = platformYieldShare;
         platformYieldShare = newShare;
@@ -106,7 +117,6 @@ contract YieldDistributor is Ownable, PlatformAdminAccessControl {
     function calculateYieldShares(
         uint256 totalYield
     ) external view returns (uint256 creatorShare, uint256 platformShare) {
-        // Use library for calculation
         (creatorShare, platformShare) = YieldLibrary.calculateYieldShares(
             totalYield,
             platformYieldShare
@@ -118,13 +128,5 @@ contract YieldDistributor is Ownable, PlatformAdminAccessControl {
         }
 
         return (creatorShare, platformShare);
-    }
-
-    function getPlatformTreasury() external view returns (address) {
-        return platformTreasury;
-    }
-
-    function getPlatformYieldShare() external view returns (uint256) {
-        return platformYieldShare;
     }
 }

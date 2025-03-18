@@ -2,10 +2,12 @@
 pragma solidity ^0.8.28;
 
 import "./ITokenRegistry.sol";
+import "./IYieldDistributor.sol";
+import "./IAavePool.sol";
+import "./ISwapRouter.sol";
+import "./IQuoter.sol";
 
 interface IDefiIntegrationManager {
-    function authorizeCampaign(address _campaign) external;
-
     function depositToYieldProtocol(address _token, uint256 _amount) external;
 
     function withdrawFromYieldProtocol(
@@ -27,6 +29,12 @@ interface IDefiIntegrationManager {
         address _toToken
     ) external returns (uint256);
 
+    function getTargetTokenEquivalent(
+        address _fromToken,
+        uint256 _amount,
+        address _toToken
+    ) external view returns (uint256);
+
     function getCurrentYieldRate(
         address token
     ) external view returns (uint256 yieldRate);
@@ -36,19 +44,23 @@ interface IDefiIntegrationManager {
         address token
     ) external view returns (uint256 amount);
 
+    function setTokenRegistry(address _tokenRegistry) external;
+
+    function setYieldDistributor(address _yieldDistributor) external;
+
+    function setAavePool(address _aavePool) external;
+
+    function setUniswapRouter(address _uniswapRouter) external;
+
+    function setUniswapQuoter(address _uniswapQuoter) external;
+
     function tokenRegistry() external view returns (ITokenRegistry);
 
-    function setPlatformAdmin(address _platformAdmin) external;
+    function yieldDistributor() external view returns (IYieldDistributor);
 
-    function isPlatformAdmin(address _address) external view returns (bool);
+    function aavePool() external view returns (IAavePool);
 
-    function isCampaignAuthorized(
-        address campaign
-    ) external view returns (bool isAuthorized);
+    function uniswapRouter() external view returns (ISwapRouter);
 
-    function adminWithdrawFromYieldProtocol(
-        address _campaign,
-        address _token,
-        uint256 _amount
-    ) external returns (uint256);
+    function uniswapQuoter() external view returns (IQuoter);
 }

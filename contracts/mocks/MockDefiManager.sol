@@ -263,7 +263,7 @@ contract MockDefiManager {
         }
 
         // Transfer to platform treasury
-        address treasury = distributor.getPlatformTreasury();
+        address treasury = distributor.platformTreasury();
         success = IERC20(token).transfer(treasury, platformYield);
         if (!success) {
             revert YieldwithdrawalFailed("Token transfer to treasury failed");

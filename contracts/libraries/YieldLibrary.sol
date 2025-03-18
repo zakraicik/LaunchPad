@@ -41,13 +41,15 @@ library YieldLibrary {
      * @dev Validates if a share percentage is within valid limits
      * @param share The share percentage to validate (in basis points)
      * @param maximumShare The maximum allowed share (in basis points)
-     * @return True if the share is valid, false otherwise
+     * @return isWithinRange True if the share is within the allowed range
+     * @return fitsUint16 True if the share can be safely cast to uint16
      */
-    function isValidShare(
+    function validateShare(
         uint256 share,
         uint16 maximumShare
-    ) internal pure returns (bool) {
-        // Share must be convertible to uint16 and not exceed maximum
-        return share <= type(uint16).max && share <= maximumShare;
+    ) internal pure returns (bool isWithinRange, bool fitsUint16) {
+        fitsUint16 = share <= type(uint16).max;
+        isWithinRange = share <= maximumShare;
+        return (isWithinRange, fitsUint16);
     }
 }
