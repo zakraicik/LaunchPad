@@ -15,32 +15,41 @@ library CampaignLibrary {
      * @param campaignEndTime Campaign end timestamp
      * @return Weight multiplier (scaled by 100)
      */
+    // Updated calculation with higher precision and safer math
     function calculateTimeWeight(
         uint256 contributionTime,
         uint256 campaignStartTime,
         uint256 campaignEndTime
     ) internal pure returns (uint256) {
         if (contributionTime == 0) return 0;
+        if (contributionTime <= campaignStartTime) return 15000; // Maximum weight if contributed at start
+        if (campaignStartTime >= campaignEndTime) return 10000; // Prevent division by zero
 
         uint256 campaignDurationSoFar = contributionTime - campaignStartTime;
         uint256 totalDuration = campaignEndTime - campaignStartTime;
 
-        // Keep using the bit shift but ensure it's properly scaled
-        // Using 7 bits (128) for percentage calculation
-        uint256 percentageThrough = (campaignDurationSoFar << 7) /
+        // Use a higher precision factor for the interim calculation
+        // 2^32 provides significantly more precision than 2^7
+        uint256 PRECISION_FACTOR = 1 << 32;
+
+        // Calculate percentage with higher precision, then scale down
+        uint256 percentageThrough = (campaignDurationSoFar * PRECISION_FACTOR) /
             totalDuration;
 
-        if (percentageThrough < 32) {
-            // ~25% of 128
-            return 15000; // 1.5x weight (scaled by 10000)
-        } else if (percentageThrough < 64) {
-            // ~50% of 128
-            return 12500; // 1.25x weight (scaled by 10000)
-        } else if (percentageThrough < 96) {
-            // ~75% of 128
-            return 11000; // 1.1x weight (scaled by 10000)
+        // Thresholds converted to higher precision
+        uint256 QUARTER_THRESHOLD = PRECISION_FACTOR / 4; // 25%
+        uint256 HALF_THRESHOLD = PRECISION_FACTOR / 2; // 50%
+        uint256 THREE_QUARTER_THRESHOLD = (PRECISION_FACTOR * 3) / 4; // 75%
+
+        // Same weight tiers but with more precise threshold calculation
+        if (percentageThrough < QUARTER_THRESHOLD) {
+            return 15000; // 1.5x weight
+        } else if (percentageThrough < HALF_THRESHOLD) {
+            return 12500; // 1.25x weight
+        } else if (percentageThrough < THREE_QUARTER_THRESHOLD) {
+            return 11000; // 1.1x weight
         } else {
-            return 10000; // 1.0x weight (scaled by 10000)
+            return 10000; // 1.0x weight
         }
     }
 

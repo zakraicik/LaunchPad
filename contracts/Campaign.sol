@@ -415,13 +415,28 @@ contract Campaign is Ownable, ReentrancyGuard, PlatformAdminAccessControl {
             currentProcessingContributor = firstContributor;
         }
 
+        // Gas monitoring variables
+        uint256 gasThreshold = 50000; // Minimum gas to keep available for finishing execution
+        uint256 gasCheckInterval = 5; // Check gas every N iterations
+
         processedCount = 0;
         uint256 totalProcessed = 0;
+        uint256 iterationCounter = 0;
 
         while (
             currentProcessingContributor != address(0) &&
             processedCount < batchSize
         ) {
+            // Check gas usage periodically to avoid out-of-gas errors
+            unchecked {
+                iterationCounter++;
+            }
+            if (iterationCounter % gasCheckInterval == 0) {
+                if (gasleft() < gasThreshold) {
+                    break; // Exit early if gas is running low
+                }
+            }
+
             if (
                 contributions[currentProcessingContributor] > 0 &&
                 !hasBeenRefunded[currentProcessingContributor]
@@ -460,6 +475,7 @@ contract Campaign is Ownable, ReentrancyGuard, PlatformAdminAccessControl {
             isComplete,
             totalProcessed
         );
+
         return (isComplete, processedCount);
     }
 

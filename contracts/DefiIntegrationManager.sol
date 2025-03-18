@@ -372,6 +372,7 @@ contract DefiIntegrationManager is
         uint256 _amount,
         address _toToken
     ) external nonReentrant returns (uint256) {
+        // CHECKS - Validate all inputs first
         if (_amount <= 0) {
             revert DefiError(ERR_ZERO_AMOUNT, _fromToken, _amount);
         }
@@ -397,19 +398,23 @@ contract DefiIntegrationManager is
             revert DefiError(ERR_SWAP_QUOTE_INVALID, _fromToken, _amount);
         }
 
-        // Use library to calculate minimum output
+        // Calculate min output
         uint256 minAmountOut = DefiLibrary.calculateMinOutput(
             expectedOut,
             SLIPPAGE_TOLERANCE
         );
 
+        // EFFECTS - No state changes in this particular function
+        // But if there were, they would go here before external interactions
+
+        // INTERACTIONS - First get the tokens from the sender
         IERC20(_fromToken).safeTransferFrom(msg.sender, address(this), _amount);
         IERC20(_fromToken).safeIncreaseAllowance(
             address(uniswapRouter),
             _amount
         );
 
-        // Use library to create swap parameters
+        // Then perform the swap
         ISwapRouter.ExactInputSingleParams memory params = DefiLibrary
             .createSwapParams(
                 _fromToken,
@@ -419,26 +424,32 @@ contract DefiIntegrationManager is
                 minAmountOut
             );
 
-        try uniswapRouter.exactInputSingle(params) returns (uint256 received) {
-            if (received < minAmountOut) {
-                revert DefiError(ERR_SLIPPAGE_EXCEEDED, _toToken, received);
-            }
-
-            IERC20(_toToken).safeTransfer(msg.sender, received);
-
-            emit DefiOperation(
-                OP_TOKEN_SWAPPED,
-                msg.sender,
-                _fromToken,
-                _toToken,
-                _amount,
-                received
-            );
-
-            return received;
+        uint256 received;
+        try uniswapRouter.exactInputSingle(params) returns (uint256 amountOut) {
+            received = amountOut;
         } catch {
             revert DefiError(ERR_SWAP_FAILED, _fromToken, _amount);
         }
+
+        // Validate the swap result
+        if (received < minAmountOut) {
+            revert DefiError(ERR_SLIPPAGE_EXCEEDED, _toToken, received);
+        }
+
+        // Finally transfer tokens to the sender
+        IERC20(_toToken).safeTransfer(msg.sender, received);
+
+        // Emit event last
+        emit DefiOperation(
+            OP_TOKEN_SWAPPED,
+            msg.sender,
+            _fromToken,
+            _toToken,
+            _amount,
+            received
+        );
+
+        return received;
     }
 
     function getCurrentYieldRate(

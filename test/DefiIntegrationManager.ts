@@ -721,7 +721,6 @@ describe('DefiIntegrationManager', function () {
         const depositAmount = ethers.parseUnits('100')
         const yieldAmount = ethers.parseUnits('10')
 
-        console.log(await yieldDistributor.platformYieldShare())
         // Calculate expected shares
         const platformSharePercentage =
           await yieldDistributor.platformYieldShare()
