@@ -14,11 +14,8 @@ import {
   Campaign
 } from '../../typechain-types'
 
-import { ICampaign } from '../interfaces/ICampaign'
-
 describe('Base Mainnet Integration Tests', function () {
   //Whales
-  const ETH_WHALE_ADDRESS = '0xf977814e90da44bfa03b6295a0616a897441acec'
   const USDC_WHALE_ADDRESS = '0x0b0a5886664376f59c351ba3f598c8a8b4d0a6f3'
   const DAI_WHALE_ADDRESS = '0x0772f014009162efb833ef34d3ea3f243fc735ba'
 
@@ -30,11 +27,7 @@ describe('Base Mainnet Integration Tests', function () {
   const DAI_ADDRESS = '0x50c5725949a6f0c72e6c4a641f24049a917db0cb' //DAI on Base
 
   // Constants for testing
-  const TOKEN_AMOUNT = ethers.parseUnits('1000', 18)
-  const CAMPAIGN_GOAL = ethers.parseUnits('500', 18)
-  const CAMPAIGN_DURATION = 30
-  const CONTRIBUTION_AMOUNT = ethers.parseUnits('100', 18)
-  const PLATFORM_YIELD_SHARE = 2000
+
   const GRACE_PERIOD = 7 // 7 days grace period
 
   let usdc: Contract
@@ -53,7 +46,20 @@ describe('Base Mainnet Integration Tests', function () {
   async function deployPlatformFixture () {
     // Impersonate the ETH whale
 
-    const eth_whale = await ethers.getSigner(ETH_WHALE_ADDRESS)
+    await network.provider.request({
+      method: 'hardhat_impersonateAccount',
+      params: [USDC_WHALE_ADDRESS]
+    })
+
+    await network.provider.request({
+      method: 'hardhat_impersonateAccount',
+      params: [DAI_WHALE_ADDRESS]
+    })
+
+    const usdc_whale = await ethers.getSigner(USDC_WHALE_ADDRESS)
+
+    const dai_whale = await ethers.getSigner(DAI_WHALE_ADDRESS)
+
     const [
       deployer,
       platformTreasury,
@@ -96,9 +102,21 @@ describe('Base Mainnet Integration Tests', function () {
       'function getReserveData(address asset) external view returns (tuple(uint256 unbacked, uint256 accruedToTreasury, uint256 totalAToken, uint256 totalStableDebt, uint256 totalVariableDebt, uint256 liquidityRate, uint256 variableBorrowRate, uint256 stableBorrowRate, uint256 averageStableBorrowRate, uint256 liquidityIndex, uint256 variableBorrowIndex, uint40 lastUpdateTimestamp))'
     ]
 
-    // Initialize contracts with signer using getContractAt
+    // Initialize contracts with signer using getContractAt to fund contributor accounts
     usdc = await ethers.getContractAt(ERC20_ABI, USDC_ADDRESS)
     dai = await ethers.getContractAt(ERC20_ABI, DAI_ADDRESS)
+
+    // Send ETH to whales
+    await deployer.sendTransaction({
+      to: USDC_WHALE_ADDRESS,
+      value: ethers.parseEther('5.0')
+    })
+
+    await deployer.sendTransaction({
+      to: DAI_WHALE_ADDRESS,
+      value: ethers.parseEther('5.0')
+    })
+
     uniswapRouter = await ethers.getContractAt(
       UNISWAP_ROUTER_ABI,
       UNISWAP_ROUTER_ADDRESS
@@ -191,6 +209,31 @@ describe('Base Mainnet Integration Tests', function () {
 
     await campaignContractFactory.waitForDeployment()
 
+    //Fund Contributors
+    const usdcDecimals = await usdc.decimals()
+    const usdTransferAmount = ethers.parseUnits('1000000', usdcDecimals)
+
+    const daiDecimals = await dai.decimals()
+    const daiTransferAmount = ethers.parseUnits('100000', daiDecimals)
+
+    await (usdc.connect(usdc_whale) as Contract).transfer(
+      contributor1.address,
+      usdTransferAmount
+    )
+    await (usdc.connect(usdc_whale) as Contract).transfer(
+      contributor2.address,
+      usdTransferAmount
+    )
+
+    await (dai.connect(dai_whale) as Contract).transfer(
+      contributor1.address,
+      daiTransferAmount
+    )
+    await (dai.connect(dai_whale) as Contract).transfer(
+      contributor2.address,
+      daiTransferAmount
+    )
+
     return {
       usdc,
       dai,
@@ -271,12 +314,16 @@ describe('Base Mainnet Integration Tests', function () {
       )
     })
 
-    it('Should allow creates to deploy a campaign', async function () {
+    it('Should allow creates to deploy a campaign(s)', async function () {
       const { usdc, campaignContractFactory, creator1 } = await loadFixture(
         deployPlatformFixture
       )
 
+      const usdcDecimals = await usdc.decimals()
+
       const OP_CAMPAIGN_CREATED = 1
+      const CAMPAIGN_GOAL = ethers.parseUnits('500', usdcDecimals)
+      const CAMPAIGN_DURATION = 60
 
       const tx = await campaignContractFactory
         .connect(creator1)
@@ -329,6 +376,64 @@ describe('Base Mainnet Integration Tests', function () {
       expect(await campaign.campaignDuration()).to.equal(CAMPAIGN_DURATION)
       expect(await campaign.isCampaignActive()).to.be.true
     })
+
+    // it('Should allow multiple contributors to fund a campaign in target token', async function () {
+    //   const {
+    //     usdc,
+    //     campaignContractFactory,
+    //     creator1,
+    //     contributor1,
+    //     contributor2
+    //   } = await loadFixture(deployPlatformFixture)
+
+    //   const OP_CAMPAIGN_CREATED = 1
+
+    //   const tx = await campaignContractFactory
+    //     .connect(creator1)
+    //     .deploy(await usdc.getAddress(), CAMPAIGN_GOAL, CAMPAIGN_DURATION)
+
+    //   const receipt = await tx.wait()
+
+    //   if (!receipt) {
+    //     throw new Error('Transaction failed')
+    //   }
+
+    //   const event = receipt.logs.find(log => {
+    //     try {
+    //       const parsed = campaignContractFactory.interface.parseLog(log)
+    //       return parsed && parsed.name === 'FactoryOperation'
+    //     } catch {
+    //       return false
+    //     }
+    //   })
+
+    //   if (!event) {
+    //     throw new Error('Event failed')
+    //   }
+
+    //   const parsedEvent = campaignContractFactory.interface.parseLog(event)
+    //   if (!parsedEvent) {
+    //     throw new Error('Event failed')
+    //   }
+
+    //   const campaignAddress = parsedEvent.args[1]
+
+    //   const Campaign = await ethers.getContractFactory('Campaign')
+    //   const campaign = Campaign.attach(campaignAddress) as unknown as Campaign
+
+    //   await (usdc.connect(contributor1) as Contract).approve(
+    //     campaignAddress,
+    //     CONTRIBUTION_AMOUNT
+    //   )
+
+    //   const contributeTx1 = await campaign
+    //     .connect(contributor1)
+    //     .contribute(await usdc.getAddress(), CONTRIBUTION_AMOUNT)
+    // })
+
+    // it('Should allow users to contribute in a non campaign token', async function () {})
+
+    // it('Should track contributions correctly with a non-1:1 exchange rate', async function () {})
   })
 
   // describe('Campaign Lifecycle', function () {
