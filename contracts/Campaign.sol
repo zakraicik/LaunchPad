@@ -150,6 +150,12 @@ contract Campaign is Ownable, ReentrancyGuard, PlatformAdminAccessControl {
                 address(0),
                 _campaignDuration
             );
+        if (_campaignDuration > 365)
+            revert CampaignError(
+                ERR_INVALID_DURATION,
+                address(0),
+                _campaignDuration
+            );
 
         campaignToken = _campaignToken;
         campaignGoalAmount = _campaignGoalAmount;
