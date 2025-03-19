@@ -19,6 +19,8 @@ import { ICampaign } from '../interfaces/ICampaign'
 describe('Base Mainnet Integration Tests', function () {
   //Whales
   const ETH_WHALE_ADDRESS = '0xf977814e90da44bfa03b6295a0616a897441acec'
+  const USDC_WHALE_ADDRESS = '0x0b0a5886664376f59c351ba3f598c8a8b4d0a6f3'
+  const DAI_WHALE_ADDRESS = '0x0772f014009162efb833ef34d3ea3f243fc735ba'
 
   // External contracts addresses
   const UNISWAP_QUOTER_ADDRESS = '0x3d4e44eb1374240ce5f1b871ab261cd16335b76a' //Uniswap Quoter V3
@@ -52,7 +54,14 @@ describe('Base Mainnet Integration Tests', function () {
     // Impersonate the ETH whale
 
     const eth_whale = await ethers.getSigner(ETH_WHALE_ADDRESS)
-    const [deployer, platformTreasury] = await ethers.getSigners()
+    const [
+      deployer,
+      platformTreasury,
+      creator1,
+      creator2,
+      contributor1,
+      contributor2
+    ] = await ethers.getSigners() //All accounts are prefunded with 10,000 ETH
 
     const feeData = await ethers.provider.getFeeData()
     const maxFeePerGas = feeData.maxFeePerGas
@@ -186,6 +195,11 @@ describe('Base Mainnet Integration Tests', function () {
       usdc,
       dai,
       deployer,
+      creator1,
+      creator2,
+      contributor1,
+      contributor2,
+      platformTreasury,
       platformAdmin,
       tokenRegistry,
       yieldDistributor,
@@ -198,6 +212,7 @@ describe('Base Mainnet Integration Tests', function () {
     it('Deploy Launchpad Supporting Contracts', async function () {
       const {
         deployer,
+        platformTreasury,
         platformAdmin,
         tokenRegistry,
         yieldDistributor,
@@ -205,11 +220,114 @@ describe('Base Mainnet Integration Tests', function () {
         campaignContractFactory
       } = await loadFixture(deployPlatformFixture)
 
+      //PlatformAdmin
       expect(await platformAdmin.owner()).to.equal(deployer.address)
+      expect(await platformAdmin.gracePeriod()).to.equal(GRACE_PERIOD)
+
+      //TokenRegistry
       expect(await tokenRegistry.owner()).to.equal(deployer.address)
+      expect(await tokenRegistry.platformAdmin()).to.equal(
+        await platformAdmin.getAddress()
+      )
+
+      //YieldDistributor
       expect(await yieldDistributor.owner()).to.equal(deployer.address)
+      expect(await yieldDistributor.platformTreasury()).to.equal(
+        platformTreasury.address
+      )
+      expect(await yieldDistributor.platformAdmin()).to.equal(
+        await platformAdmin.getAddress()
+      )
+
+      //DefiIntegrationManager
       expect(await defiIntegrationManager.owner()).to.equal(deployer.address)
+      expect(await defiIntegrationManager.aavePool()).to.equal(
+        ethers.getAddress(AAVE_POOL_ADDRESS)
+      )
+      expect(await defiIntegrationManager.uniswapRouter()).to.equal(
+        ethers.getAddress(UNISWAP_ROUTER_ADDRESS)
+      )
+      expect(await defiIntegrationManager.uniswapQuoter()).to.equal(
+        ethers.getAddress(UNISWAP_QUOTER_ADDRESS)
+      )
+      expect(await defiIntegrationManager.tokenRegistry()).to.equal(
+        ethers.getAddress(await tokenRegistry.getAddress())
+      )
+      expect(await defiIntegrationManager.yieldDistributor()).to.equal(
+        ethers.getAddress(await yieldDistributor.getAddress())
+      )
+
+      expect(await defiIntegrationManager.platformAdmin()).to.equal(
+        await platformAdmin.getAddress()
+      )
+
+      //CampaignContractFactory
       expect(await campaignContractFactory.owner()).to.equal(deployer.address)
+      expect(await campaignContractFactory.defiManager()).to.equal(
+        await defiIntegrationManager.getAddress()
+      )
+      expect(await campaignContractFactory.platformAdmin()).to.equal(
+        await platformAdmin.getAddress()
+      )
+    })
+
+    it('Should allow creates to deploy a campaign', async function () {
+      const { usdc, campaignContractFactory, creator1 } = await loadFixture(
+        deployPlatformFixture
+      )
+
+      const OP_CAMPAIGN_CREATED = 1
+
+      const tx = await campaignContractFactory
+        .connect(creator1)
+        .deploy(await usdc.getAddress(), CAMPAIGN_GOAL, CAMPAIGN_DURATION)
+
+      const receipt = await tx.wait()
+
+      if (!receipt) {
+        throw new Error('Transaction failed')
+      }
+
+      const event = receipt.logs.find(log => {
+        try {
+          const parsed = campaignContractFactory.interface.parseLog(log)
+          return parsed && parsed.name === 'FactoryOperation'
+        } catch {
+          return false
+        }
+      })
+
+      if (!event) {
+        throw new Error('Event failed')
+      }
+
+      const parsedEvent = campaignContractFactory.interface.parseLog(event)
+      if (!parsedEvent) {
+        throw new Error('Event failed')
+      }
+
+      expect(parsedEvent.args[0]).to.equal(OP_CAMPAIGN_CREATED)
+
+      const campaignAddress = parsedEvent.args[1]
+
+      expect(parsedEvent.args[2]).to.equal(creator1.address)
+      expect(await campaignContractFactory.deployedCampaigns(0)).to.equal(
+        campaignAddress
+      )
+      expect(
+        await campaignContractFactory.creatorToCampaigns(creator1.address, 0)
+      ).to.equal(campaignAddress)
+
+      const Campaign = await ethers.getContractFactory('Campaign')
+      const campaign = Campaign.attach(campaignAddress) as unknown as Campaign
+
+      expect(await campaign.owner()).to.equal(creator1.address)
+      expect(await campaign.campaignToken()).to.equal(
+        ethers.getAddress(await usdc.getAddress())
+      )
+      expect(await campaign.campaignGoalAmount()).to.equal(CAMPAIGN_GOAL)
+      expect(await campaign.campaignDuration()).to.equal(CAMPAIGN_DURATION)
+      expect(await campaign.isCampaignActive()).to.be.true
     })
   })
 
