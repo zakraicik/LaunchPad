@@ -1,11 +1,12 @@
 //SPDX-License-Identifier: MIT
 pragma solidity ^0.8.28;
+import "@openzeppelin/contracts/access/Ownable.sol";
 import "./Campaign.sol";
 import "./interfaces/IDefiIntegrationManager.sol";
 import "./interfaces/IPlatformAdmin.sol";
 import "./libraries/FactoryLibrary.sol";
 
-contract CampaignContractFactory {
+contract CampaignContractFactory is Ownable {
     // Use the library
     using FactoryLibrary for *;
 
@@ -34,7 +35,11 @@ contract CampaignContractFactory {
     // Consolidated error with error code
     error FactoryError(uint8 code, address addr, uint256 value);
 
-    constructor(address _defiManager, address _platformAdmin) {
+    constructor(
+        address _defiManager,
+        address _platformAdmin,
+        address _owner
+    ) Ownable(_owner) {
         if (_defiManager == address(0) || _platformAdmin == address(0)) {
             revert FactoryError(ERR_INVALID_ADDRESS, address(0), 0);
         }
@@ -60,7 +65,6 @@ contract CampaignContractFactory {
             _campaignToken,
             _campaignGoalAmount,
             _campaignDuration,
-            address(tokenRegistry),
             isTokenSupported
         );
 

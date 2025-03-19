@@ -5,7 +5,14 @@ import { Contract } from 'ethers'
 import { time } from '@nomicfoundation/hardhat-network-helpers'
 import { loadFixture } from '@nomicfoundation/hardhat-network-helpers'
 
-import { PlatformAdmin } from '../../typechain-types'
+import {
+  PlatformAdmin,
+  TokenRegistry,
+  YieldDistributor,
+  DefiIntegrationManager,
+  CampaignContractFactory,
+  Campaign
+} from '../../typechain-types'
 
 import { ICampaign } from '../interfaces/ICampaign'
 
@@ -34,12 +41,18 @@ describe('Base Mainnet Integration Tests', function () {
   let uniswapQuoter: Contract
   let aavePool: Contract
   let platformAdmin: PlatformAdmin
+  let tokenRegistry: TokenRegistry
+  let yieldDistributor: YieldDistributor
+  let defiIntegrationManager: DefiIntegrationManager
+  let campaignContractFactory: CampaignContractFactory
+  let campaign: Campaign
+
   // Main fixture that deploys the entire platform and sets up test environment
   async function deployPlatformFixture () {
     // Impersonate the ETH whale
 
     const eth_whale = await ethers.getSigner(ETH_WHALE_ADDRESS)
-    const deployer = (await ethers.getSigners())[0]
+    const [deployer, platformTreasury] = await ethers.getSigners()
 
     const feeData = await ethers.provider.getFeeData()
     const maxFeePerGas = feeData.maxFeePerGas
@@ -87,6 +100,7 @@ describe('Base Mainnet Integration Tests', function () {
     )
     aavePool = await ethers.getContractAt(AAVE_POOL_ABI, AAVE_POOL_ADDRESS)
 
+    //Deploy PlatformAdmin
     platformAdmin = await ethers.deployContract(
       'PlatformAdmin',
       [GRACE_PERIOD, deployer.address],
@@ -97,27 +111,105 @@ describe('Base Mainnet Integration Tests', function () {
       }
     )
 
-    // await platformAdmin.waitForDeployment()
+    await platformAdmin.waitForDeployment()
+
+    //Deploy TokenRegistry
+    tokenRegistry = await ethers.deployContract(
+      'TokenRegistry',
+      [deployer.address, await platformAdmin.getAddress()],
+      {
+        maxFeePerGas,
+        maxPriorityFeePerGas,
+        gasLimit: 3000000
+      }
+    )
+
+    await tokenRegistry.waitForDeployment()
+
+    //Add tokens to TokenRegistry
+    await tokenRegistry.addToken(USDC_ADDRESS, await usdc.decimals())
+    await tokenRegistry.addToken(DAI_ADDRESS, await dai.decimals())
+
+    yieldDistributor = await ethers.deployContract(
+      'YieldDistributor',
+      [
+        platformTreasury.address,
+        await platformAdmin.getAddress(),
+        deployer.address
+      ],
+      {
+        maxFeePerGas,
+        maxPriorityFeePerGas,
+        gasLimit: 3000000
+      }
+    )
+
+    await yieldDistributor.waitForDeployment()
+
+    defiIntegrationManager = await ethers.deployContract(
+      'DefiIntegrationManager',
+      [
+        AAVE_POOL_ADDRESS,
+        UNISWAP_ROUTER_ADDRESS,
+        UNISWAP_QUOTER_ADDRESS,
+        await tokenRegistry.getAddress(),
+        await yieldDistributor.getAddress(),
+        await platformAdmin.getAddress(),
+        deployer.address
+      ],
+      {
+        maxFeePerGas,
+        maxPriorityFeePerGas,
+        gasLimit: 3000000
+      }
+    )
+
+    await defiIntegrationManager.waitForDeployment()
+
+    campaignContractFactory = await ethers.deployContract(
+      'CampaignContractFactory',
+      [
+        await defiIntegrationManager.getAddress(),
+        await platformAdmin.getAddress(),
+        deployer.address
+      ],
+      {
+        maxFeePerGas,
+        maxPriorityFeePerGas,
+        gasLimit: 5000000
+      }
+    )
+
+    await campaignContractFactory.waitForDeployment()
 
     return {
       usdc,
       dai,
       deployer,
-      platformAdmin
+      platformAdmin,
+      tokenRegistry,
+      yieldDistributor,
+      defiIntegrationManager,
+      campaignContractFactory
     }
-
-    // console.log('PlatformAdmin deployed at:', await platformAdmin.getAddress())
-
-    // console.log(await platformAdmin.owner())
   }
 
   describe('Base Mainnet Fork Tests', function () {
-    it('Deploy Launchpad', async function () {
-      const { platformAdmin, deployer } = await loadFixture(
-        deployPlatformFixture
-      )
+    it('Deploy Launchpad Supporting Contracts', async function () {
+      const {
+        deployer,
+        platformAdmin,
+        tokenRegistry,
+        yieldDistributor,
+        defiIntegrationManager,
+        campaignContractFactory
+      } = await loadFixture(deployPlatformFixture)
 
       expect(await platformAdmin.owner()).to.equal(deployer.address)
+      expect(await tokenRegistry.owner()).to.equal(deployer.address)
+      expect(await yieldDistributor.owner()).to.equal(deployer.address)
+      expect(await defiIntegrationManager.owner()).to.equal(deployer.address)
+      expect(await campaignContractFactory.owner()).to.equal(deployer.address)
     })
   })
 
