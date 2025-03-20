@@ -36,7 +36,7 @@ const config: HardhatUserConfig = {
     }
   },
   gasReporter: {
-    enabled: true, // This will show all methods, including internal ones
+    enabled: true,
     currency: 'USD',
     remoteContracts: [
       {
