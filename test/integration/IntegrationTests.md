@@ -85,13 +85,13 @@ Tests to verify the complete flow of campaign creation, funding, and completion.
 ### Contribution Process
 
 - ✅ Contribute with campaign token (direct contribution)
-- ✅ Contribute with different token (requires swap)
-- ✅ Verify contributions update campaign total raised amount
-- ✅ Verify first-time contributor is added to linked list
-- ✅ Verify repeated contributions from same contributor
-- ✅ Test minimum contribution enforcement
-- ✅ Test contribution after campaign end (should fail)
-- ✅ Test contribution after goal reached (should fail)
+- Contribute with different token (requires swap)
+- Verify contributions update campaign total raised amount
+- Verify first-time contributor is added to linked list
+- Verify repeated contributions from same contributor
+- Test minimum contribution enforcement
+- Test contribution after campaign end (should fail)
+- Test contribution after goal reached (should fail)
 
 ### Yield Generation
 
