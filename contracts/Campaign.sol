@@ -136,8 +136,18 @@ contract Campaign is Ownable, ReentrancyGuard, PlatformAdminAccessControl {
         defiManager = IDefiIntegrationManager(_defiManager);
         tokenRegistry = ITokenRegistry(defiManager.tokenRegistry());
 
-        if (!tokenRegistry.isTokenSupported(_campaignToken))
+        bool isTokenValid;
+        try tokenRegistry.isTokenSupported(_campaignToken) returns (
+            bool supported
+        ) {
+            isTokenValid = supported;
+        } catch {
+            isTokenValid = false;
+        }
+
+        if (!isTokenValid)
             revert CampaignError(ERR_TOKEN_NOT_SUPPORTED, _campaignToken, 0);
+
         if (_campaignGoalAmount == 0)
             revert CampaignError(
                 ERR_INVALID_GOAL,

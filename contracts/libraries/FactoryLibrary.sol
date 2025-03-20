@@ -12,11 +12,8 @@ library FactoryLibrary {
         uint16 campaignDuration,
         function(address) external view returns (bool) isTokenSupported
     ) internal view returns (bool) {
+        // First check basic parameters
         if (campaignToken == address(0)) {
-            return false;
-        }
-
-        if (!isTokenSupported(campaignToken)) {
             return false;
         }
 
@@ -24,7 +21,16 @@ library FactoryLibrary {
             return false;
         }
 
-        if (campaignDuration <= 0) {
+        if (campaignDuration <= 0 || campaignDuration > 365) {
+            return false;
+        }
+
+        // Check token support with try/catch to handle possible revert
+        try isTokenSupported(campaignToken) returns (bool supported) {
+            if (!supported) {
+                return false;
+            }
+        } catch {
             return false;
         }
 

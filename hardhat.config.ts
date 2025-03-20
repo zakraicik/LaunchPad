@@ -4,6 +4,9 @@ import '@nomicfoundation/hardhat-toolbox'
 import 'hardhat-gas-reporter'
 
 import IERC20ABI from './test/abis/IERC20ABI.json'
+import UniswapQuoterABI from './test/abis/UniswapQuoter.json'
+import UniswapRouterABI from './test/abis/UniswapRouter.json'
+import AavePoolABI from './test/abis/AAVEPool.json'
 
 const config: HardhatUserConfig = {
   solidity: {
@@ -48,6 +51,26 @@ const config: HardhatUserConfig = {
         name: 'DAI',
         address: '0x50c5725949a6f0c72e6c4a641f24049a917db0cb',
         abi: IERC20ABI
+      },
+      {
+        name: 'WBTC',
+        address: '0x0555e30da8f98308edb960aa94c0db47230d2b9c',
+        abi: IERC20ABI
+      },
+      {
+        name: 'AAVE',
+        address: '0xa238dd80c259a72e81d7e4664a9801593f98d1c5',
+        abi: AavePoolABI
+      },
+      {
+        name: 'UNISWAP QUOTER',
+        address: '0x3d4e44eb1374240ce5f1b871ab261cd16335b76a',
+        abi: UniswapQuoterABI
+      },
+      {
+        name: 'UNISWAP ROUTER',
+        address: '0x6ff5693b99212da76ad316178a184ab56d299b43',
+        abi: UniswapRouterABI
       }
     ]
   }

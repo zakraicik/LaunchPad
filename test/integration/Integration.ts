@@ -26,6 +26,7 @@ describe('Base Mainnet Integration Tests', function () {
   const AAVE_POOL_ADDRESS = '0xa238dd80c259a72e81d7e4664a9801593f98d1c5' //AAVE v3
   const USDC_ADDRESS = '0x833589fcd6edb6e08f4c7c32d4f71b54bda02913' //USDC on Base
   const DAI_ADDRESS = '0x50c5725949a6f0c72e6c4a641f24049a917db0cb' //DAI on Base
+  const WBTC = '0x0555e30da8f98308edb960aa94c0db47230d2b9c' //Wrapped BTCC on base
 
   // Constants for testing
 
@@ -33,6 +34,7 @@ describe('Base Mainnet Integration Tests', function () {
 
   let usdc: IERC20Metadata
   let dai: IERC20Metadata
+  let wbtc: IERC20Metadata
 
   let uniswapRouter: Contract
   let uniswapQuoter: Contract
@@ -113,6 +115,11 @@ describe('Base Mainnet Integration Tests', function () {
     usdc = (await ethers.getContractAt(
       IERC20ABI,
       USDC_ADDRESS
+    )) as unknown as IERC20Metadata
+
+    wbtc = (await ethers.getContractAt(
+      IERC20ABI,
+      WBTC
     )) as unknown as IERC20Metadata
 
     // Send ETH to whales
@@ -264,6 +271,7 @@ describe('Base Mainnet Integration Tests', function () {
     return {
       usdc,
       dai,
+      wbtc,
       deployer,
       creator1,
       creator2,
@@ -279,6 +287,12 @@ describe('Base Mainnet Integration Tests', function () {
   }
 
   describe('Base Mainnet Fork Tests', function () {
+    const ERR_INVALID_ADDRESS = 1
+    const ERR_TOKEN_NOT_SUPPORTED = 2
+    const ERR_INVALID_GOAL = 3
+    const ERR_INVALID_DURATION = 4
+    const OP_CAMPAIGN_CREATED = 1
+
     it('Deployment & Initial State', async function () {
       const {
         deployer,
@@ -341,132 +355,263 @@ describe('Base Mainnet Integration Tests', function () {
       )
     })
 
-    describe('Campaign Operations', function () {
-      it('Should allow creates to deploy a campaign(s)', async function () {
-        const { usdc, campaignContractFactory, creator1 } = await loadFixture(
-          deployPlatformFixture
-        )
+    it('Should reject campaign with token that is not in token registry', async function () {
+      const { creator1, wbtc, campaignContractFactory } = await loadFixture(
+        deployPlatformFixture
+      )
 
-        const usdcDecimals = await usdc.decimals()
+      const CAMPAIGN_GOAL = ethers.parseUnits('500', 18)
+      const CAMPAIGN_DURATION = 60
 
-        const OP_CAMPAIGN_CREATED = 1
-        const CAMPAIGN_GOAL = ethers.parseUnits('500', usdcDecimals)
-        const CAMPAIGN_DURATION = 60
-
-        const tx = await campaignContractFactory
+      await expect(
+        campaignContractFactory
           .connect(creator1)
-          .deploy(await usdc.getAddress(), CAMPAIGN_GOAL, CAMPAIGN_DURATION)
-
-        const receipt = await tx.wait()
-
-        if (!receipt) {
-          throw new Error('Transaction failed')
-        }
-
-        const event = receipt.logs.find(log => {
-          try {
-            const parsed = campaignContractFactory.interface.parseLog(log)
-            return parsed && parsed.name === 'FactoryOperation'
-          } catch {
-            return false
-          }
-        })
-
-        if (!event) {
-          throw new Error('Event failed')
-        }
-
-        const parsedEvent = campaignContractFactory.interface.parseLog(event)
-        if (!parsedEvent) {
-          throw new Error('Event failed')
-        }
-
-        expect(parsedEvent.args[0]).to.equal(OP_CAMPAIGN_CREATED)
-
-        const campaignAddress = parsedEvent.args[1]
-
-        expect(parsedEvent.args[2]).to.equal(creator1.address)
-        expect(await campaignContractFactory.deployedCampaigns(0)).to.equal(
-          campaignAddress
+          .deploy(await wbtc.getAddress(), CAMPAIGN_GOAL, CAMPAIGN_DURATION)
+      )
+        .to.be.revertedWithCustomError(campaignContractFactory, 'FactoryError')
+        .withArgs(
+          ERR_TOKEN_NOT_SUPPORTED,
+          ethers.getAddress(await wbtc.getAddress()),
+          0
         )
-        expect(
-          await campaignContractFactory.creatorToCampaigns(creator1.address, 0)
-        ).to.equal(campaignAddress)
+    })
 
-        const Campaign = await ethers.getContractFactory('Campaign')
-        const campaign = Campaign.attach(campaignAddress) as unknown as Campaign
+    it('Should reject campaign with token that is  in token registry but not supported', async function () {
+      const { creator1, wbtc, campaignContractFactory, tokenRegistry } =
+        await loadFixture(deployPlatformFixture)
 
-        expect(await campaign.owner()).to.equal(creator1.address)
-        expect(await campaign.campaignToken()).to.equal(
-          ethers.getAddress(await usdc.getAddress())
+      const CAMPAIGN_GOAL = ethers.parseUnits('500', 18)
+      const CAMPAIGN_DURATION = 60
+
+      const wbtcDecimals = await wbtc.decimals()
+      await tokenRegistry.addToken(await wbtc.getAddress(), wbtcDecimals)
+
+      await tokenRegistry.disableTokenSupport(await wbtc.getAddress())
+
+      await expect(
+        campaignContractFactory
+          .connect(creator1)
+          .deploy(await wbtc.getAddress(), CAMPAIGN_GOAL, CAMPAIGN_DURATION)
+      )
+        .to.be.revertedWithCustomError(campaignContractFactory, 'FactoryError')
+        .withArgs(
+          ERR_TOKEN_NOT_SUPPORTED,
+          ethers.getAddress(await wbtc.getAddress()),
+          0
         )
-        expect(await campaign.campaignGoalAmount()).to.equal(CAMPAIGN_GOAL)
-        expect(await campaign.campaignDuration()).to.equal(CAMPAIGN_DURATION)
-        expect(await campaign.isCampaignActive()).to.be.true
+    })
+
+    it('Should reject campaign with zero goal amount', async function () {
+      const { creator1, usdc, campaignContractFactory } = await loadFixture(
+        deployPlatformFixture
+      )
+
+      const ZERO_GOAL = 0
+      const CAMPAIGN_DURATION = 60
+
+      await expect(
+        campaignContractFactory
+          .connect(creator1)
+          .deploy(await usdc.getAddress(), ZERO_GOAL, CAMPAIGN_DURATION)
+      )
+        .to.be.revertedWithCustomError(campaignContractFactory, 'FactoryError')
+        .withArgs(ERR_INVALID_GOAL, ethers.ZeroAddress, 0)
+    })
+
+    it('Should allow creates to deploy a campaign(s)', async function () {
+      const { usdc, campaignContractFactory, creator1 } = await loadFixture(
+        deployPlatformFixture
+      )
+
+      const usdcDecimals = await usdc.decimals()
+
+      const CAMPAIGN_GOAL = ethers.parseUnits('500', usdcDecimals)
+      const CAMPAIGN_DURATION = 60
+
+      const tx = await campaignContractFactory
+        .connect(creator1)
+        .deploy(await usdc.getAddress(), CAMPAIGN_GOAL, CAMPAIGN_DURATION)
+
+      const receipt = await tx.wait()
+
+      if (!receipt) {
+        throw new Error('Transaction failed')
+      }
+
+      const event = receipt.logs.find(log => {
+        try {
+          const parsed = campaignContractFactory.interface.parseLog(log)
+          return parsed && parsed.name === 'FactoryOperation'
+        } catch {
+          return false
+        }
       })
 
-      it('Should allow multiple contributors to fund a campaign in target token', async function () {
-        const {
-          usdc,
-          campaignContractFactory,
-          creator1,
-          contributor1,
-          contributor2
-        } = await loadFixture(deployPlatformFixture)
+      if (!event) {
+        throw new Error('Event failed')
+      }
 
-        const usdcDecimals = await usdc.decimals()
-        const CAMPAIGN_GOAL = ethers.parseUnits('500', usdcDecimals)
-        const CAMPAIGN_DURATION = 60
+      const parsedEvent = campaignContractFactory.interface.parseLog(event)
+      if (!parsedEvent) {
+        throw new Error('Event failed')
+      }
 
-        const tx = await campaignContractFactory
+      expect(parsedEvent.args[0]).to.equal(OP_CAMPAIGN_CREATED)
+
+      const campaignAddress = parsedEvent.args[1]
+
+      expect(parsedEvent.args[2]).to.equal(creator1.address)
+      expect(await campaignContractFactory.deployedCampaigns(0)).to.equal(
+        campaignAddress
+      )
+      expect(
+        await campaignContractFactory.creatorToCampaigns(creator1.address, 0)
+      ).to.equal(campaignAddress)
+
+      const Campaign = await ethers.getContractFactory('Campaign')
+      const campaign = Campaign.attach(campaignAddress) as unknown as Campaign
+
+      expect(await campaign.owner()).to.equal(creator1.address)
+      expect(await campaign.campaignToken()).to.equal(
+        ethers.getAddress(await usdc.getAddress())
+      )
+      expect(await campaign.campaignGoalAmount()).to.equal(CAMPAIGN_GOAL)
+      expect(await campaign.campaignDuration()).to.equal(CAMPAIGN_DURATION)
+      expect(await campaign.isCampaignActive()).to.be.true
+    })
+
+    it('Should reject campaign with zero goal amount', async function () {
+      const { creator1, usdc, campaignContractFactory } = await loadFixture(
+        deployPlatformFixture
+      )
+
+      const ZERO_GOAL = 0
+      const CAMPAIGN_DURATION = 60
+
+      await expect(
+        campaignContractFactory
           .connect(creator1)
-          .deploy(await usdc.getAddress(), CAMPAIGN_GOAL, CAMPAIGN_DURATION)
+          .deploy(await usdc.getAddress(), ZERO_GOAL, CAMPAIGN_DURATION)
+      )
+        .to.be.revertedWithCustomError(campaignContractFactory, 'FactoryError')
+        .withArgs(ERR_INVALID_GOAL, ethers.ZeroAddress, 0)
+    })
 
-        const receipt = await tx.wait()
+    it('Should reject campaign with zero duration', async function () {
+      const { creator1, usdc, campaignContractFactory } = await loadFixture(
+        deployPlatformFixture
+      )
 
-        if (!receipt) {
-          throw new Error('Transaction failed')
+      const usdcDecimals = await usdc.decimals()
+      const CAMPAIGN_GOAL = ethers.parseUnits('500', usdcDecimals)
+      const ZERO_DURATION = 0
+
+      await expect(
+        campaignContractFactory
+          .connect(creator1)
+          .deploy(await usdc.getAddress(), CAMPAIGN_GOAL, ZERO_DURATION)
+      )
+        .to.be.revertedWithCustomError(campaignContractFactory, 'FactoryError')
+        .withArgs(ERR_INVALID_DURATION, ethers.ZeroAddress, 0)
+    })
+
+    it('Should reject campaign with excessive duration', async function () {
+      const { creator1, usdc, campaignContractFactory } = await loadFixture(
+        deployPlatformFixture
+      )
+
+      const usdcDecimals = await usdc.decimals()
+      const CAMPAIGN_GOAL = ethers.parseUnits('500', usdcDecimals)
+      const EXCESSIVE_DURATION = 366 // > 365 days
+
+      await expect(
+        campaignContractFactory
+          .connect(creator1)
+          .deploy(await usdc.getAddress(), CAMPAIGN_GOAL, EXCESSIVE_DURATION)
+      )
+        .to.be.revertedWithCustomError(campaignContractFactory, 'FactoryError')
+        .withArgs(ERR_INVALID_DURATION, ethers.ZeroAddress, EXCESSIVE_DURATION)
+    })
+
+    it('Should reject campaign with zero address for token', async function () {
+      const { creator1, campaignContractFactory } = await loadFixture(
+        deployPlatformFixture
+      )
+
+      const CAMPAIGN_GOAL = ethers.parseUnits('500', 18)
+      const CAMPAIGN_DURATION = 60
+
+      await expect(
+        campaignContractFactory
+          .connect(creator1)
+          .deploy(ethers.ZeroAddress, CAMPAIGN_GOAL, CAMPAIGN_DURATION)
+      )
+        .to.be.revertedWithCustomError(campaignContractFactory, 'FactoryError')
+        .withArgs(ERR_INVALID_ADDRESS, ethers.ZeroAddress, 0)
+    })
+  })
+  describe('Campaign Contribution', function () {
+    it('Should allow multiple contributors to fund a campaign in target token', async function () {
+      const {
+        usdc,
+        campaignContractFactory,
+        creator1,
+        contributor1,
+        contributor2
+      } = await loadFixture(deployPlatformFixture)
+
+      const usdcDecimals = await usdc.decimals()
+      const CAMPAIGN_GOAL = ethers.parseUnits('500', usdcDecimals)
+      const CAMPAIGN_DURATION = 60
+
+      const tx = await campaignContractFactory
+        .connect(creator1)
+        .deploy(await usdc.getAddress(), CAMPAIGN_GOAL, CAMPAIGN_DURATION)
+
+      const receipt = await tx.wait()
+
+      if (!receipt) {
+        throw new Error('Transaction failed')
+      }
+
+      const event = receipt.logs.find(log => {
+        try {
+          const parsed = campaignContractFactory.interface.parseLog(log)
+          return parsed && parsed.name === 'FactoryOperation'
+        } catch {
+          return false
         }
-
-        const event = receipt.logs.find(log => {
-          try {
-            const parsed = campaignContractFactory.interface.parseLog(log)
-            return parsed && parsed.name === 'FactoryOperation'
-          } catch {
-            return false
-          }
-        })
-
-        if (!event) {
-          throw new Error('Event failed')
-        }
-
-        const parsedEvent = campaignContractFactory.interface.parseLog(event)
-        if (!parsedEvent) {
-          throw new Error('Event failed')
-        }
-
-        const campaignAddress = parsedEvent.args[1]
-
-        const Campaign = await ethers.getContractFactory('Campaign')
-        const campaign = Campaign.attach(campaignAddress) as unknown as Campaign
-
-        const contributionAmount = ethers.parseUnits('100', usdcDecimals)
-
-        await usdc
-          .connect(contributor1)
-          .approve(campaignAddress, contributionAmount)
-
-        const contributeTx1 = await campaign
-          .connect(contributor1)
-          .contribute(await usdc.getAddress(), contributionAmount)
-
-        if (!contributeTx1) {
-          throw new Error('Transaction failed')
-        }
-
-        const contributeReceipt1 = await contributeTx1.wait()
       })
+
+      if (!event) {
+        throw new Error('Event failed')
+      }
+
+      const parsedEvent = campaignContractFactory.interface.parseLog(event)
+      if (!parsedEvent) {
+        throw new Error('Event failed')
+      }
+
+      const campaignAddress = parsedEvent.args[1]
+
+      const Campaign = await ethers.getContractFactory('Campaign')
+      const campaign = Campaign.attach(campaignAddress) as unknown as Campaign
+
+      const contributionAmount = ethers.parseUnits('100', usdcDecimals)
+
+      await usdc
+        .connect(contributor1)
+        .approve(campaignAddress, contributionAmount)
+
+      const contributeTx1 = await campaign
+        .connect(contributor1)
+        .contribute(await usdc.getAddress(), contributionAmount)
+
+      if (!contributeTx1) {
+        throw new Error('Transaction failed')
+      }
+
+      const contributeReceipt1 = await contributeTx1.wait()
     })
   })
 })

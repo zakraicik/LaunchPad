@@ -69,13 +69,23 @@ contract CampaignContractFactory is Ownable {
         );
 
         if (!isValid) {
-            // If validation fails, determine the specific reason for better error reporting
             if (_campaignToken == address(0)) {
                 revert FactoryError(ERR_INVALID_ADDRESS, _campaignToken, 0);
             }
-            if (!tokenRegistry.isTokenSupported(_campaignToken)) {
+
+            bool isTokenValid;
+            try tokenRegistry.isTokenSupported(_campaignToken) returns (
+                bool supported
+            ) {
+                isTokenValid = supported;
+            } catch {
+                isTokenValid = false;
+            }
+
+            if (!isTokenValid) {
                 revert FactoryError(ERR_TOKEN_NOT_SUPPORTED, _campaignToken, 0);
             }
+
             if (_campaignGoalAmount <= 0) {
                 revert FactoryError(
                     ERR_INVALID_GOAL,
@@ -83,7 +93,8 @@ contract CampaignContractFactory is Ownable {
                     _campaignGoalAmount
                 );
             }
-            if (_campaignDuration <= 0) {
+
+            if (_campaignDuration <= 0 || _campaignDuration > 365) {
                 revert FactoryError(
                     ERR_INVALID_DURATION,
                     address(0),
@@ -91,7 +102,6 @@ contract CampaignContractFactory is Ownable {
                 );
             }
 
-            // Generic validation error as fallback
             revert FactoryError(ERR_VALIDATION_FAILED, address(0), 0);
         }
 
