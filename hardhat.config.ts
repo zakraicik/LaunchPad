@@ -3,6 +3,8 @@ import { HardhatUserConfig } from 'hardhat/config'
 import '@nomicfoundation/hardhat-toolbox'
 import 'hardhat-gas-reporter'
 
+import IERC20ABI from './test/abis/IERC20ABI.json'
+
 const config: HardhatUserConfig = {
   solidity: {
     version: '0.8.28',
@@ -35,7 +37,19 @@ const config: HardhatUserConfig = {
   },
   gasReporter: {
     enabled: true, // This will show all methods, including internal ones
-    currency: 'USD'
+    currency: 'USD',
+    remoteContracts: [
+      {
+        name: 'USDC',
+        address: '0x833589fcd6edb6e08f4c7c32d4f71b54bda02913',
+        abi: IERC20ABI
+      },
+      {
+        name: 'DAI',
+        address: '0x50c5725949a6f0c72e6c4a641f24049a917db0cb',
+        abi: IERC20ABI
+      }
+    ]
   }
 }
 
