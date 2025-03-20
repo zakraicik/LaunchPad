@@ -34,9 +34,8 @@ const config: HardhatUserConfig = {
     }
   },
   gasReporter: {
-    enabled: true,
-    currency: 'USD',
-    gasPrice: 21
+    enabled: true, // This will show all methods, including internal ones
+    currency: 'USD'
   }
 }
 
