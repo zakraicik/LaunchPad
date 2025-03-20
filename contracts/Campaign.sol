@@ -207,6 +207,12 @@ contract Campaign is Ownable, ReentrancyGuard, PlatformAdminAccessControl {
                 totalAmountRaised
             );
 
+        (uint256 minAmount, ) = tokenRegistry.getMinContributionAmount(
+            fromToken
+        );
+        if (amount < minAmount)
+            revert CampaignError(ERR_INVALID_AMOUNT, address(0), amount);
+
         if (!tokenRegistry.isTokenSupported(fromToken))
             revert CampaignError(ERR_TOKEN_NOT_SUPPORTED, fromToken, 0);
 
@@ -246,13 +252,13 @@ contract Campaign is Ownable, ReentrancyGuard, PlatformAdminAccessControl {
 
         contributions[msg.sender] += contributionAmount;
         totalAmountRaised += contributionAmount;
-        contributionTimestamps[msg.sender] = block.timestamp;
 
         if (!isContributor[msg.sender]) {
             isContributor[msg.sender] = true;
             nextContributor[msg.sender] = firstContributor;
             firstContributor = msg.sender;
             contributorsCount++;
+            contributionTimestamps[msg.sender] = block.timestamp;
         }
 
         emit Contribution(msg.sender, contributionAmount);

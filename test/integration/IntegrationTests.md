@@ -87,37 +87,37 @@ Tests to verify the complete flow of campaign creation, funding, and completion.
 - ✅ Contribute with campaign token (direct contribution)
 - Contribute with different token (requires swap)
 - Verify contributions update campaign total raised amount
-- Verify first-time contributor is added to linked list
-- Verify repeated contributions from same contributor
-- Test minimum contribution enforcement
-- Test contribution after campaign end (should fail)
-- Test contribution after goal reached (should fail)
+- ✅ Verify first-time contributor is added to linked list
+- ✅ Verify contribution balances(both weighted and unweighted)
+- ✅ Test minimum contribution enforcement
+- ✅ Test contribution after campaign end (should fail)
+- ✅ Test contribution after goal reached (should fail)
 
 ### Yield Generation
 
-- ✅ Deposit funds to yield protocol
-- ✅ Verify deposit records in DefiManager
-- ✅ Harvest yield from protocol
-- ✅ Verify yield distribution between platform and campaign
-- ✅ Withdraw partial funds from yield protocol
-- ✅ Withdraw all funds from yield protocol
+- Deposit funds to yield protocol
+- Verify deposit records in DefiManager
+- Harvest yield from protocol
+- Verify yield distribution between platform and campaign
+- Withdraw partial funds from yield protocol
+- Withdraw all funds from yield protocol
 
 ### Campaign Completion (Success)
 
-- ✅ End campaign with goal achieved
-- ✅ Calculate weighted contributions (both full and batch methods)
-- ✅ Owner claims funds after successful campaign
-- ✅ Contributors claim yield based on weighted contributions
-- ✅ Verify correct yield share calculations
-- ✅ Attempt to claim funds before campaign end (should fail)
+- End campaign with goal achieved
+- Calculate weighted contributions (both full and batch methods)
+- Owner claims funds after successful campaign
+- Contributors claim yield based on weighted contributions
+- Verify correct yield share calculations
+- Attempt to claim funds before campaign end (should fail)
 
 ### Campaign Completion (Failure)
 
-- ✅ End campaign without reaching goal
-- ✅ Contributors request refunds
-- ✅ Verify refund amount matches contribution
-- ✅ Attempt owner claim after failed campaign (should fail)
-- ✅ Attempt double refund (should fail)
+- End campaign without reaching goal
+- Contributors request refunds
+- Verify refund amount matches contribution
+- Attempt owner claim after failed campaign (should fail)
+- Attempt double refund (should fail)
 
 ## 2. Token Integration Tests
 
@@ -125,26 +125,26 @@ Tests focused on token functionality and interactions.
 
 ### Token Registry
 
-- ✅ Add new token to registry with minimum contribution
-- ✅ Remove token from registry
-- ✅ Disable token support temporarily
-- ✅ Re-enable token support
-- ✅ Update token minimum contribution
+- Add new token to registry with minimum contribution
+- Remove token from registry
+- Disable token support temporarily
+- Re-enable token support
+- Update token minimum contribution
 
 ### Token Swap Tests
 
-- ✅ Swap between different tokens
-- ✅ Verify slippage protection works correctly
-- ✅ Test with tokens of different decimals (6, 8, 18)
-- ✅ Test swap failure handling
-- ✅ Verify event emission with correct swap details
+- Swap between different tokens
+- Verify slippage protection works correctly
+- Test with tokens of different decimals (6, 8, 18)
+- Test swap failure handling
+- Verify event emission with correct swap details
 
 ### Token Error Handling
 
-- ✅ Test contribution with unsupported token (should fail)
-- ✅ Test with insufficient allowance (should fail)
-- ✅ Test swap with extreme slippage (should fail)
-- ✅ Verify zero-amount operations are rejected
+- Test contribution with unsupported token (should fail)
+- Test with insufficient allowance (should fail)
+- Test swap with extreme slippage (should fail)
+- Verify zero-amount operations are rejected
 
 ## 3. DeFi Integration Tests
 
@@ -152,27 +152,27 @@ Tests for interactions with external DeFi protocols.
 
 ### Aave Integration
 
-- ✅ Test deposit to Aave
-- ✅ Test withdrawal from Aave
-- ✅ Verify yield calculation from Aave
-- ✅ Test handling of yield rate changes
-- ✅ Verify response to liquidity constraints
+- Test deposit to Aave
+- Test withdrawal from Aave
+- Verify yield calculation from Aave
+- Test handling of yield rate changes
+- Verify response to liquidity constraints
 
 ### Uniswap Integration
 
-- ✅ Test token swaps via Uniswap
-- ✅ Verify exchange rate calculation
-- ✅ Test handling of low liquidity pairs
-- ✅ Verify slippage limit enforcement
-- ✅ Test swap path optimization
+- Test token swaps via Uniswap
+- Verify exchange rate calculation
+- Test handling of low liquidity pairs
+- Verify slippage limit enforcement
+- Test swap path optimization
 
 ### Yield Distribution
 
-- ✅ Test platform fee calculation
-- ✅ Test weighted contribution calculations
-- ✅ Verify yield distribution to treasury
-- ✅ Verify yield distribution to contributors
-- ✅ Test updating platform yield share percentage
+- Test platform fee calculation
+- Test weighted contribution calculations
+- Verify yield distribution to treasury
+- Verify yield distribution to contributors
+- Test updating platform yield share percentage
 
 ## 4. Admin Control Tests
 
@@ -180,23 +180,23 @@ Tests for administrative functions and controls.
 
 ### Platform Admin Access
 
-- ✅ Test admin access control validation
-- ✅ Add new platform admin
-- ✅ Remove platform admin
-- ✅ Test non-admin restricted function access (should fail)
+- Test admin access control validation
+- Add new platform admin
+- Remove platform admin
+- Test non-admin restricted function access (should fail)
 
 ### Grace Period Mechanics
 
-- ✅ Test grace period calculation
-- ✅ Admin intervention before grace period (should fail)
-- ✅ Admin intervention after grace period
-- ✅ Update grace period length
+- Test grace period calculation
+- Admin intervention before grace period (should fail)
+- Admin intervention after grace period
+- Update grace period length
 
 ### Admin Override Functions
 
-- ✅ Test admin campaign override flag
-- ✅ Test emergency fund withdrawal
-- ✅ Reset weighted contribution calculation
+- Test admin campaign override flag
+- Test emergency fund withdrawal
+- Reset weighted contribution calculation
 
 ## 5. Edge Cases and Recovery Tests
 
@@ -204,21 +204,21 @@ Testing resilience and handling of exceptional conditions.
 
 ### Gas Optimization
 
-- ✅ Test batch processing with different batch sizes
-- ✅ Verify gas usage for large contributor counts
-- ✅ Test operation near gas limits
+- Test batch processing with different batch sizes
+- Verify gas usage for large contributor counts
+- Test operation near gas limits
 
 ### Error Recovery
 
-- ✅ Test recovery from interrupted weighted contribution calculation
-- ✅ Test admin intervention after owner abandonment
-- ✅ Test with failing external contracts
+- Test recovery from interrupted weighted contribution calculation
+- Test admin intervention after owner abandonment
+- Test with failing external contracts
 
 ### Security Scenarios
 
-- ✅ Test reentrancy protection
-- ✅ Verify access control in critical functions
-- ✅ Test with malicious input data
+- Test reentrancy protection
+- Verify access control in critical functions
+- Test with malicious input data
 
 ## 6. Integration Test Setup
 
