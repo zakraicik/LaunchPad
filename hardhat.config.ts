@@ -22,7 +22,7 @@ const config: HardhatUserConfig = {
     hardhat: {
       forking: {
         url: 'https://base-mainnet.g.alchemy.com/v2/A8wE4FsZsP3eTlR0DSDh3w5nU7wdPyUG',
-        blockNumber: 27769750 // Use a recent block number
+        blockNumber: 27890275 // Use a recent block number
       },
       chains: {
         8453: {
@@ -48,8 +48,8 @@ const config: HardhatUserConfig = {
         abi: IERC20ABI
       },
       {
-        name: 'DAI',
-        address: '0x50c5725949a6f0c72e6c4a641f24049a917db0cb',
+        name: 'MANTRA',
+        address: '0x3992b27da26848c2b19cea6fd25ad5568b68ab98',
         abi: IERC20ABI
       },
       {
@@ -61,16 +61,6 @@ const config: HardhatUserConfig = {
         name: 'AAVE',
         address: '0xa238dd80c259a72e81d7e4664a9801593f98d1c5',
         abi: AavePoolABI
-      },
-      {
-        name: 'UNISWAP QUOTER',
-        address: '0x3d4e44eb1374240ce5f1b871ab261cd16335b76a',
-        abi: UniswapQuoterABI
-      },
-      {
-        name: 'UNISWAP ROUTER',
-        address: '0x6ff5693b99212da76ad316178a184ab56d299b43',
-        abi: UniswapRouterABI
       }
     ]
   }

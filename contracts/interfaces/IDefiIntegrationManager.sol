@@ -4,8 +4,6 @@ pragma solidity ^0.8.28;
 import "./ITokenRegistry.sol";
 import "./IYieldDistributor.sol";
 import "./IAavePool.sol";
-import "./ISwapRouter.sol";
-import "./IQuoter.sol";
 
 interface IDefiIntegrationManager {
     function depositToYieldProtocol(address _token, uint256 _amount) external;
@@ -22,18 +20,6 @@ interface IDefiIntegrationManager {
     function harvestYield(
         address _token
     ) external returns (uint256 creatorYield, uint256 platformYield);
-
-    function swapTokenForTarget(
-        address _fromToken,
-        uint256 _amount,
-        address _toToken
-    ) external returns (uint256);
-
-    function getTargetTokenEquivalent(
-        address _fromToken,
-        uint256 _amount,
-        address _toToken
-    ) external view returns (uint256);
 
     function getCurrentYieldRate(
         address token
@@ -59,8 +45,4 @@ interface IDefiIntegrationManager {
     function yieldDistributor() external view returns (IYieldDistributor);
 
     function aavePool() external view returns (IAavePool);
-
-    function uniswapRouter() external view returns (ISwapRouter);
-
-    function uniswapQuoter() external view returns (IQuoter);
 }

@@ -90,22 +90,6 @@ contract MockCampaign {
         emit YieldHarvested(token, creatorYield);
     }
 
-    function swapTokens(
-        address fromToken,
-        uint256 amount,
-        address toToken
-    ) external {
-        IERC20(fromToken).approve(address(defiManager), amount);
-        uint256 received = defiManager.swapTokenForTarget(
-            fromToken,
-            amount,
-            toToken
-        );
-        lastSwapAmount = received;
-
-        emit TokensSwapped(fromToken, toToken, amount, received);
-    }
-
     // Helper functions for testing
 
     function getDepositedAmount(address token) external view returns (uint256) {

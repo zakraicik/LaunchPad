@@ -8,10 +8,7 @@ import {DataTypes} from "@aave/core-v3/contracts/protocol/libraries/types/DataTy
 import "./interfaces/ITokenRegistry.sol";
 import "./interfaces/IYieldDistributor.sol";
 import "./interfaces/IAavePool.sol";
-import "./interfaces/ISwapRouter.sol";
-import "./interfaces/IQuoter.sol";
 import "./abstracts/PlatformAdminAccessControl.sol";
-import "./libraries/DefiLibrary.sol";
 
 contract DefiIntegrationManager is
     Ownable,
@@ -19,42 +16,30 @@ contract DefiIntegrationManager is
     PlatformAdminAccessControl
 {
     using SafeERC20 for IERC20;
-    using DefiLibrary for *;
 
     // Operation types for events
     uint8 private constant OP_YIELD_DEPOSITED = 1;
     uint8 private constant OP_YIELD_WITHDRAWN = 2;
     uint8 private constant OP_YIELD_HARVESTED = 3;
-    uint8 private constant OP_TOKEN_SWAPPED = 4;
-    uint8 private constant OP_CONFIG_UPDATED = 5;
+    uint8 private constant OP_CONFIG_UPDATED = 4;
 
     // Error codes
     uint8 private constant ERR_UNAUTHORIZED = 1;
     uint8 private constant ERR_ZERO_AMOUNT = 2;
     uint8 private constant ERR_INSUFFICIENT_DEPOSIT = 3;
     uint8 private constant ERR_TOKEN_NOT_SUPPORTED = 4;
-    uint8 private constant ERR_SLIPPAGE_EXCEEDED = 5;
-    uint8 private constant ERR_YIELD_DEPOSIT_FAILED = 6;
-    uint8 private constant ERR_YIELD_WITHDRAWAL_FAILED = 7;
-    uint8 private constant ERR_INVALID_ADDRESS = 8;
-    uint8 private constant ERR_INVALID_CONSTRUCTOR = 9;
-    uint8 private constant ERR_NO_YIELD = 10;
-    uint8 private constant ERR_WITHDRAWAL_MISMATCH = 11;
-    uint8 private constant ERR_FAILED_GET_ATOKEN = 12;
-    uint8 private constant ERR_TOKENS_SAME = 13;
-    uint8 private constant ERR_SWAP_QUOTE_INVALID = 14;
-    uint8 private constant ERR_SWAP_FAILED = 15;
+    uint8 private constant ERR_YIELD_DEPOSIT_FAILED = 5;
+    uint8 private constant ERR_YIELD_WITHDRAWAL_FAILED = 6;
+    uint8 private constant ERR_INVALID_ADDRESS = 7;
+    uint8 private constant ERR_INVALID_CONSTRUCTOR = 8;
+    uint8 private constant ERR_NO_YIELD = 9;
+    uint8 private constant ERR_WITHDRAWAL_MISMATCH = 10;
+    uint8 private constant ERR_FAILED_GET_ATOKEN = 11;
 
     // External contracts
     IAavePool public aavePool;
-    ISwapRouter public uniswapRouter;
-    IQuoter public uniswapQuoter;
     ITokenRegistry public tokenRegistry;
     IYieldDistributor public yieldDistributor;
-
-    // Constants
-    uint24 public constant UNISWAP_FEE_TIER = 3000; // 0.3%
-    uint16 public constant SLIPPAGE_TOLERANCE = 50; // 0.5%
 
     // Storage
     mapping(address => mapping(address => uint256)) public aaveDeposits;
@@ -81,8 +66,6 @@ contract DefiIntegrationManager is
 
     constructor(
         address _aavePool,
-        address _uniswapRouter,
-        address _uniswapQuoter,
         address _tokenRegistry,
         address _yieldDistributor,
         address _platformAdmin,
@@ -90,14 +73,6 @@ contract DefiIntegrationManager is
     ) Ownable(_owner) PlatformAdminAccessControl(_platformAdmin) {
         if (_aavePool == address(0)) {
             revert DefiError(ERR_INVALID_CONSTRUCTOR, _aavePool, 0);
-        }
-
-        if (_uniswapRouter == address(0)) {
-            revert DefiError(ERR_INVALID_CONSTRUCTOR, _uniswapRouter, 1);
-        }
-
-        if (_uniswapQuoter == address(0)) {
-            revert DefiError(ERR_INVALID_CONSTRUCTOR, _uniswapQuoter, 2);
         }
 
         if (_tokenRegistry == address(0)) {
@@ -109,8 +84,6 @@ contract DefiIntegrationManager is
         }
 
         aavePool = IAavePool(_aavePool);
-        uniswapRouter = ISwapRouter(_uniswapRouter);
-        uniswapQuoter = IQuoter(_uniswapQuoter);
         tokenRegistry = ITokenRegistry(_tokenRegistry);
         yieldDistributor = IYieldDistributor(_yieldDistributor);
     }
@@ -150,32 +123,6 @@ contract DefiIntegrationManager is
         aavePool = IAavePool(_aavePool);
 
         emit ConfigUpdated(3, oldAavePool, _aavePool);
-    }
-
-    function setUniswapRouter(
-        address _uniswapRouter
-    ) external onlyPlatformAdmin {
-        if (_uniswapRouter == address(0)) {
-            revert DefiError(ERR_INVALID_ADDRESS, _uniswapRouter, 0);
-        }
-
-        address oldUniswapRouter = address(uniswapRouter);
-        uniswapRouter = ISwapRouter(_uniswapRouter);
-
-        emit ConfigUpdated(4, oldUniswapRouter, _uniswapRouter);
-    }
-
-    function setUniswapQuoter(
-        address _uniswapQuoter
-    ) external onlyPlatformAdmin {
-        if (_uniswapQuoter == address(0)) {
-            revert DefiError(ERR_INVALID_ADDRESS, _uniswapQuoter, 0);
-        }
-
-        address oldUniswapQuoter = address(uniswapQuoter);
-        uniswapQuoter = IQuoter(_uniswapQuoter);
-
-        emit ConfigUpdated(5, oldUniswapQuoter, _uniswapQuoter);
     }
 
     function depositToYieldProtocol(
@@ -341,115 +288,6 @@ contract DefiIntegrationManager is
         } catch {
             revert DefiError(ERR_YIELD_WITHDRAWAL_FAILED, _token, totalYield);
         }
-    }
-
-    function getTargetTokenEquivalent(
-        address _fromToken,
-        uint256 _amount,
-        address _toToken
-    ) public view returns (uint256) {
-        if (_fromToken == _toToken) {
-            revert DefiError(ERR_TOKENS_SAME, _fromToken, 0);
-        }
-
-        try
-            uniswapQuoter.quoteExactInputSingle(
-                _fromToken,
-                _toToken,
-                UNISWAP_FEE_TIER,
-                _amount,
-                0
-            )
-        returns (uint256 quote) {
-            return quote;
-        } catch {
-            return 0;
-        }
-    }
-
-    function swapTokenForTarget(
-        address _fromToken,
-        uint256 _amount,
-        address _toToken
-    ) external nonReentrant returns (uint256) {
-        // CHECKS - Validate all inputs first
-        if (_amount <= 0) {
-            revert DefiError(ERR_ZERO_AMOUNT, _fromToken, _amount);
-        }
-
-        if (!tokenRegistry.isTokenSupported(_fromToken)) {
-            revert DefiError(ERR_TOKEN_NOT_SUPPORTED, _fromToken, 0);
-        }
-
-        if (!tokenRegistry.isTokenSupported(_toToken)) {
-            revert DefiError(ERR_TOKEN_NOT_SUPPORTED, _toToken, 0);
-        }
-
-        if (_fromToken == _toToken) {
-            revert DefiError(ERR_TOKENS_SAME, _fromToken, 0);
-        }
-
-        uint256 expectedOut = getTargetTokenEquivalent(
-            _fromToken,
-            _amount,
-            _toToken
-        );
-        if (expectedOut == 0) {
-            revert DefiError(ERR_SWAP_QUOTE_INVALID, _fromToken, _amount);
-        }
-
-        // Calculate min output
-        uint256 minAmountOut = DefiLibrary.calculateMinOutput(
-            expectedOut,
-            SLIPPAGE_TOLERANCE
-        );
-
-        // EFFECTS - No state changes in this particular function
-        // But if there were, they would go here before external interactions
-
-        // INTERACTIONS - First get the tokens from the sender
-        IERC20(_fromToken).safeTransferFrom(msg.sender, address(this), _amount);
-        IERC20(_fromToken).safeIncreaseAllowance(
-            address(uniswapRouter),
-            _amount
-        );
-
-        // Then perform the swap
-        ISwapRouter.ExactInputSingleParams memory params = DefiLibrary
-            .createSwapParams(
-                _fromToken,
-                _toToken,
-                UNISWAP_FEE_TIER,
-                _amount,
-                minAmountOut
-            );
-
-        uint256 received;
-        try uniswapRouter.exactInputSingle(params) returns (uint256 amountOut) {
-            received = amountOut;
-        } catch {
-            revert DefiError(ERR_SWAP_FAILED, _fromToken, _amount);
-        }
-
-        // Validate the swap result
-        if (received < minAmountOut) {
-            revert DefiError(ERR_SLIPPAGE_EXCEEDED, _toToken, received);
-        }
-
-        // Finally transfer tokens to the sender
-        IERC20(_toToken).safeTransfer(msg.sender, received);
-
-        // Emit event last
-        emit DefiOperation(
-            OP_TOKEN_SWAPPED,
-            msg.sender,
-            _fromToken,
-            _toToken,
-            _amount,
-            received
-        );
-
-        return received;
     }
 
     function getCurrentYieldRate(

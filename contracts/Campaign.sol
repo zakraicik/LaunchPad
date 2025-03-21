@@ -99,13 +99,6 @@ contract Campaign is Ownable, ReentrancyGuard, PlatformAdminAccessControl {
         address initiator // Who initiated the operation
     );
 
-    event TokensSwapped(
-        address indexed fromToken,
-        address indexed toToken,
-        uint256 amountIn,
-        uint256 amountOut
-    );
-
     event YieldDistributed(
         address indexed contributor,
         uint256 amount,
@@ -218,37 +211,14 @@ contract Campaign is Ownable, ReentrancyGuard, PlatformAdminAccessControl {
 
         uint256 contributionAmount;
 
-        if (fromToken == campaignToken) {
-            contributionAmount = amount;
+        contributionAmount = amount;
 
-            TokenOperations.safeTransferFrom(
-                campaignToken,
-                msg.sender,
-                address(this),
-                amount
-            );
-        } else {
-            TokenOperations.safeTransferFrom(
-                fromToken,
-                msg.sender,
-                address(this),
-                amount
-            );
-            TokenOperations.safeIncreaseAllowance(
-                fromToken,
-                address(defiManager),
-                amount
-            );
-
-            uint256 received = defiManager.swapTokenForTarget(
-                fromToken,
-                amount,
-                campaignToken
-            );
-            contributionAmount = received;
-
-            emit TokensSwapped(fromToken, campaignToken, amount, received);
-        }
+        TokenOperations.safeTransferFrom(
+            campaignToken,
+            msg.sender,
+            address(this),
+            amount
+        );
 
         contributions[msg.sender] += contributionAmount;
         totalAmountRaised += contributionAmount;

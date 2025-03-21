@@ -85,8 +85,7 @@ Tests to verify the complete flow of campaign creation, funding, and completion.
 ### Contribution Process
 
 - ✅ Contribute with campaign token (direct contribution)
-- Contribute with different token (requires swap)
-- Verify contributions update campaign total raised amount
+- ✅ Verify contributions update campaign total raised amount
 - ✅ Verify first-time contributor is added to linked list
 - ✅ Verify contribution balances(both weighted and unweighted)
 - ✅ Test minimum contribution enforcement

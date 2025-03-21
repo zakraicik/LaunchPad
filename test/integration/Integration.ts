@@ -18,26 +18,20 @@ import {
 describe('Base Mainnet Integration Tests', function () {
   //Whales
   const USDC_WHALE_ADDRESS = '0x0b0a5886664376f59c351ba3f598c8a8b4d0a6f3'
-  const DAI_WHALE_ADDRESS = '0x0772f014009162efb833ef34d3ea3f243fc735ba'
 
   // External contracts addresses
-  const UNISWAP_QUOTER_ADDRESS = '0x3d4e44eb1374240ce5f1b871ab261cd16335b76a' //Uniswap Quoter V3
-  const UNISWAP_ROUTER_ADDRESS = '0x6ff5693b99212da76ad316178a184ab56d299b43' //uniswap Router V3
   const AAVE_POOL_ADDRESS = '0xa238dd80c259a72e81d7e4664a9801593f98d1c5' //AAVE v3
   const USDC_ADDRESS = '0x833589fcd6edb6e08f4c7c32d4f71b54bda02913' //USDC on Base
-  const DAI_ADDRESS = '0x50c5725949a6f0c72e6c4a641f24049a917db0cb' //DAI on Base
-  const WBTC = '0x0555e30da8f98308edb960aa94c0db47230d2b9c' //Wrapped BTCC on base
+  const WBTC = '0x0555e30da8f98308edb960aa94c0db47230d2b9c' //Wrapped BTC on base
 
   // Constants for testing
 
   const GRACE_PERIOD = 7 // 7 days grace period
+  const GAS_LIMIT = 5000000
 
   let usdc: IERC20Metadata
-  let dai: IERC20Metadata
   let wbtc: IERC20Metadata
 
-  let uniswapRouter: Contract
-  let uniswapQuoter: Contract
   let aavePool: Contract
   let platformAdmin: PlatformAdmin
   let tokenRegistry: TokenRegistry
@@ -55,14 +49,7 @@ describe('Base Mainnet Integration Tests', function () {
       params: [USDC_WHALE_ADDRESS]
     })
 
-    await network.provider.request({
-      method: 'hardhat_impersonateAccount',
-      params: [DAI_WHALE_ADDRESS]
-    })
-
     const usdc_whale = await ethers.getSigner(USDC_WHALE_ADDRESS)
-
-    const dai_whale = await ethers.getSigner(DAI_WHALE_ADDRESS)
 
     const [
       deployer,
@@ -87,19 +74,6 @@ describe('Base Mainnet Integration Tests', function () {
       'function balanceOf(address account) external view returns (uint256)'
     ]
 
-    // Uniswap Router ABI for testing
-    const UNISWAP_ROUTER_ABI = [
-      'function exactInputSingle(tuple(address tokenIn, address tokenOut, uint24 fee, address recipient, uint256 deadline, uint256 amountIn, uint256 amountOutMinimum, uint160 sqrtPriceLimitX96)) external payable returns (uint256 amountOut)',
-      'function exactInput(tuple(bytes path, address recipient, uint256 deadline, uint256 amountIn, uint256 amountOutMinimum)) external payable returns (uint256 amountOut)',
-      'function getAmountsOut(uint256 amountIn, address[] memory path) external view returns (uint256[] memory amounts)'
-    ]
-
-    // Uniswap Quoter ABI for testing
-    const UNISWAP_QUOTER_ABI = [
-      'function quoteExactInputSingle(address tokenIn, address tokenOut, uint24 fee, uint256 amountIn, uint160 sqrtPriceLimitX96) external returns (uint256 amountOut)',
-      'function quoteExactInput(bytes memory path, uint256 amountIn) external returns (uint256 amountOut)'
-    ]
-
     // Aave Pool ABI for testing
     const AAVE_POOL_ABI = [
       'function supply(address asset, uint256 amount, address onBehalfOf, uint16 referralCode) external',
@@ -108,10 +82,6 @@ describe('Base Mainnet Integration Tests', function () {
     ]
 
     // Initialize contracts with signer using getContractAt to fund contributor accounts
-    dai = (await ethers.getContractAt(
-      IERC20ABI,
-      DAI_ADDRESS
-    )) as unknown as IERC20Metadata
 
     usdc = (await ethers.getContractAt(
       IERC20ABI,
@@ -127,27 +97,11 @@ describe('Base Mainnet Integration Tests', function () {
     await deployer.sendTransaction({
       to: USDC_WHALE_ADDRESS,
       value: ethers.parseEther('5.0'),
-      gasLimit: 21000,
+      gasLimit: GAS_LIMIT,
       maxFeePerGas: maxFeePerGas,
       maxPriorityFeePerGas: maxPriorityFeePerGas
     })
 
-    await deployer.sendTransaction({
-      to: DAI_WHALE_ADDRESS,
-      value: ethers.parseEther('5.0'),
-      gasLimit: 21000,
-      maxFeePerGas: maxFeePerGas,
-      maxPriorityFeePerGas: maxPriorityFeePerGas
-    })
-
-    uniswapRouter = await ethers.getContractAt(
-      UNISWAP_ROUTER_ABI,
-      UNISWAP_ROUTER_ADDRESS
-    )
-    uniswapQuoter = await ethers.getContractAt(
-      UNISWAP_QUOTER_ABI,
-      UNISWAP_QUOTER_ADDRESS
-    )
     aavePool = await ethers.getContractAt(AAVE_POOL_ABI, AAVE_POOL_ADDRESS)
 
     //Deploy PlatformAdmin
@@ -157,7 +111,7 @@ describe('Base Mainnet Integration Tests', function () {
       {
         maxFeePerGas,
         maxPriorityFeePerGas,
-        gasLimit: 3000000
+        gasLimit: GAS_LIMIT
       }
     )
 
@@ -170,7 +124,7 @@ describe('Base Mainnet Integration Tests', function () {
       {
         maxFeePerGas,
         maxPriorityFeePerGas,
-        gasLimit: 3000000
+        gasLimit: GAS_LIMIT
       }
     )
 
@@ -178,7 +132,6 @@ describe('Base Mainnet Integration Tests', function () {
 
     //Add tokens to TokenRegistry
     await tokenRegistry.addToken(USDC_ADDRESS, 1)
-    await tokenRegistry.addToken(DAI_ADDRESS, 1)
 
     yieldDistributor = await ethers.deployContract(
       'YieldDistributor',
@@ -190,7 +143,7 @@ describe('Base Mainnet Integration Tests', function () {
       {
         maxFeePerGas,
         maxPriorityFeePerGas,
-        gasLimit: 3000000
+        gasLimit: GAS_LIMIT
       }
     )
 
@@ -200,8 +153,6 @@ describe('Base Mainnet Integration Tests', function () {
       'DefiIntegrationManager',
       [
         AAVE_POOL_ADDRESS,
-        UNISWAP_ROUTER_ADDRESS,
-        UNISWAP_QUOTER_ADDRESS,
         await tokenRegistry.getAddress(),
         await yieldDistributor.getAddress(),
         await platformAdmin.getAddress(),
@@ -210,7 +161,7 @@ describe('Base Mainnet Integration Tests', function () {
       {
         maxFeePerGas,
         maxPriorityFeePerGas,
-        gasLimit: 3000000
+        gasLimit: GAS_LIMIT
       }
     )
 
@@ -226,7 +177,7 @@ describe('Base Mainnet Integration Tests', function () {
       {
         maxFeePerGas,
         maxPriorityFeePerGas,
-        gasLimit: 5000000
+        gasLimit: GAS_LIMIT
       }
     )
 
@@ -236,61 +187,34 @@ describe('Base Mainnet Integration Tests', function () {
     const usdcDecimals = await usdc.decimals()
     const usdTransferAmount = ethers.parseUnits('1000000', usdcDecimals)
 
-    const daiDecimals = await dai.decimals()
-    const daiTransferAmount = ethers.parseUnits('100000', daiDecimals)
-
     await usdc
       .connect(usdc_whale)
       .transfer(contributor1.address, usdTransferAmount, {
-        gasLimit: 100000, // Adjust based on the complexity of the transfer
+        gasLimit: GAS_LIMIT, // Adjust based on the complexity of the transfer
         maxFeePerGas: maxFeePerGas,
         maxPriorityFeePerGas: maxPriorityFeePerGas
       })
     await usdc
       .connect(usdc_whale)
       .transfer(contributor2.address, usdTransferAmount, {
-        gasLimit: 100000, // Adjust based on the complexity of the transfer
+        gasLimit: GAS_LIMIT, // Adjust based on the complexity of the transfer
         maxFeePerGas: maxFeePerGas,
         maxPriorityFeePerGas: maxPriorityFeePerGas
       })
     await usdc
       .connect(usdc_whale)
       .transfer(contributor3.address, usdTransferAmount, {
-        gasLimit: 100000, // Adjust based on the complexity of the transfer
-        maxFeePerGas: maxFeePerGas,
-        maxPriorityFeePerGas: maxPriorityFeePerGas
-      })
-
-    await dai
-      .connect(dai_whale)
-      .transfer(contributor1.address, daiTransferAmount, {
-        gasLimit: 100000, // Adjust based on the complexity of the transfer
-        maxFeePerGas: maxFeePerGas,
-        maxPriorityFeePerGas: maxPriorityFeePerGas
-      })
-    await dai
-      .connect(dai_whale)
-      .transfer(contributor2.address, daiTransferAmount, {
-        gasLimit: 100000, // Adjust based on the complexity of the transfer
-        maxFeePerGas: maxFeePerGas,
-        maxPriorityFeePerGas: maxPriorityFeePerGas
-      })
-    await dai
-      .connect(dai_whale)
-      .transfer(contributor3.address, daiTransferAmount, {
-        gasLimit: 100000, // Adjust based on the complexity of the transfer
+        gasLimit: GAS_LIMIT, // Adjust based on the complexity of the transfer
         maxFeePerGas: maxFeePerGas,
         maxPriorityFeePerGas: maxPriorityFeePerGas
       })
 
     return {
       usdc,
-      dai,
       wbtc,
       deployer,
       creator1,
       creator2,
-
       contributor1,
       contributor2,
       contributor3,
@@ -344,12 +268,6 @@ describe('Base Mainnet Integration Tests', function () {
       expect(await defiIntegrationManager.owner()).to.equal(deployer.address)
       expect(await defiIntegrationManager.aavePool()).to.equal(
         ethers.getAddress(AAVE_POOL_ADDRESS)
-      )
-      expect(await defiIntegrationManager.uniswapRouter()).to.equal(
-        ethers.getAddress(UNISWAP_ROUTER_ADDRESS)
-      )
-      expect(await defiIntegrationManager.uniswapQuoter()).to.equal(
-        ethers.getAddress(UNISWAP_QUOTER_ADDRESS)
       )
       expect(await defiIntegrationManager.tokenRegistry()).to.equal(
         ethers.getAddress(await tokenRegistry.getAddress())
