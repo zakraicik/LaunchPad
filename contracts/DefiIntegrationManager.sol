@@ -320,4 +320,8 @@ contract DefiIntegrationManager is
 
         return aaveDeposits[campaign][token];
     }
+
+    function getPlatformTreasury() external view returns (address) {
+        return yieldDistributor.platformTreasury();
+    }
 }

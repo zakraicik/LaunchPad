@@ -47,11 +47,7 @@ const config: HardhatUserConfig = {
         address: '0x833589fcd6edb6e08f4c7c32d4f71b54bda02913',
         abi: IERC20ABI
       },
-      {
-        name: 'MANTRA',
-        address: '0x3992b27da26848c2b19cea6fd25ad5568b68ab98',
-        abi: IERC20ABI
-      },
+
       {
         name: 'WBTC',
         address: '0x0555e30da8f98308edb960aa94c0db47230d2b9c',

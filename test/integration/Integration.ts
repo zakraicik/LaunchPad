@@ -18,6 +18,7 @@ import {
 describe('Base Mainnet Integration Tests', function () {
   //Whales
   const USDC_WHALE_ADDRESS = '0x0b0a5886664376f59c351ba3f598c8a8b4d0a6f3'
+  const WBTC_WHALE_ADDRESS = '0x48cce57c4d2dbb31eaf79575abf482bbb8dc071d'
 
   // External contracts addresses
   const AAVE_POOL_ADDRESS = '0xa238dd80c259a72e81d7e4664a9801593f98d1c5' //AAVE v3
@@ -49,7 +50,13 @@ describe('Base Mainnet Integration Tests', function () {
       params: [USDC_WHALE_ADDRESS]
     })
 
+    await network.provider.request({
+      method: 'hardhat_impersonateAccount',
+      params: [WBTC_WHALE_ADDRESS]
+    })
+
     const usdc_whale = await ethers.getSigner(USDC_WHALE_ADDRESS)
+    const wbtc_whale = await ethers.getSigner(WBTC_WHALE_ADDRESS)
 
     const [
       deployer,
@@ -96,6 +103,14 @@ describe('Base Mainnet Integration Tests', function () {
     // Send ETH to whales
     await deployer.sendTransaction({
       to: USDC_WHALE_ADDRESS,
+      value: ethers.parseEther('5.0'),
+      gasLimit: GAS_LIMIT,
+      maxFeePerGas: maxFeePerGas,
+      maxPriorityFeePerGas: maxPriorityFeePerGas
+    })
+
+    await deployer.sendTransaction({
+      to: WBTC_WHALE_ADDRESS,
       value: ethers.parseEther('5.0'),
       gasLimit: GAS_LIMIT,
       maxFeePerGas: maxFeePerGas,
@@ -187,6 +202,9 @@ describe('Base Mainnet Integration Tests', function () {
     const usdcDecimals = await usdc.decimals()
     const usdTransferAmount = ethers.parseUnits('1000000', usdcDecimals)
 
+    const wbtcDecimals = await wbtc.decimals()
+    const wbtcTransferAmount = ethers.parseUnits('.01', wbtcDecimals)
+
     await usdc
       .connect(usdc_whale)
       .transfer(contributor1.address, usdTransferAmount, {
@@ -204,6 +222,14 @@ describe('Base Mainnet Integration Tests', function () {
     await usdc
       .connect(usdc_whale)
       .transfer(contributor3.address, usdTransferAmount, {
+        gasLimit: GAS_LIMIT, // Adjust based on the complexity of the transfer
+        maxFeePerGas: maxFeePerGas,
+        maxPriorityFeePerGas: maxPriorityFeePerGas
+      })
+
+    await wbtc
+      .connect(wbtc_whale)
+      .transfer(contributor1.address, wbtcTransferAmount, {
         gasLimit: GAS_LIMIT, // Adjust based on the complexity of the transfer
         maxFeePerGas: maxFeePerGas,
         maxPriorityFeePerGas: maxPriorityFeePerGas
@@ -227,263 +253,294 @@ describe('Base Mainnet Integration Tests', function () {
     }
   }
 
-  describe('Campaign Creation', function () {
+  describe('Campaign Mechanics', function () {
     const ERR_INVALID_ADDRESS = 1
     const ERR_TOKEN_NOT_SUPPORTED = 2
     const ERR_INVALID_GOAL = 3
     const ERR_INVALID_DURATION = 4
     const OP_CAMPAIGN_CREATED = 1
 
-    it('Deploy supporting contracts and set initial state correctly', async function () {
-      const {
-        deployer,
-        platformTreasury,
-        platformAdmin,
-        tokenRegistry,
-        yieldDistributor,
-        defiIntegrationManager,
-        campaignContractFactory
-      } = await loadFixture(deployPlatformFixture)
+    describe('Campaign Creation', function () {
+      it('Deploy supporting contracts and set initial state correctly', async function () {
+        const {
+          deployer,
+          platformTreasury,
+          platformAdmin,
+          tokenRegistry,
+          yieldDistributor,
+          defiIntegrationManager,
+          campaignContractFactory
+        } = await loadFixture(deployPlatformFixture)
 
-      //PlatformAdmin
-      expect(await platformAdmin.owner()).to.equal(deployer.address)
-      expect(await platformAdmin.gracePeriod()).to.equal(GRACE_PERIOD)
+        //PlatformAdmin
+        expect(await platformAdmin.owner()).to.equal(deployer.address)
+        expect(await platformAdmin.gracePeriod()).to.equal(GRACE_PERIOD)
 
-      //TokenRegistry
-      expect(await tokenRegistry.owner()).to.equal(deployer.address)
-      expect(await tokenRegistry.platformAdmin()).to.equal(
-        await platformAdmin.getAddress()
-      )
-
-      //YieldDistributor
-      expect(await yieldDistributor.owner()).to.equal(deployer.address)
-      expect(await yieldDistributor.platformTreasury()).to.equal(
-        platformTreasury.address
-      )
-      expect(await yieldDistributor.platformAdmin()).to.equal(
-        await platformAdmin.getAddress()
-      )
-
-      //DefiIntegrationManager
-      expect(await defiIntegrationManager.owner()).to.equal(deployer.address)
-      expect(await defiIntegrationManager.aavePool()).to.equal(
-        ethers.getAddress(AAVE_POOL_ADDRESS)
-      )
-      expect(await defiIntegrationManager.tokenRegistry()).to.equal(
-        ethers.getAddress(await tokenRegistry.getAddress())
-      )
-      expect(await defiIntegrationManager.yieldDistributor()).to.equal(
-        ethers.getAddress(await yieldDistributor.getAddress())
-      )
-
-      expect(await defiIntegrationManager.platformAdmin()).to.equal(
-        await platformAdmin.getAddress()
-      )
-
-      //CampaignContractFactory
-      expect(await campaignContractFactory.owner()).to.equal(deployer.address)
-      expect(await campaignContractFactory.defiManager()).to.equal(
-        await defiIntegrationManager.getAddress()
-      )
-      expect(await campaignContractFactory.platformAdmin()).to.equal(
-        await platformAdmin.getAddress()
-      )
-    })
-
-    it('Should reject campaign with token that is not in token registry', async function () {
-      const { creator1, wbtc, campaignContractFactory } = await loadFixture(
-        deployPlatformFixture
-      )
-
-      const CAMPAIGN_GOAL = ethers.parseUnits('500', 18)
-      const CAMPAIGN_DURATION = 60
-
-      await expect(
-        campaignContractFactory
-          .connect(creator1)
-          .deploy(await wbtc.getAddress(), CAMPAIGN_GOAL, CAMPAIGN_DURATION)
-      )
-        .to.be.revertedWithCustomError(campaignContractFactory, 'FactoryError')
-        .withArgs(
-          ERR_TOKEN_NOT_SUPPORTED,
-          ethers.getAddress(await wbtc.getAddress()),
-          0
+        //TokenRegistry
+        expect(await tokenRegistry.owner()).to.equal(deployer.address)
+        expect(await tokenRegistry.platformAdmin()).to.equal(
+          await platformAdmin.getAddress()
         )
-    })
 
-    it('Should reject campaign with token that is  in token registry but not supported', async function () {
-      const { creator1, wbtc, campaignContractFactory, tokenRegistry } =
-        await loadFixture(deployPlatformFixture)
-
-      const CAMPAIGN_GOAL = ethers.parseUnits('500', 18)
-      const CAMPAIGN_DURATION = 60
-
-      const wbtcDecimals = await wbtc.decimals()
-      await tokenRegistry.addToken(await wbtc.getAddress(), wbtcDecimals)
-
-      await tokenRegistry.disableTokenSupport(await wbtc.getAddress())
-
-      await expect(
-        campaignContractFactory
-          .connect(creator1)
-          .deploy(await wbtc.getAddress(), CAMPAIGN_GOAL, CAMPAIGN_DURATION)
-      )
-        .to.be.revertedWithCustomError(campaignContractFactory, 'FactoryError')
-        .withArgs(
-          ERR_TOKEN_NOT_SUPPORTED,
-          ethers.getAddress(await wbtc.getAddress()),
-          0
+        //YieldDistributor
+        expect(await yieldDistributor.owner()).to.equal(deployer.address)
+        expect(await yieldDistributor.platformTreasury()).to.equal(
+          platformTreasury.address
         )
-    })
+        expect(await yieldDistributor.platformAdmin()).to.equal(
+          await platformAdmin.getAddress()
+        )
 
-    it('Should reject campaign with zero goal amount', async function () {
-      const { creator1, usdc, campaignContractFactory } = await loadFixture(
-        deployPlatformFixture
-      )
+        //DefiIntegrationManager
+        expect(await defiIntegrationManager.owner()).to.equal(deployer.address)
+        expect(await defiIntegrationManager.aavePool()).to.equal(
+          ethers.getAddress(AAVE_POOL_ADDRESS)
+        )
+        expect(await defiIntegrationManager.tokenRegistry()).to.equal(
+          ethers.getAddress(await tokenRegistry.getAddress())
+        )
+        expect(await defiIntegrationManager.yieldDistributor()).to.equal(
+          ethers.getAddress(await yieldDistributor.getAddress())
+        )
 
-      const ZERO_GOAL = 0
-      const CAMPAIGN_DURATION = 60
+        expect(await defiIntegrationManager.platformAdmin()).to.equal(
+          await platformAdmin.getAddress()
+        )
 
-      await expect(
-        campaignContractFactory
-          .connect(creator1)
-          .deploy(await usdc.getAddress(), ZERO_GOAL, CAMPAIGN_DURATION)
-      )
-        .to.be.revertedWithCustomError(campaignContractFactory, 'FactoryError')
-        .withArgs(ERR_INVALID_GOAL, ethers.ZeroAddress, 0)
-    })
-
-    it('Should allow creates to deploy a campaign(s)', async function () {
-      const { usdc, campaignContractFactory, creator1 } = await loadFixture(
-        deployPlatformFixture
-      )
-
-      const usdcDecimals = await usdc.decimals()
-
-      const CAMPAIGN_GOAL = ethers.parseUnits('500', usdcDecimals)
-      const CAMPAIGN_DURATION = 60
-
-      const tx = await campaignContractFactory
-        .connect(creator1)
-        .deploy(await usdc.getAddress(), CAMPAIGN_GOAL, CAMPAIGN_DURATION)
-
-      const receipt = await tx.wait()
-
-      if (!receipt) {
-        throw new Error('Transaction failed')
-      }
-
-      const event = receipt.logs.find(log => {
-        try {
-          const parsed = campaignContractFactory.interface.parseLog(log)
-          return parsed && parsed.name === 'FactoryOperation'
-        } catch {
-          return false
-        }
+        //CampaignContractFactory
+        expect(await campaignContractFactory.owner()).to.equal(deployer.address)
+        expect(await campaignContractFactory.defiManager()).to.equal(
+          await defiIntegrationManager.getAddress()
+        )
+        expect(await campaignContractFactory.platformAdmin()).to.equal(
+          await platformAdmin.getAddress()
+        )
       })
 
-      if (!event) {
-        throw new Error('Event failed')
-      }
+      it('Should reject campaign with token that is not in token registry', async function () {
+        const { creator1, wbtc, campaignContractFactory } = await loadFixture(
+          deployPlatformFixture
+        )
 
-      const parsedEvent = campaignContractFactory.interface.parseLog(event)
-      if (!parsedEvent) {
-        throw new Error('Event failed')
-      }
+        const CAMPAIGN_GOAL = ethers.parseUnits('500', 18)
+        const CAMPAIGN_DURATION = 60
 
-      expect(parsedEvent.args[0]).to.equal(OP_CAMPAIGN_CREATED)
+        await expect(
+          campaignContractFactory
+            .connect(creator1)
+            .deploy(await wbtc.getAddress(), CAMPAIGN_GOAL, CAMPAIGN_DURATION)
+        )
+          .to.be.revertedWithCustomError(
+            campaignContractFactory,
+            'FactoryError'
+          )
+          .withArgs(
+            ERR_TOKEN_NOT_SUPPORTED,
+            ethers.getAddress(await wbtc.getAddress()),
+            0
+          )
+      })
 
-      const campaignAddress = parsedEvent.args[1]
+      it('Should reject campaign with token that is  in token registry but not supported', async function () {
+        const { creator1, wbtc, campaignContractFactory, tokenRegistry } =
+          await loadFixture(deployPlatformFixture)
 
-      expect(parsedEvent.args[2]).to.equal(creator1.address)
-      expect(await campaignContractFactory.deployedCampaigns(0)).to.equal(
-        campaignAddress
-      )
-      expect(
-        await campaignContractFactory.creatorToCampaigns(creator1.address, 0)
-      ).to.equal(campaignAddress)
+        const CAMPAIGN_GOAL = ethers.parseUnits('500', 18)
+        const CAMPAIGN_DURATION = 60
 
-      const Campaign = await ethers.getContractFactory('Campaign')
-      const campaign = Campaign.attach(campaignAddress) as unknown as Campaign
+        const wbtcDecimals = await wbtc.decimals()
+        await tokenRegistry.addToken(await wbtc.getAddress(), wbtcDecimals)
 
-      expect(await campaign.owner()).to.equal(creator1.address)
-      expect(await campaign.campaignToken()).to.equal(
-        ethers.getAddress(await usdc.getAddress())
-      )
-      expect(await campaign.campaignGoalAmount()).to.equal(CAMPAIGN_GOAL)
-      expect(await campaign.campaignDuration()).to.equal(CAMPAIGN_DURATION)
-      expect(await campaign.isCampaignActive()).to.be.true
-    })
+        await tokenRegistry.disableTokenSupport(await wbtc.getAddress())
 
-    it('Should reject campaign with zero goal amount', async function () {
-      const { creator1, usdc, campaignContractFactory } = await loadFixture(
-        deployPlatformFixture
-      )
+        await expect(
+          campaignContractFactory
+            .connect(creator1)
+            .deploy(await wbtc.getAddress(), CAMPAIGN_GOAL, CAMPAIGN_DURATION)
+        )
+          .to.be.revertedWithCustomError(
+            campaignContractFactory,
+            'FactoryError'
+          )
+          .withArgs(
+            ERR_TOKEN_NOT_SUPPORTED,
+            ethers.getAddress(await wbtc.getAddress()),
+            0
+          )
+      })
 
-      const ZERO_GOAL = 0
-      const CAMPAIGN_DURATION = 60
+      it('Should reject campaign with zero goal amount', async function () {
+        const { creator1, usdc, campaignContractFactory } = await loadFixture(
+          deployPlatformFixture
+        )
 
-      await expect(
-        campaignContractFactory
+        const ZERO_GOAL = 0
+        const CAMPAIGN_DURATION = 60
+
+        await expect(
+          campaignContractFactory
+            .connect(creator1)
+            .deploy(await usdc.getAddress(), ZERO_GOAL, CAMPAIGN_DURATION)
+        )
+          .to.be.revertedWithCustomError(
+            campaignContractFactory,
+            'FactoryError'
+          )
+          .withArgs(ERR_INVALID_GOAL, ethers.ZeroAddress, 0)
+      })
+
+      it('Should allow creates to deploy a campaign(s)', async function () {
+        const { usdc, campaignContractFactory, creator1 } = await loadFixture(
+          deployPlatformFixture
+        )
+
+        const usdcDecimals = await usdc.decimals()
+
+        const CAMPAIGN_GOAL = ethers.parseUnits('500', usdcDecimals)
+        const CAMPAIGN_DURATION = 60
+
+        const tx = await campaignContractFactory
           .connect(creator1)
-          .deploy(await usdc.getAddress(), ZERO_GOAL, CAMPAIGN_DURATION)
-      )
-        .to.be.revertedWithCustomError(campaignContractFactory, 'FactoryError')
-        .withArgs(ERR_INVALID_GOAL, ethers.ZeroAddress, 0)
+          .deploy(await usdc.getAddress(), CAMPAIGN_GOAL, CAMPAIGN_DURATION)
+
+        const receipt = await tx.wait()
+
+        if (!receipt) {
+          throw new Error('Transaction failed')
+        }
+
+        const event = receipt.logs.find(log => {
+          try {
+            const parsed = campaignContractFactory.interface.parseLog(log)
+            return parsed && parsed.name === 'FactoryOperation'
+          } catch {
+            return false
+          }
+        })
+
+        if (!event) {
+          throw new Error('Event failed')
+        }
+
+        const parsedEvent = campaignContractFactory.interface.parseLog(event)
+        if (!parsedEvent) {
+          throw new Error('Event failed')
+        }
+
+        expect(parsedEvent.args[0]).to.equal(OP_CAMPAIGN_CREATED)
+
+        const campaignAddress = parsedEvent.args[1]
+
+        expect(parsedEvent.args[2]).to.equal(creator1.address)
+        expect(await campaignContractFactory.deployedCampaigns(0)).to.equal(
+          campaignAddress
+        )
+        expect(
+          await campaignContractFactory.creatorToCampaigns(creator1.address, 0)
+        ).to.equal(campaignAddress)
+
+        const Campaign = await ethers.getContractFactory('Campaign')
+        const campaign = Campaign.attach(campaignAddress) as unknown as Campaign
+
+        expect(await campaign.owner()).to.equal(creator1.address)
+        expect(await campaign.campaignToken()).to.equal(
+          ethers.getAddress(await usdc.getAddress())
+        )
+        expect(await campaign.campaignGoalAmount()).to.equal(CAMPAIGN_GOAL)
+        expect(await campaign.campaignDuration()).to.equal(CAMPAIGN_DURATION)
+        expect(await campaign.isCampaignActive()).to.be.true
+      })
+
+      it('Should reject campaign with zero goal amount', async function () {
+        const { creator1, usdc, campaignContractFactory } = await loadFixture(
+          deployPlatformFixture
+        )
+
+        const ZERO_GOAL = 0
+        const CAMPAIGN_DURATION = 60
+
+        await expect(
+          campaignContractFactory
+            .connect(creator1)
+            .deploy(await usdc.getAddress(), ZERO_GOAL, CAMPAIGN_DURATION)
+        )
+          .to.be.revertedWithCustomError(
+            campaignContractFactory,
+            'FactoryError'
+          )
+          .withArgs(ERR_INVALID_GOAL, ethers.ZeroAddress, 0)
+      })
+
+      it('Should reject campaign with zero duration', async function () {
+        const { creator1, usdc, campaignContractFactory } = await loadFixture(
+          deployPlatformFixture
+        )
+
+        const usdcDecimals = await usdc.decimals()
+        const CAMPAIGN_GOAL = ethers.parseUnits('500', usdcDecimals)
+        const ZERO_DURATION = 0
+
+        await expect(
+          campaignContractFactory
+            .connect(creator1)
+            .deploy(await usdc.getAddress(), CAMPAIGN_GOAL, ZERO_DURATION)
+        )
+          .to.be.revertedWithCustomError(
+            campaignContractFactory,
+            'FactoryError'
+          )
+          .withArgs(ERR_INVALID_DURATION, ethers.ZeroAddress, 0)
+      })
+
+      it('Should reject campaign with excessive duration', async function () {
+        const { creator1, usdc, campaignContractFactory } = await loadFixture(
+          deployPlatformFixture
+        )
+
+        const usdcDecimals = await usdc.decimals()
+        const CAMPAIGN_GOAL = ethers.parseUnits('500', usdcDecimals)
+        const EXCESSIVE_DURATION = 366 // > 365 days
+
+        await expect(
+          campaignContractFactory
+            .connect(creator1)
+            .deploy(await usdc.getAddress(), CAMPAIGN_GOAL, EXCESSIVE_DURATION)
+        )
+          .to.be.revertedWithCustomError(
+            campaignContractFactory,
+            'FactoryError'
+          )
+          .withArgs(
+            ERR_INVALID_DURATION,
+            ethers.ZeroAddress,
+            EXCESSIVE_DURATION
+          )
+      })
+
+      it('Should reject campaign with zero address for token', async function () {
+        const { creator1, campaignContractFactory } = await loadFixture(
+          deployPlatformFixture
+        )
+
+        const CAMPAIGN_GOAL = ethers.parseUnits('500', 18)
+        const CAMPAIGN_DURATION = 60
+
+        await expect(
+          campaignContractFactory
+            .connect(creator1)
+            .deploy(ethers.ZeroAddress, CAMPAIGN_GOAL, CAMPAIGN_DURATION)
+        )
+          .to.be.revertedWithCustomError(
+            campaignContractFactory,
+            'FactoryError'
+          )
+          .withArgs(ERR_INVALID_ADDRESS, ethers.ZeroAddress, 0)
+      })
     })
 
-    it('Should reject campaign with zero duration', async function () {
-      const { creator1, usdc, campaignContractFactory } = await loadFixture(
-        deployPlatformFixture
-      )
+    describe('Successful Campaign Completion', function () {})
 
-      const usdcDecimals = await usdc.decimals()
-      const CAMPAIGN_GOAL = ethers.parseUnits('500', usdcDecimals)
-      const ZERO_DURATION = 0
-
-      await expect(
-        campaignContractFactory
-          .connect(creator1)
-          .deploy(await usdc.getAddress(), CAMPAIGN_GOAL, ZERO_DURATION)
-      )
-        .to.be.revertedWithCustomError(campaignContractFactory, 'FactoryError')
-        .withArgs(ERR_INVALID_DURATION, ethers.ZeroAddress, 0)
-    })
-
-    it('Should reject campaign with excessive duration', async function () {
-      const { creator1, usdc, campaignContractFactory } = await loadFixture(
-        deployPlatformFixture
-      )
-
-      const usdcDecimals = await usdc.decimals()
-      const CAMPAIGN_GOAL = ethers.parseUnits('500', usdcDecimals)
-      const EXCESSIVE_DURATION = 366 // > 365 days
-
-      await expect(
-        campaignContractFactory
-          .connect(creator1)
-          .deploy(await usdc.getAddress(), CAMPAIGN_GOAL, EXCESSIVE_DURATION)
-      )
-        .to.be.revertedWithCustomError(campaignContractFactory, 'FactoryError')
-        .withArgs(ERR_INVALID_DURATION, ethers.ZeroAddress, EXCESSIVE_DURATION)
-    })
-
-    it('Should reject campaign with zero address for token', async function () {
-      const { creator1, campaignContractFactory } = await loadFixture(
-        deployPlatformFixture
-      )
-
-      const CAMPAIGN_GOAL = ethers.parseUnits('500', 18)
-      const CAMPAIGN_DURATION = 60
-
-      await expect(
-        campaignContractFactory
-          .connect(creator1)
-          .deploy(ethers.ZeroAddress, CAMPAIGN_GOAL, CAMPAIGN_DURATION)
-      )
-        .to.be.revertedWithCustomError(campaignContractFactory, 'FactoryError')
-        .withArgs(ERR_INVALID_ADDRESS, ethers.ZeroAddress, 0)
-    })
+    describe('Unuccessful Campaign Completion', function () {})
   })
   describe('Campaign Contribution', function () {
     const ERR_CAMPAIGN_NOT_ACTIVE = 6
@@ -511,6 +568,176 @@ describe('Base Mainnet Integration Tests', function () {
         .deploy(await usdc.getAddress(), CAMPAIGN_GOAL, CAMPAIGN_DURATION)
 
       const receipt = await tx.wait()
+      if (!receipt) throw new Error('Transaction failed')
+
+      const event = receipt.logs.find(log => {
+        try {
+          const parsed = campaignContractFactory.interface.parseLog(log)
+          return parsed && parsed.name === 'FactoryOperation'
+        } catch {
+          return false
+        }
+      })
+
+      if (!event) throw new Error('Event failed')
+
+      const parsedEvent = campaignContractFactory.interface.parseLog(event)
+      if (!parsedEvent) throw new Error('Event failed')
+
+      const campaignAddress = parsedEvent.args[1]
+
+      const Campaign = await ethers.getContractFactory('Campaign')
+      const campaign = Campaign.attach(campaignAddress) as unknown as Campaign
+
+      const contributionAmount = ethers.parseUnits('100', usdcDecimals)
+
+      await usdc
+        .connect(contributor1)
+        .approve(campaignAddress, contributionAmount)
+
+      const contributeTx1 = await campaign
+        .connect(contributor1)
+        .contribute(await usdc.getAddress(), contributionAmount)
+
+      if (!contributeTx1) throw new Error('Transaction failed')
+
+      const contributeReceipt1 = await contributeTx1.wait()
+      if (!contributeReceipt1) throw new Error('Transaction failed')
+
+      const contributionEvent = contributeReceipt1.logs.find(log => {
+        try {
+          const parsed = campaign.interface.parseLog(log)
+          return parsed && parsed.name === 'Contribution'
+        } catch {
+          return false
+        }
+      })
+
+      if (!contributionEvent) throw new Error('Event failed')
+
+      const parsedContributionEvent =
+        campaign.interface.parseLog(contributionEvent)
+      if (!parsedContributionEvent) throw new Error('Event failed')
+
+      expect(parsedContributionEvent.args.contributor).to.equal(
+        contributor1.address
+      )
+      expect(parsedContributionEvent.args.amount).to.equal(contributionAmount)
+
+      // Keep these checks
+      expect(await campaign.isContributor(contributor1.address)).to.be.true
+      expect(await campaign.contributorsCount()).to.equal(1)
+
+      const contributionAmount2 = ethers.parseUnits('200', usdcDecimals)
+
+      await usdc
+        .connect(contributor2)
+        .approve(campaignAddress, contributionAmount2)
+
+      const contributeTx2 = await campaign
+        .connect(contributor2)
+        .contribute(await usdc.getAddress(), contributionAmount2)
+
+      if (!contributeTx2) throw new Error('Transaction failed')
+
+      const contributeReceipt2 = await contributeTx2.wait()
+      if (!contributeReceipt2) throw new Error('Transaction failed')
+
+      const contributionEvent2 = contributeReceipt2.logs.find(log => {
+        try {
+          const parsed = campaign.interface.parseLog(log)
+          return parsed && parsed.name === 'Contribution'
+        } catch {
+          return false
+        }
+      })
+
+      if (!contributionEvent2) throw new Error('Event failed')
+
+      const parsedContributionEvent2 =
+        campaign.interface.parseLog(contributionEvent2)
+      if (!parsedContributionEvent2) throw new Error('Event failed')
+
+      expect(parsedContributionEvent2.args.contributor).to.equal(
+        contributor2.address
+      )
+      expect(parsedContributionEvent2.args.amount).to.equal(contributionAmount2)
+
+      expect(await campaign.contributions(contributor1.address)).to.equal(
+        contributionAmount
+      )
+      expect(await campaign.contributions(contributor2.address)).to.equal(
+        contributionAmount2
+      )
+
+      expect(await campaign.totalAmountRaised()).to.equal(
+        contributionAmount + contributionAmount2
+      )
+      expect(await usdc.balanceOf(campaignAddress)).to.equal(
+        contributionAmount + contributionAmount2
+      )
+
+      // Keep these checks, remove linked list checks
+      expect(await campaign.isContributor(contributor2.address)).to.be.true
+      expect(await campaign.contributorsCount()).to.equal(2)
+
+      await usdc
+        .connect(contributor1)
+        .approve(campaignAddress, contributionAmount2)
+
+      const contributeTx3 = await campaign
+        .connect(contributor1)
+        .contribute(await usdc.getAddress(), contributionAmount2)
+
+      if (!contributeTx3) throw new Error('Transaction failed')
+
+      const contributeReceipt3 = await contributeTx3.wait()
+      if (!contributeReceipt3) throw new Error('Transaction failed')
+
+      const contributionEvent3 = contributeReceipt3.logs.find(log => {
+        try {
+          const parsed = campaign.interface.parseLog(log)
+          return parsed && parsed.name === 'Contribution'
+        } catch {
+          return false
+        }
+      })
+
+      if (!contributionEvent3) throw new Error('Event failed')
+
+      const parsedContributionEvent3 =
+        campaign.interface.parseLog(contributionEvent3)
+      if (!parsedContributionEvent3) throw new Error('Event failed')
+
+      expect(await campaign.contributions(contributor1.address)).to.equal(
+        contributionAmount + contributionAmount2
+      )
+
+      // Keep these checks, remove linked list checks
+      expect(await campaign.isContributor(contributor1.address)).to.be.true
+      expect(await campaign.isContributor(contributor2.address)).to.be.true
+      expect(await campaign.contributorsCount()).to.equal(2)
+    })
+
+    it('Should not allow contributions in non-target token', async function () {
+      const {
+        wbtc,
+        campaignContractFactory,
+        creator1,
+        contributor1,
+        contributor2
+      } = await loadFixture(deployPlatformFixture)
+
+      const wbtcDecimals = await wbtc.decimals()
+      const CAMPAIGN_GOAL = ethers.parseUnits('500', wbtcDecimals)
+      const CAMPAIGN_DURATION = 60
+      const ERR_NOT_TARGET_TOKEN = 15
+
+      const tx = await campaignContractFactory
+        .connect(creator1)
+        .deploy(await usdc.getAddress(), CAMPAIGN_GOAL, CAMPAIGN_DURATION)
+
+      const receipt = await tx.wait()
 
       if (!receipt) {
         throw new Error('Transaction failed')
@@ -539,171 +766,23 @@ describe('Base Mainnet Integration Tests', function () {
       const Campaign = await ethers.getContractFactory('Campaign')
       const campaign = Campaign.attach(campaignAddress) as unknown as Campaign
 
-      const contributionAmount = ethers.parseUnits('100', usdcDecimals)
+      const contributionAmount = ethers.parseUnits('100', wbtcDecimals)
 
-      await usdc
+      await wbtc
         .connect(contributor1)
         .approve(campaignAddress, contributionAmount)
 
-      const contributeTx1 = await campaign
-        .connect(contributor1)
-        .contribute(await usdc.getAddress(), contributionAmount)
-
-      if (!contributeTx1) {
-        throw new Error('Transaction failed')
-      }
-
-      const contributeReceipt1 = await contributeTx1.wait()
-
-      if (!contributeReceipt1) {
-        throw new Error('Transaction failed')
-      }
-
-      const contributionEvent = contributeReceipt1.logs.find(log => {
-        try {
-          const parsed = campaign.interface.parseLog(log)
-          return parsed && parsed.name === 'Contribution'
-        } catch {
-          return false
-        }
-      })
-
-      if (!contributionEvent) {
-        throw new Error('Event failed')
-      }
-
-      const parsedContributionEvent =
-        campaign.interface.parseLog(contributionEvent)
-
-      if (!parsedContributionEvent) {
-        throw new Error('Event failed')
-      }
-
-      expect(parsedContributionEvent.args.contributor).to.equal(
-        contributor1.address
+      await expect(
+        campaign
+          .connect(contributor1)
+          .contribute(await wbtc.getAddress(), contributionAmount)
       )
-      expect(parsedContributionEvent.args.amount).to.equal(contributionAmount)
-
-      expect(await campaign.firstContributor()).to.equal(contributor1.address)
-      expect(await campaign.isContributor(contributor1.address)).to.be.true
-      expect(await campaign.contributorsCount()).to.equal(1)
-
-      const contributionAmount2 = ethers.parseUnits('200', usdcDecimals)
-
-      await usdc
-        .connect(contributor2)
-        .approve(campaignAddress, contributionAmount2)
-
-      const contributeTx2 = await campaign
-        .connect(contributor2)
-        .contribute(await usdc.getAddress(), contributionAmount2)
-
-      if (!contributeTx2) {
-        throw new Error('Transaction failed')
-      }
-
-      const contributeReceipt2 = await contributeTx2.wait()
-
-      if (!contributeReceipt2) {
-        throw new Error('Transaction failed')
-      }
-
-      const contributionEvent2 = contributeReceipt2.logs.find(log => {
-        try {
-          const parsed = campaign.interface.parseLog(log)
-          return parsed && parsed.name === 'Contribution'
-        } catch {
-          return false
-        }
-      })
-
-      if (!contributionEvent2) {
-        throw new Error('Event failed')
-      }
-
-      const parsedContributionEvent2 =
-        campaign.interface.parseLog(contributionEvent2)
-
-      if (!parsedContributionEvent2) {
-        throw new Error('Event failed')
-      }
-
-      expect(parsedContributionEvent2.args.contributor).to.equal(
-        contributor2.address
-      )
-      expect(parsedContributionEvent2.args.amount).to.equal(contributionAmount2)
-
-      expect(await campaign.contributions(contributor1.address)).to.equal(
-        contributionAmount
-      )
-      expect(await campaign.contributions(contributor2.address)).to.equal(
-        contributionAmount2
-      )
-
-      expect(await campaign.totalAmountRaised()).to.equal(
-        contributionAmount + contributionAmount2
-      )
-
-      expect(await usdc.balanceOf(campaignAddress)).to.equal(
-        contributionAmount + contributionAmount2
-      )
-
-      // After the second contribution
-      expect(await campaign.firstContributor()).to.equal(contributor2.address)
-      expect(await campaign.nextContributor(contributor2.address)).to.equal(
-        contributor1.address
-      )
-      expect(await campaign.isContributor(contributor2.address)).to.be.true
-      expect(await campaign.contributorsCount()).to.equal(2)
-
-      await usdc
-        .connect(contributor1)
-        .approve(campaignAddress, contributionAmount2)
-
-      const contributeTx3 = await campaign
-        .connect(contributor1)
-        .contribute(await usdc.getAddress(), contributionAmount2)
-
-      if (!contributeTx3) {
-        throw new Error('Transaction failed')
-      }
-
-      const contributeReceipt3 = await contributeTx3.wait()
-
-      if (!contributeReceipt3) {
-        throw new Error('Transaction failed')
-      }
-
-      const contributionEvent3 = contributeReceipt3.logs.find(log => {
-        try {
-          const parsed = campaign.interface.parseLog(log)
-          return parsed && parsed.name === 'Contribution'
-        } catch {
-          return false
-        }
-      })
-
-      if (!contributionEvent3) {
-        throw new Error('Event failed')
-      }
-
-      const parsedContributionEvent3 =
-        campaign.interface.parseLog(contributionEvent3)
-
-      if (!parsedContributionEvent3) {
-        throw new Error('Event failed')
-      }
-      expect(await campaign.contributions(contributor1.address)).to.equal(
-        contributionAmount + contributionAmount2
-      )
-
-      expect(await campaign.firstContributor()).to.equal(contributor2.address)
-      expect(await campaign.nextContributor(contributor2.address)).to.equal(
-        contributor1.address
-      )
-      expect(await campaign.isContributor(contributor1.address)).to.be.true
-      expect(await campaign.isContributor(contributor2.address)).to.be.true
-      expect(await campaign.contributorsCount()).to.equal(2)
+        .to.be.revertedWithCustomError(campaign, 'CampaignError')
+        .withArgs(
+          ERR_NOT_TARGET_TOKEN,
+          ethers.getAddress(await wbtc.getAddress()),
+          0
+        )
     })
 
     it('Should not allow contributions after campaign is end date has passed', async function () {
@@ -1127,27 +1206,18 @@ describe('Base Mainnet Integration Tests', function () {
         .withArgs(ERR_GOAL_REACHED, ethers.ZeroAddress, largeAmount)
     })
 
-    it('Should calculate weighted contributions correctly for all contributors', async function () {
+    it('Should allow a contribution that exceeds the goal', async function () {
       const {
-        usdc,
-        campaignContractFactory,
         creator1,
         contributor1,
         contributor2,
-        contributor3
+        usdc,
+        campaignContractFactory
       } = await loadFixture(deployPlatformFixture)
 
-      // Define expected weight multipliers based on CampaignLibrary
-      const expectedWeight1Multiplier = 15000 // 1.5x weight for early contributor (first 25%)
-      const expectedWeight2Multiplier = 12500 // 1.25x weight for mid-early contributor (25%-50%)
-      const expectedWeight3Multiplier = 11000 // 1.1x weight for mid-late contributor (50%-75%)
-      const expectedWeight4Multiplier = 10000 // 1.0x weight for late contributor (75%-100%)
-
       const usdcDecimals = await usdc.decimals()
-
-      // Use a shorter campaign duration for testing
-      const CAMPAIGN_DURATION = 30 // 30 days
       const CAMPAIGN_GOAL = ethers.parseUnits('500', usdcDecimals)
+      const CAMPAIGN_DURATION = 60 // 60 days
 
       // Create a campaign
       const tx = await campaignContractFactory
@@ -1165,153 +1235,140 @@ describe('Base Mainnet Integration Tests', function () {
           return false
         }
       })
-      if (!event) throw new Error('Event failed')
 
+      if (!event) throw new Error('Event not found')
       const parsedEvent = campaignContractFactory.interface.parseLog(event)
-      if (!parsedEvent) throw new Error('Event failed')
+      if (!parsedEvent) throw new Error('Event parsing failed')
 
       const campaignAddress = parsedEvent.args[1]
       const Campaign = await ethers.getContractFactory('Campaign')
       const campaign = Campaign.attach(campaignAddress) as unknown as Campaign
 
-      const contributionAmount = ethers.parseUnits('100', usdcDecimals)
-
-      // First contribution from contributor1 (very early in the campaign)
+      // First contribution: 400 USDC (below goal)
+      const firstContribution = ethers.parseUnits('400', usdcDecimals)
       await usdc
         .connect(contributor1)
-        .approve(campaignAddress, contributionAmount)
+        .approve(campaignAddress, firstContribution)
       await campaign
         .connect(contributor1)
-        .contribute(await usdc.getAddress(), contributionAmount) //Contributor 1 locks in 1.5x yield
-      const latestBlock1 = await ethers.provider.getBlock('latest')
-      if (!latestBlock1) throw new Error('Latest block not found')
+        .contribute(await usdc.getAddress(), firstContribution)
 
-      // Advance time by 1/4 of campaign duration
-      await time.increase((CAMPAIGN_DURATION * 24 * 60 * 60) / 4)
+      // Verify campaign state after first contribution
+      expect(await campaign.totalAmountRaised()).to.equal(firstContribution)
+      expect(await campaign.isCampaignSuccessful()).to.be.false
 
-      // First contribution from contributor2 (at ~25% of campaign duration)
+      // Second contribution: 150 USDC (exceeds goal by 50 USDC)
+      const secondContribution = ethers.parseUnits('150', usdcDecimals)
       await usdc
         .connect(contributor2)
-        .approve(campaignAddress, contributionAmount)
-      await campaign
+        .approve(campaignAddress, secondContribution)
+
+      // This contribution should be accepted even though it exceeds the goal
+      const contributeTx = await campaign
         .connect(contributor2)
-        .contribute(await usdc.getAddress(), contributionAmount) //Contributor 2 locks in 1.25x yield
-      const latestBlock2 = await ethers.provider.getBlock('latest')
-      if (!latestBlock2) throw new Error('Latest block not found')
+        .contribute(await usdc.getAddress(), secondContribution)
 
-      // Advance time to 50% of campaign duration
-      await time.increase((CAMPAIGN_DURATION * 24 * 60 * 60) / 4)
+      const contributeReceipt = await contributeTx.wait()
+      if (!contributeReceipt) throw new Error('Transaction failed')
 
-      // Second contribution from contributor1 (at ~50% of campaign duration)
-      await usdc
-        .connect(contributor1)
-        .approve(campaignAddress, contributionAmount)
-      await campaign
-        .connect(contributor1)
-        .contribute(await usdc.getAddress(), contributionAmount) //100 * 1.1 = 110
-      const latestBlock3 = await ethers.provider.getBlock('latest')
-      if (!latestBlock3) throw new Error('Latest block not found')
-
-      // Advance time to 75% of campaign duration
-      await time.increase((CAMPAIGN_DURATION * 24 * 60 * 60) / 4)
-
-      // Second contribution from contributor2 (at ~75% of campaign duration)
-      await usdc
-        .connect(contributor2)
-        .approve(campaignAddress, contributionAmount)
-      await campaign
-        .connect(contributor2)
-        .contribute(await usdc.getAddress(), contributionAmount)
-
-      await usdc
-        .connect(contributor3)
-        .approve(campaignAddress, contributionAmount)
-      await campaign
-        .connect(contributor3)
-        .contribute(await usdc.getAddress(), contributionAmount)
-
-      const latestBlock4 = await ethers.provider.getBlock('latest')
-      if (!latestBlock4) throw new Error('Latest block not found')
-
-      // Verify campaign is still active
-      expect(await campaign.isCampaignActive()).to.be.true
-
-      // Attempting to calculate weighted contributions while campaign is active should fail
-      await expect(campaign.calculateWeightedContributions())
-        .to.be.revertedWithCustomError(campaign, 'CampaignError')
-        .withArgs(ERR_CAMPAIGN_STILL_ACTIVE, ethers.ZeroAddress, 0)
-
-      // Move past campaign end
-      await time.increase(CAMPAIGN_DURATION * 24 * 60 * 60)
-
-      // Verify campaign is no longer active
-      expect(await campaign.isCampaignActive()).to.be.false
-
-      // Calculate weighted contributions
-      const weightedTx = await campaign.calculateWeightedContributions() //150 + 125 + 150 + 125 = 550
-      const weightedReceipt = await weightedTx.wait()
-      if (!weightedReceipt) throw new Error('Transaction failed')
-
-      // Find the YieldSharesCalculationUpdate event
-      const yieldSharesEvent = weightedReceipt.logs.find(log => {
+      // Find and verify the Contribution event
+      const contributionEvent = contributeReceipt.logs.find(log => {
         try {
           const parsed = campaign.interface.parseLog(log)
-          return parsed && parsed.name === 'YieldSharesCalculationUpdate'
+          return parsed && parsed.name === 'Contribution'
         } catch {
           return false
         }
       })
-      if (!yieldSharesEvent)
-        throw new Error('YieldSharesCalculationUpdate event not emitted')
 
-      const parsedYieldEvent = campaign.interface.parseLog(yieldSharesEvent)
-      if (!parsedYieldEvent) throw new Error('Event failed')
+      if (!contributionEvent) throw new Error('Contribution event not found')
+      const parsedContributionEvent =
+        campaign.interface.parseLog(contributionEvent)
+      if (!parsedContributionEvent) throw new Error('Event parsing failed')
 
-      expect(parsedYieldEvent.args.processedCount).to.equal(3)
-      expect(parsedYieldEvent.args.isComplete).to.be.true
-      expect(parsedYieldEvent.args.totalProcessed).to.equal(3)
+      // Verify contribution was processed correctly
+      expect(parsedContributionEvent.args.contributor).to.equal(
+        contributor2.address
+      )
+      expect(parsedContributionEvent.args.amount).to.equal(secondContribution)
 
-      // Get weighted contributions for both contributors
-      const weight1 = await campaign.weightedContributions(contributor1.address)
-      const weight2 = await campaign.weightedContributions(contributor2.address)
-      const weight3 = await campaign.weightedContributions(contributor3.address)
+      // Verify campaign state after the goal-exceeding contribution
+      const expectedTotal = firstContribution + secondContribution
+      expect(await campaign.totalAmountRaised()).to.equal(expectedTotal)
+      expect(await campaign.isCampaignSuccessful()).to.be.true
 
-      // Calculate expected weights - each contributor made two contributions at different times
-      const expectedWeight1 =
-        (BigInt(2) *
-          BigInt(contributionAmount) *
-          BigInt(expectedWeight1Multiplier)) /
-        BigInt(10000)
+      // Additional contribution should now be rejected since goal is reached
+      const thirdContribution = ethers.parseUnits('10', usdcDecimals)
+      await usdc
+        .connect(contributor1)
+        .approve(campaignAddress, thirdContribution)
 
-      const expectedWeight2 =
-        (BigInt(2) *
-          BigInt(contributionAmount) *
-          BigInt(expectedWeight2Multiplier)) /
-        BigInt(10000)
-
-      const expectedWeight3 =
-        (BigInt(contributionAmount) * BigInt(expectedWeight4Multiplier)) /
-        BigInt(10000)
-
-      // Check that each contributor's calculated weight matches our expected calculation
-      expect(weight1).to.equal(expectedWeight1)
-      expect(weight2).to.equal(expectedWeight2)
-      expect(weight3).to.equal(expectedWeight3)
-
-      // Verify that early contributor has higher weight since their first contribution was earlier
-      expect(weight1).to.be.gt(weight2).to.be.gt(weight3)
-
-      // Check total weighted contributions
-      const totalWeighted = await campaign.totalWeightedContributions()
-      expect(totalWeighted).to.equal(weight1 + weight2 + weight3)
-
-      // Verify calculation is marked as complete
-      expect(await campaign.weightedContributionsCalculated()).to.be.true
-
-      // Attempting to calculate again should fail
-      await expect(campaign.calculateWeightedContributions())
+      await expect(
+        campaign
+          .connect(contributor1)
+          .contribute(await usdc.getAddress(), thirdContribution)
+      )
         .to.be.revertedWithCustomError(campaign, 'CampaignError')
-        .withArgs(ERR_CALCULATION_COMPLETE, ethers.ZeroAddress, 0)
+        .withArgs(ERR_GOAL_REACHED, ethers.ZeroAddress, expectedTotal)
+    })
+  })
+
+  describe('Yield Generation', function () {
+    it('Should enable campaign creator to deposit yield into campaign', async function () {
+      const {
+        usdc,
+        campaignContractFactory,
+        creator1,
+        contributor1,
+        contributor2
+      } = await loadFixture(deployPlatformFixture)
+
+      const usdcDecimals = await usdc.decimals()
+      const CAMPAIGN_GOAL = ethers.parseUnits('500', usdcDecimals)
+      const CAMPAIGN_DURATION = 60
+
+      const tx = await campaignContractFactory
+        .connect(creator1)
+        .deploy(await usdc.getAddress(), CAMPAIGN_GOAL, CAMPAIGN_DURATION)
+
+      const receipt = await tx.wait()
+
+      if (!receipt) {
+        throw new Error('Transaction failed')
+      }
+
+      const event = receipt.logs.find(log => {
+        try {
+          const parsed = campaignContractFactory.interface.parseLog(log)
+          return parsed && parsed.name === 'FactoryOperation'
+        } catch {
+          return false
+        }
+      })
+
+      if (!event) {
+        throw new Error('Event failed')
+      }
+
+      const parsedEvent = campaignContractFactory.interface.parseLog(event)
+      if (!parsedEvent) {
+        throw new Error('Event failed')
+      }
+
+      const campaignAddress = parsedEvent.args[1]
+
+      const Campaign = await ethers.getContractFactory('Campaign')
+      const campaign = Campaign.attach(campaignAddress) as unknown as Campaign
+
+      const contributionAmount = ethers.parseUnits('100', usdcDecimals)
+
+      await usdc
+        .connect(contributor1)
+        .approve(campaignAddress, contributionAmount)
+
+      const contributeTx1 = await campaign
+        .connect(contributor1)
+        .contribute(await usdc.getAddress(), contributionAmount)
     })
   })
 })

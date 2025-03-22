@@ -22,7 +22,6 @@ contract Campaign is Ownable, ReentrancyGuard, PlatformAdminAccessControl {
     uint8 private constant OP_HARVEST = 2;
     uint8 private constant OP_WITHDRAW = 3;
     uint8 private constant OP_WITHDRAW_ALL = 4;
-    uint8 private constant OP_RESET_WEIGHTED_CONTRIBUTIONS_CALCULATION = 5;
 
     // Error codes - more specific but still compact
     uint8 private constant ERR_INVALID_ADDRESS = 1;
@@ -39,10 +38,8 @@ contract Campaign is Ownable, ReentrancyGuard, PlatformAdminAccessControl {
     uint8 private constant ERR_NOTHING_TO_REFUND = 12;
     uint8 private constant ERR_FUNDS_CLAIMED = 13;
     uint8 private constant ERR_NO_YIELD = 14;
-    uint8 private constant ERR_YIELD_CLAIMED = 15;
-    uint8 private constant ERR_CALCULATION_COMPLETE = 16;
-    uint8 private constant ERR_CALCULATION_IN_PROGRESS = 17;
-    uint8 private constant ERR_WEIGHTED_NOT_CALCULATED = 18;
+    uint8 private constant ERR_NOT_TARGET_TOKEN = 15;
+    uint8 private constant ERR_YIELD_ALREADY_CLAIMED = 16;
 
     // External contract references
     IDefiIntegrationManager public immutable defiManager;
@@ -61,27 +58,15 @@ contract Campaign is Ownable, ReentrancyGuard, PlatformAdminAccessControl {
     uint64 public immutable campaignStartTime;
     uint64 public immutable campaignEndTime;
     uint64 public immutable campaignDuration;
-    bool public isClaimed;
+    bool public hasClaimedYield;
 
-    // Contributor linked list
-    address public firstContributor;
-    mapping(address => address) public nextContributor;
-    uint256 public contributorsCount;
+    uint32 public contributorsCount;
 
     // Contributor data
     mapping(address => uint256) public contributions;
-    mapping(address => uint256) public contributionTimestamps;
     mapping(address => bool) public hasBeenRefunded;
-    mapping(address => bool) public hasClaimedYield;
     mapping(address => bool) public isContributor;
 
-    // Batch processing state
-    address public currentProcessingContributor;
-
-    // Yield distribution variables
-    uint256 public totalWeightedContributions;
-    mapping(address => uint256) public weightedContributions;
-    bool public weightedContributionsCalculated;
     bool public adminOverride;
 
     // Events
@@ -99,16 +84,7 @@ contract Campaign is Ownable, ReentrancyGuard, PlatformAdminAccessControl {
         address initiator // Who initiated the operation
     );
 
-    event YieldDistributed(
-        address indexed contributor,
-        uint256 amount,
-        uint256 sharePercentage
-    );
-    event YieldSharesCalculationUpdate(
-        uint256 processedCount,
-        bool isComplete,
-        uint256 totalProcessed
-    );
+    event YieldClaimed(address indexed creator, uint256 creatorAmount);
 
     // Consolidated errors with error codes
     error CampaignError(uint8 code, address addr, uint256 value);
@@ -185,12 +161,11 @@ contract Campaign is Ownable, ReentrancyGuard, PlatformAdminAccessControl {
         revert CampaignError(ERR_ETH_NOT_ACCEPTED, address(0), 0);
     }
 
-    function contribute(
-        address fromToken,
-        uint256 amount
-    ) external nonReentrant {
+    function contribute(address token, uint256 amount) external nonReentrant {
         if (amount == 0)
             revert CampaignError(ERR_INVALID_AMOUNT, address(0), amount);
+        if (token != campaignToken)
+            revert CampaignError(ERR_NOT_TARGET_TOKEN, token, 0);
         if (!isCampaignActive())
             revert CampaignError(ERR_CAMPAIGN_NOT_ACTIVE, address(0), 0);
         if (totalAmountRaised >= campaignGoalAmount)
@@ -200,18 +175,12 @@ contract Campaign is Ownable, ReentrancyGuard, PlatformAdminAccessControl {
                 totalAmountRaised
             );
 
-        (uint256 minAmount, ) = tokenRegistry.getMinContributionAmount(
-            fromToken
-        );
+        (uint256 minAmount, ) = tokenRegistry.getMinContributionAmount(token);
         if (amount < minAmount)
             revert CampaignError(ERR_INVALID_AMOUNT, address(0), amount);
 
-        if (!tokenRegistry.isTokenSupported(fromToken))
-            revert CampaignError(ERR_TOKEN_NOT_SUPPORTED, fromToken, 0);
-
-        uint256 contributionAmount;
-
-        contributionAmount = amount;
+        if (!tokenRegistry.isTokenSupported(token))
+            revert CampaignError(ERR_TOKEN_NOT_SUPPORTED, token, 0);
 
         TokenOperations.safeTransferFrom(
             campaignToken,
@@ -220,18 +189,15 @@ contract Campaign is Ownable, ReentrancyGuard, PlatformAdminAccessControl {
             amount
         );
 
-        contributions[msg.sender] += contributionAmount;
-        totalAmountRaised += contributionAmount;
-
         if (!isContributor[msg.sender]) {
-            isContributor[msg.sender] = true;
-            nextContributor[msg.sender] = firstContributor;
-            firstContributor = msg.sender;
             contributorsCount++;
-            contributionTimestamps[msg.sender] = block.timestamp;
+            isContributor[msg.sender] = true;
         }
 
-        emit Contribution(msg.sender, contributionAmount);
+        contributions[msg.sender] += amount;
+        totalAmountRaised += amount;
+
+        emit Contribution(msg.sender, amount);
     }
 
     function requestRefund() external nonReentrant {
@@ -255,26 +221,6 @@ contract Campaign is Ownable, ReentrancyGuard, PlatformAdminAccessControl {
 
         TokenOperations.safeTransfer(campaignToken, msg.sender, refundAmount);
         emit RefundIssued(msg.sender, refundAmount);
-    }
-
-    function claimFunds() external onlyOwner nonReentrant {
-        if (isCampaignActive())
-            revert CampaignError(ERR_CAMPAIGN_STILL_ACTIVE, address(0), 0);
-        if (totalAmountRaised < campaignGoalAmount)
-            revert CampaignError(
-                ERR_GOAL_NOT_REACHED,
-                address(0),
-                totalAmountRaised
-            );
-        if (isClaimed) revert CampaignError(ERR_FUNDS_CLAIMED, address(0), 0);
-
-        uint256 balance = TokenOperations.getBalance(
-            campaignToken,
-            address(this)
-        );
-        isClaimed = true;
-        TokenOperations.safeTransfer(campaignToken, owner(), balance);
-        emit FundsClaimed(owner(), balance);
     }
 
     function depositToYieldProtocol(
@@ -355,187 +301,62 @@ contract Campaign is Ownable, ReentrancyGuard, PlatformAdminAccessControl {
         emit FundsOperation(token, withdrawn, OP_WITHDRAW, 0, initiator);
     }
 
-    function calculateWeightedContributions() public {
+    function claimYield() external onlyOwner nonReentrant {
         if (isCampaignActive())
             revert CampaignError(ERR_CAMPAIGN_STILL_ACTIVE, address(0), 0);
-        if (weightedContributionsCalculated)
-            revert CampaignError(ERR_CALCULATION_COMPLETE, address(0), 0);
-        if (currentProcessingContributor != address(0))
+        if (!isCampaignSuccessful())
             revert CampaignError(
-                ERR_CALCULATION_IN_PROGRESS,
-                currentProcessingContributor,
-                0
+                ERR_GOAL_NOT_REACHED,
+                address(0),
+                totalAmountRaised
             );
+        if (hasClaimedYield)
+            revert CampaignError(ERR_YIELD_ALREADY_CLAIMED, msg.sender, 0);
 
-        totalWeightedContributions = 0;
-        address currentContributor = firstContributor;
-        uint256 totalProcessed = 0;
-
-        while (currentContributor != address(0)) {
-            if (
-                contributions[currentContributor] > 0 &&
-                !hasBeenRefunded[currentContributor]
-            ) {
-                uint256 timeWeight = CampaignLibrary.calculateTimeWeight(
-                    contributionTimestamps[currentContributor],
-                    campaignStartTime,
-                    campaignEndTime
-                );
-                uint256 weighted = (contributions[currentContributor] *
-                    timeWeight) / 10000;
-                weightedContributions[currentContributor] = weighted;
-                unchecked {
-                    totalWeightedContributions += weighted;
-                    totalProcessed++;
-                }
-            }
-            currentContributor = nextContributor[currentContributor];
-        }
-
-        weightedContributionsCalculated = true;
-        emit YieldSharesCalculationUpdate(totalProcessed, true, totalProcessed);
-    }
-
-    function calculateWeightedContributionsBatch(
-        uint256 batchSize
-    ) public returns (bool isComplete, uint256 processedCount) {
-        if (isCampaignActive())
-            revert CampaignError(ERR_CAMPAIGN_STILL_ACTIVE, address(0), 0);
-        if (weightedContributionsCalculated)
-            revert CampaignError(ERR_CALCULATION_COMPLETE, address(0), 0);
-
-        if (currentProcessingContributor == address(0)) {
-            currentProcessingContributor = firstContributor;
-        }
-
-        // Gas monitoring variables
-        uint256 gasThreshold = 50000; // Minimum gas to keep available for finishing execution
-        uint256 gasCheckInterval = 5; // Check gas every N iterations
-
-        processedCount = 0;
-        uint256 totalProcessed = 0;
-        uint256 iterationCounter = 0;
-
-        while (
-            currentProcessingContributor != address(0) &&
-            processedCount < batchSize
-        ) {
-            // Check gas usage periodically to avoid out-of-gas errors
-            unchecked {
-                iterationCounter++;
-            }
-            if (iterationCounter % gasCheckInterval == 0) {
-                if (gasleft() < gasThreshold) {
-                    break; // Exit early if gas is running low
-                }
-            }
-
-            if (
-                contributions[currentProcessingContributor] > 0 &&
-                !hasBeenRefunded[currentProcessingContributor]
-            ) {
-                uint256 timeWeight = CampaignLibrary.calculateTimeWeight(
-                    contributionTimestamps[currentProcessingContributor],
-                    campaignStartTime,
-                    campaignEndTime
-                );
-                uint256 weighted = (contributions[
-                    currentProcessingContributor
-                ] * timeWeight) / 10000;
-                weightedContributions[currentProcessingContributor] = weighted;
-                unchecked {
-                    totalWeightedContributions += weighted;
-                    processedCount++;
-                }
-            }
-
-            unchecked {
-                totalProcessed++;
-            }
-
-            currentProcessingContributor = nextContributor[
-                currentProcessingContributor
-            ];
-        }
-
-        isComplete = (currentProcessingContributor == address(0));
-        if (isComplete) {
-            weightedContributionsCalculated = true;
-        }
-
-        emit YieldSharesCalculationUpdate(
-            processedCount,
-            isComplete,
-            totalProcessed
-        );
-
-        return (isComplete, processedCount);
-    }
-
-    function resetWeightedContributionsCalculation()
-        external
-        onlyPlatformAdmin
-    {
-        if (weightedContributionsCalculated)
-            revert CampaignError(ERR_CALCULATION_COMPLETE, address(0), 0);
-        currentProcessingContributor = address(0);
-
-        emit FundsOperation(
-            campaignToken,
-            0,
-            OP_RESET_WEIGHTED_CONTRIBUTIONS_CALCULATION,
-            0,
-            msg.sender
-        );
-    }
-
-    function calculateYieldShare(
-        address contributor
-    ) public view returns (uint256) {
-        if (
-            !weightedContributionsCalculated ||
-            weightedContributions[contributor] == 0 ||
-            totalWeightedContributions == 0
-        ) {
-            return 0;
-        }
-
-        return
-            CampaignLibrary.calculateYieldShare(
-                weightedContributions[contributor],
-                totalWeightedContributions,
-                totalHarvestedYield
-            );
-    }
-
-    function claimYield() external nonReentrant {
-        if (isCampaignActive())
-            revert CampaignError(ERR_CAMPAIGN_STILL_ACTIVE, address(0), 0);
-        if (!weightedContributionsCalculated)
-            revert CampaignError(ERR_WEIGHTED_NOT_CALCULATED, address(0), 0);
-        if (!isContributor[msg.sender] || contributions[msg.sender] == 0)
-            revert CampaignError(ERR_NO_YIELD, msg.sender, 0);
-        if (hasBeenRefunded[msg.sender])
-            revert CampaignError(ERR_NO_YIELD, msg.sender, 0);
-        if (hasClaimedYield[msg.sender])
-            revert CampaignError(ERR_YIELD_CLAIMED, msg.sender, 0);
         if (totalHarvestedYield == 0)
             revert CampaignError(ERR_NO_YIELD, address(0), 0);
 
-        uint256 yieldShare = calculateYieldShare(msg.sender);
-        if (yieldShare == 0) revert CampaignError(ERR_NO_YIELD, msg.sender, 0);
+        hasClaimedYield = true;
 
-        hasClaimedYield[msg.sender] = true;
-
-        TokenOperations.safeTransfer(campaignToken, msg.sender, yieldShare);
-
-        uint256 sharePercentage = CampaignLibrary.calculateSharePercentage(
-            weightedContributions[msg.sender],
-            totalWeightedContributions,
-            10000
+        TokenOperations.safeTransfer(
+            campaignToken,
+            owner(),
+            totalHarvestedYield
         );
 
-        emit YieldDistributed(msg.sender, yieldShare, sharePercentage);
+        emit YieldClaimed(owner(), totalHarvestedYield);
+    }
+
+    function claimYieldAdmin()
+        external
+        onlyPlatformAdminAfterGrace
+        nonReentrant
+    {
+        if (isCampaignActive())
+            revert CampaignError(ERR_CAMPAIGN_STILL_ACTIVE, address(0), 0);
+        if (!isCampaignSuccessful())
+            revert CampaignError(
+                ERR_GOAL_NOT_REACHED,
+                address(0),
+                totalAmountRaised
+            );
+        if (hasClaimedYield)
+            revert CampaignError(ERR_YIELD_ALREADY_CLAIMED, msg.sender, 0);
+
+        if (totalHarvestedYield == 0)
+            revert CampaignError(ERR_NO_YIELD, address(0), 0);
+
+        hasClaimedYield = true;
+
+        address platformTreasury = defiManager
+            .yieldDistributor()
+            .platformTreasury();
+
+        TokenOperations.safeTransfer(
+            campaignToken,
+            platformTreasury,
+            totalHarvestedYield
+        );
     }
 
     function isCampaignActive() public view returns (bool) {

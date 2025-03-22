@@ -13,6 +13,9 @@ import '@nomicfoundation/hardhat-toolbox'
 import 'hardhat-gas-reporter'
 
 import IERC20ABI from './test/abis/IERC20ABI.json'
+import UniswapQuoterABI from './test/abis/UniswapQuoter.json'
+import UniswapRouterABI from './test/abis/UniswapRouter.json'
+import AavePoolABI from './test/abis/AAVEPool.json'
 
 const config: HardhatUserConfig = {
   solidity: {
@@ -28,7 +31,7 @@ const config: HardhatUserConfig = {
     hardhat: {
       forking: {
         url: 'https://base-mainnet.g.alchemy.com/v2/A8wE4FsZsP3eTlR0DSDh3w5nU7wdPyUG',
-        blockNumber: 27769750 // Use a recent block number
+        blockNumber: 27890275 // Use a recent block number
       },
       chains: {
         8453: {
@@ -54,9 +57,19 @@ const config: HardhatUserConfig = {
         abi: IERC20ABI
       },
       {
-        name: 'DAI',
-        address: '0x50c5725949a6f0c72e6c4a641f24049a917db0cb',
+        name: 'MANTRA',
+        address: '0x3992b27da26848c2b19cea6fd25ad5568b68ab98',
         abi: IERC20ABI
+      },
+      {
+        name: 'WBTC',
+        address: '0x0555e30da8f98308edb960aa94c0db47230d2b9c',
+        abi: IERC20ABI
+      },
+      {
+        name: 'AAVE',
+        address: '0xa238dd80c259a72e81d7e4664a9801593f98d1c5',
+        abi: AavePoolABI
       }
     ]
   }
@@ -130,19 +143,10 @@ Tests focused on token functionality and interactions.
 - Re-enable token support
 - Update token minimum contribution
 
-### Token Swap Tests
-
-- Swap between different tokens
-- Verify slippage protection works correctly
-- Test with tokens of different decimals (6, 8, 18)
-- Test swap failure handling
-- Verify event emission with correct swap details
-
 ### Token Error Handling
 
 - Test contribution with unsupported token (should fail)
 - Test with insufficient allowance (should fail)
-- Test swap with extreme slippage (should fail)
 - Verify zero-amount operations are rejected
 
 ## 3. DeFi Integration Tests
@@ -156,14 +160,6 @@ Tests for interactions with external DeFi protocols.
 - Verify yield calculation from Aave
 - Test handling of yield rate changes
 - Verify response to liquidity constraints
-
-### Uniswap Integration
-
-- Test token swaps via Uniswap
-- Verify exchange rate calculation
-- Test handling of low liquidity pairs
-- Verify slippage limit enforcement
-- Test swap path optimization
 
 ### Yield Distribution
 
@@ -219,104 +215,6 @@ Testing resilience and handling of exceptional conditions.
 - Verify access control in critical functions
 - Test with malicious input data
 
-## 6. Integration Test Setup
-
-### Using Forked Mainnet
-
-Since our Hardhat config uses a forked Base mainnet, we can interact with real DeFi protocols:
-
-```javascript
-// Import required dependencies
-import { ethers } from 'hardhat'
-import { impersonateAccount } from '@nomicfoundation/hardhat-network-helpers'
-
-// Known contract addresses on Base
-const AAVE_POOL_ADDRESS = '0xA238Dd80C259a72e81d7e4664a9801593F98d1c5'
-const UNISWAP_ROUTER_ADDRESS = '0xFd0e0A4c6D0fe66b3177BC3E30bab5Ba753cc8c3'
-const UNISWAP_QUOTER_ADDRESS = '0x3d4e44Eb1374240CE5F1B871ab261CD16335B76a'
-
-// Real token addresses on Base
-const USDC_ADDRESS = '0x833589fcd6edb6e08f4c7c32d4f71b54bda02913'
-const DAI_ADDRESS = '0x50c5725949a6f0c72e6c4a641f24049a917db0cb'
-
-async function setupTestEnvironment() {
-  // Get signers
-  const [owner, contributor1, contributor2, treasury] =
-    await ethers.getSigners()
-
-  // Deploy platform contracts with real DeFi protocol addresses
-  const PlatformAdmin = await ethers.getContractFactory('PlatformAdmin')
-  const platformAdmin = await PlatformAdmin.deploy(30, owner.address) // 30 day grace period
-
-  const TokenRegistry = await ethers.getContractFactory('TokenRegistry')
-  const tokenRegistry = await TokenRegistry.deploy(
-    owner.address,
-    platformAdmin.address
-  )
-
-  const YieldDistributor = await ethers.getContractFactory('YieldDistributor')
-  const yieldDistributor = await YieldDistributor.deploy(
-    treasury.address,
-    platformAdmin.address,
-    owner.address
-  )
-
-  const DefiManager = await ethers.getContractFactory('DefiIntegrationManager')
-  const defiManager = await DefiManager.deploy(
-    AAVE_POOL_ADDRESS,
-    UNISWAP_ROUTER_ADDRESS,
-    UNISWAP_QUOTER_ADDRESS,
-    tokenRegistry.address,
-    yieldDistributor.address,
-    platformAdmin.address,
-    owner.address
-  )
-
-  // Fund test accounts with tokens from a large holder
-  await fundAccountsWithTokens(USDC_ADDRESS, [
-    contributor1.address,
-    contributor2.address
-  ])
-  await fundAccountsWithTokens(DAI_ADDRESS, [
-    contributor1.address,
-    contributor2.address
-  ])
-
-  return {
-    owner,
-    contributor1,
-    contributor2,
-    treasury,
-    platformAdmin,
-    tokenRegistry,
-    yieldDistributor,
-    defiManager
-  }
-}
-
-async function fundAccountsWithTokens(tokenAddress, recipientAddresses) {
-  // Find a whale address for the token
-  const whale = '0x...' // Replace with known whale address for the token
-
-  // Impersonate the whale account
-  await impersonateAccount(whale)
-  const whaleSigner = await ethers.getSigner(whale)
-
-  // Get the token contract
-  const token = await ethers.getContractAt('IERC20', tokenAddress, whaleSigner)
-
-  // Send tokens to each test account
-  for (const recipient of recipientAddresses) {
-    const amount =
-      (await token.decimals()) === 6
-        ? 1000 * 10 ** 6 // 1000 units for 6 decimal tokens
-        : ethers.utils.parseEther('1000') // 1000 units for 18 decimal tokens
-
-    await token.transfer(recipient, amount)
-  }
-}
-```
-
 ## Running the Tests
 
 With our Hardhat configuration, we can run the tests using:
@@ -327,12 +225,6 @@ npx hardhat test
 
 # Run a specific test file
 npx hardhat test ./test/integration/Campaign.test.ts
-
-# Run with gas reporter enabled
-REPORT_GAS=true npx hardhat test
-
-# Run tests on a specific network
-npx hardhat test --network baseSepolia
 ```
 
 ### Tips for Test Performance

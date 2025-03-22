@@ -45,4 +45,6 @@ interface IDefiIntegrationManager {
     function yieldDistributor() external view returns (IYieldDistributor);
 
     function aavePool() external view returns (IAavePool);
+
+    function getPlatformTreasury() external view returns (address);
 }
