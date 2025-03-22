@@ -1403,6 +1403,17 @@ describe('Base Mainnet Integration Tests', function () {
       expect(depositEvent.args[4]).to.equal(
         ethers.getAddress(await campaign.owner())
       )
+
+      const { inContract, inYield, total } =
+        await campaign.getAvailableBalance()
+
+      expect(inContract).to.equal(0)
+      expect(inYield).to.equal(contributionAmount)
+      expect(total).to.equal(contributionAmount)
+
+      expect(
+        await campaign.getDepositedAmount(await usdc.getAddress())
+      ).to.equal(inYield)
     })
   })
 })
