@@ -81,9 +81,9 @@ export default config
 ### Key Configuration Details:
 
 1. **Solidity Version**: 0.8.28 with optimization enabled
-2. **Network Forking**: Tests run against a forked Base mainnet with block 27769750
+2. **Network Forking**: Tests run against a forked Base mainnet with block 27890275
 3. **Gas Reporter**: Tracks gas usage for optimizing contract deployment and functions
-4. **Remote Contracts**: Includes configuration for real USDC and DAI tokens on Base
+4. **Remote Contracts**: Includes configuration for real tokens and protocols on Base
 
 ## 1. Campaign Lifecycle Tests
 
@@ -99,36 +99,37 @@ Tests to verify the complete flow of campaign creation, funding, and completion.
 
 - ✅ Contribute with campaign token (direct contribution)
 - ✅ Verify contributions update campaign total raised amount
-- ✅ Verify first-time contributor is added to linked list
-- ✅ Verify contribution balances(both weighted and unweighted)
+- ✅ Verify contributor count increases correctly
 - ✅ Test minimum contribution enforcement
 - ✅ Test contribution after campaign end (should fail)
 - ✅ Test contribution after goal reached (should fail)
+- ✅ Test contribution with non-target token (should fail)
 
 ### Yield Generation
 
 - Deposit funds to yield protocol
 - Verify deposit records in DefiManager
 - Harvest yield from protocol
-- Verify yield distribution between platform and campaign
+- Verify yield distribution between platform treasury and campaign
 - Withdraw partial funds from yield protocol
 - Withdraw all funds from yield protocol
 
 ### Campaign Completion (Success)
 
 - End campaign with goal achieved
-- Calculate weighted contributions (both full and batch methods)
+- Creator claims yield after successful campaign
 - Owner claims funds after successful campaign
-- Contributors claim yield based on weighted contributions
-- Verify correct yield share calculations
+- Attempt to claim yield before campaign end (should fail)
 - Attempt to claim funds before campaign end (should fail)
+- Verify yield can only be claimed once
 
 ### Campaign Completion (Failure)
 
 - End campaign without reaching goal
 - Contributors request refunds
 - Verify refund amount matches contribution
-- Attempt owner claim after failed campaign (should fail)
+- Attempt creator yield claim after failed campaign (should fail)
+- Attempt owner funds claim after failed campaign (should fail)
 - Attempt double refund (should fail)
 
 ## 2. Token Integration Tests
@@ -145,7 +146,7 @@ Tests focused on token functionality and interactions.
 
 ### Token Error Handling
 
-- Test contribution with unsupported token (should fail)
+- ✅ Test contribution with unsupported token (should fail)
 - Test with insufficient allowance (should fail)
 - Verify zero-amount operations are rejected
 
@@ -164,9 +165,8 @@ Tests for interactions with external DeFi protocols.
 ### Yield Distribution
 
 - Test platform fee calculation
-- Test weighted contribution calculations
-- Verify yield distribution to treasury
-- Verify yield distribution to contributors
+- Verify yield distribution to treasury during harvest
+- Verify remaining yield goes to campaign owner on claim
 - Test updating platform yield share percentage
 
 ## 4. Admin Control Tests
@@ -190,8 +190,8 @@ Tests for administrative functions and controls.
 ### Admin Override Functions
 
 - Test admin campaign override flag
-- Test emergency fund withdrawal
-- Reset weighted contribution calculation
+- Test admin yield claim functionality
+- Test emergency fund withdrawal by admin
 
 ## 5. Edge Cases and Recovery Tests
 
@@ -199,21 +199,22 @@ Testing resilience and handling of exceptional conditions.
 
 ### Gas Optimization
 
-- Test batch processing with different batch sizes
 - Verify gas usage for large contributor counts
-- Test operation near gas limits
+- Test gas efficiency of key operations
+- Compare gas costs before and after optimizations
 
 ### Error Recovery
 
-- Test recovery from interrupted weighted contribution calculation
 - Test admin intervention after owner abandonment
 - Test with failing external contracts
+- Verify graceful handling of reverted transactions
 
 ### Security Scenarios
 
 - Test reentrancy protection
 - Verify access control in critical functions
 - Test with malicious input data
+- Verify funds safety in edge case scenarios
 
 ## Running the Tests
 
