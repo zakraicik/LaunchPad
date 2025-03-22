@@ -373,6 +373,17 @@ contract Campaign is Ownable, ReentrancyGuard, PlatformAdminAccessControl {
         return totalAmountRaised >= campaignGoalAmount;
     }
 
+    function getAvailableBalance()
+        public
+        view
+        returns (uint256 inContract, uint256 inYield, uint256 total)
+    {
+        inYield = defiManager.getDepositedAmount(address(this), campaignToken);
+        inContract = IERC20(campaignToken).balanceOf(address(this));
+        total = inContract + inYield;
+        return (inContract, inYield, total);
+    }
+
     function getDepositedAmount(address token) external view returns (uint256) {
         return defiManager.getDepositedAmount(address(this), token);
     }

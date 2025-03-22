@@ -321,6 +321,36 @@ contract DefiIntegrationManager is
         return aaveDeposits[campaign][token];
     }
 
+    function getCurrentYield(
+        address campaign,
+        address token
+    ) external view returns (uint256 yieldAmount) {
+        uint256 deposited = aaveDeposits[campaign][token];
+        if (deposited == 0) {
+            return 0;
+        }
+
+        address aToken;
+        try aavePool.getReserveData(token) returns (
+            DataTypes.ReserveData memory data
+        ) {
+            aToken = data.aTokenAddress;
+        } catch {
+            return 0;
+        }
+
+        if (aToken == address(0)) {
+            return 0;
+        }
+
+        uint256 aTokenBalance = IERC20(aToken).balanceOf(address(this));
+        if (aTokenBalance <= deposited) {
+            return 0;
+        }
+
+        return aTokenBalance - deposited;
+    }
+
     function getPlatformTreasury() external view returns (address) {
         return yieldDistributor.platformTreasury();
     }

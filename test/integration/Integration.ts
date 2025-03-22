@@ -1,6 +1,6 @@
 import { expect } from 'chai'
 import { ethers, network } from 'hardhat'
-import { Contract } from 'ethers'
+import { Contract, Log } from 'ethers'
 
 import { time } from '@nomicfoundation/hardhat-network-helpers'
 import { loadFixture } from '@nomicfoundation/hardhat-network-helpers'
@@ -1315,12 +1315,15 @@ describe('Base Mainnet Integration Tests', function () {
 
   describe('Yield Generation', function () {
     it('Should enable campaign creator to deposit yield into campaign', async function () {
+      const OP_DEPOSIT = 1
+
       const {
         usdc,
         campaignContractFactory,
         creator1,
         contributor1,
-        contributor2
+        contributor2,
+        deployer
       } = await loadFixture(deployPlatformFixture)
 
       const usdcDecimals = await usdc.decimals()
@@ -1369,6 +1372,37 @@ describe('Base Mainnet Integration Tests', function () {
       const contributeTx1 = await campaign
         .connect(contributor1)
         .contribute(await usdc.getAddress(), contributionAmount)
+
+      const depositTx = await campaign
+        .connect(creator1)
+        .depositToYieldProtocol(await usdc.getAddress(), contributionAmount)
+
+      const depositReceipt = await depositTx.wait()
+
+      if (!depositReceipt) throw new Error('Transaction failed')
+
+      const depositEvent: any = depositReceipt.logs.find(log => {
+        try {
+          const parsed = campaign.interface.parseLog(log)
+          return parsed && parsed.name === 'FundsOperation'
+        } catch {
+          return false
+        }
+      })
+
+      if (!depositEvent) {
+        throw new Error('FundsOperation event not found')
+      }
+
+      expect(depositEvent.args[0]).to.equal(
+        ethers.getAddress(await usdc.getAddress())
+      )
+      expect(depositEvent.args[1]).to.equal(contributionAmount)
+      expect(depositEvent.args[2]).to.equal(OP_DEPOSIT)
+      expect(depositEvent.args[3]).to.equal(0)
+      expect(depositEvent.args[4]).to.equal(
+        ethers.getAddress(await campaign.owner())
+      )
     })
   })
 })
