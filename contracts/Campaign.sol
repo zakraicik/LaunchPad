@@ -226,11 +226,12 @@ contract Campaign is Ownable, ReentrancyGuard, PlatformAdminAccessControl {
     }
 
     function depositToYieldProtocol(
-        address token,
-        uint256 amount
+        address token
     ) external onlyOwner nonReentrant {
         if (!isCampaignActive())
             revert CampaignError(ERR_CAMPAIGN_NOT_ACTIVE, address(0), 0);
+
+        uint256 amount = IERC20(token).balanceOf(address(this));
 
         TokenOperations.safeIncreaseAllowance(
             token,
@@ -287,48 +288,22 @@ contract Campaign is Ownable, ReentrancyGuard, PlatformAdminAccessControl {
         emit FundsOperation(token, 0, OP_HARVEST, _contributorYield, initiator);
     }
 
-    function withdrawAllFromYieldProtocol(
+    function withdrawFromYieldProtocol(
         address token
     ) external onlyOwner nonReentrant {
         _withdrawAllFromYield(token, msg.sender);
     }
 
-    function withdrawAllFromYieldProtocolAdmin(
+    function withdrawFromYieldProtocolAdmin(
         address token
     ) external onlyPlatformAdminAfterGrace nonReentrant {
         _withdrawAllFromYield(token, msg.sender);
     }
 
     function _withdrawAllFromYield(address token, address initiator) internal {
-        uint256 withdrawn = defiManager.withdrawAllFromYieldProtocol(token);
+        uint256 withdrawn = defiManager.withdrawFromYieldProtocol(token);
 
         emit FundsOperation(token, withdrawn, OP_WITHDRAW_ALL, 0, initiator);
-    }
-
-    function withdrawFromYieldProtocol(
-        address token,
-        uint256 amount
-    ) external onlyOwner nonReentrant {
-        _withdrawFromYield(token, amount, msg.sender);
-    }
-
-    function withdrawFromYieldProtocolAdmin(
-        address token,
-        uint256 amount
-    ) external onlyPlatformAdminAfterGrace nonReentrant {
-        _withdrawFromYield(token, amount, msg.sender);
-    }
-
-    function _withdrawFromYield(
-        address token,
-        uint256 amount,
-        address initiator
-    ) internal {
-        uint256 withdrawn = defiManager.withdrawFromYieldProtocol(
-            token,
-            amount
-        );
-        emit FundsOperation(token, withdrawn, OP_WITHDRAW, 0, initiator);
     }
 
     function claimYield() external onlyOwner nonReentrant {

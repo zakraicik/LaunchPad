@@ -182,33 +182,6 @@ contract MockDefiManager {
     }
 
     function withdrawFromYieldProtocol(
-        address token,
-        uint256 amount
-    ) external returns (uint256) {
-        if (!withdrawSuccess) {
-            revert YieldwithdrawalFailed("Withdrawal failed");
-        }
-
-        if (amount <= 0) {
-            revert ZeroAmount(amount);
-        }
-
-        uint256 availableAmount = aaveDeposits[msg.sender][token];
-        if (amount > availableAmount) {
-            revert InsufficientDeposit(token, amount, availableAmount);
-        }
-
-        aaveDeposits[msg.sender][token] -= amount;
-        bool success = IERC20(token).transfer(msg.sender, amount);
-        if (!success) {
-            revert YieldwithdrawalFailed("Token transfer failed");
-        }
-
-        emit YieldWithdrawn(msg.sender, token, amount);
-        return amount;
-    }
-
-    function withdrawAllFromYieldProtocol(
         address token
     ) external returns (uint256) {
         if (!withdrawSuccess) {

@@ -169,44 +169,6 @@ contract DefiIntegrationManager is
     }
 
     function withdrawFromYieldProtocol(
-        address _token,
-        uint256 _amount
-    ) external nonReentrant returns (uint256) {
-        if (_amount <= 0) {
-            revert DefiError(ERR_ZERO_AMOUNT, _token, _amount);
-        }
-
-        uint256 deposited = aaveDeposits[msg.sender][_token];
-        if (_amount > deposited) {
-            revert DefiError(ERR_INSUFFICIENT_DEPOSIT, _token, _amount);
-        }
-
-        try aavePool.withdraw(_token, _amount, address(this)) returns (
-            uint256 withdrawn
-        ) {
-            if (withdrawn != _amount) {
-                revert DefiError(ERR_WITHDRAWAL_MISMATCH, _token, _amount);
-            }
-
-            aaveDeposits[msg.sender][_token] -= _amount;
-            IERC20(_token).safeTransfer(msg.sender, withdrawn);
-
-            emit DefiOperation(
-                OP_YIELD_WITHDRAWN,
-                msg.sender,
-                _token,
-                address(0),
-                withdrawn,
-                0
-            );
-
-            return withdrawn;
-        } catch {
-            revert DefiError(ERR_YIELD_WITHDRAWAL_FAILED, _token, _amount);
-        }
-    }
-
-    function withdrawAllFromYieldProtocol(
         address _token
     ) external nonReentrant returns (uint256) {
         uint256 amount = aaveDeposits[msg.sender][_token];

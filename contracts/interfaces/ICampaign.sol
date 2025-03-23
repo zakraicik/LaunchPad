@@ -36,9 +36,7 @@ interface ICampaign {
 
     function harvestYield(address token) external;
 
-    function withdrawAllFromYieldProtocol(address token) external;
-
-    function withdrawFromYieldProtocol(address token, uint256 amount) external;
+    function withdrawFromYieldProtocol(address token) external;
 
     function getDepositedAmount(address token) external view returns (uint256);
 

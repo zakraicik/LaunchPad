@@ -1322,7 +1322,6 @@ describe('Base Mainnet Integration Tests', function () {
         usdc,
         campaignContractFactory,
         creator1,
-        creator2,
         contributor1,
         IERC20ABI
       } = await loadFixture(deployPlatformFixture)
@@ -1380,7 +1379,7 @@ describe('Base Mainnet Integration Tests', function () {
 
       const depositTx = await campaign
         .connect(creator1)
-        .depositToYieldProtocol(await usdc.getAddress(), contributionAmount)
+        .depositToYieldProtocol(await usdc.getAddress())
 
       const depositReceipt = await depositTx.wait()
 
@@ -1487,9 +1486,9 @@ describe('Base Mainnet Integration Tests', function () {
         .connect(contributor1)
         .contribute(await usdc.getAddress(), contributionAmount2)
 
-      const depositTx2 = await campaign2
+      await campaign2
         .connect(creator1)
-        .depositToYieldProtocol(await usdc.getAddress(), contributionAmount2)
+        .depositToYieldProtocol(await usdc.getAddress())
 
       expect(await aToken.balanceOf(campaignAddress2)).to.equal(
         contributionAmount2
@@ -1568,13 +1567,13 @@ describe('Base Mainnet Integration Tests', function () {
       await expect(
         campaign
           .connect(contributor1)
-          .depositToYieldProtocol(await usdc.getAddress(), contributionAmount)
+          .depositToYieldProtocol(await usdc.getAddress())
       )
         .to.be.revertedWithCustomError(campaign, 'OwnableUnauthorizedAccount')
         .withArgs(contributor1.address)
     })
 
-    it('Should  allow owner to harvest yield', async function () {
+    it('Should allow owner to harvest yield', async function () {
       const OP_HARVEST = 2
 
       const {
@@ -1635,9 +1634,9 @@ describe('Base Mainnet Integration Tests', function () {
         .connect(contributor1)
         .contribute(await usdc.getAddress(), contributionAmount)
 
-      const depositTx = await campaign
+      await campaign
         .connect(creator1)
-        .depositToYieldProtocol(await usdc.getAddress(), contributionAmount)
+        .depositToYieldProtocol(await usdc.getAddress())
 
       await network.provider.send('evm_increaseTime', [60 * 60 * 24 * 120]) // 30 days
       await network.provider.send('evm_mine')

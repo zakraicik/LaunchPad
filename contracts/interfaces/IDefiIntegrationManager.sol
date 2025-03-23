@@ -9,11 +9,6 @@ interface IDefiIntegrationManager {
     function depositToYieldProtocol(address _token, uint256 _amount) external;
 
     function withdrawFromYieldProtocol(
-        address _token,
-        uint256 _amount
-    ) external returns (uint256);
-
-    function withdrawAllFromYieldProtocol(
         address _token
     ) external returns (uint256);
 
