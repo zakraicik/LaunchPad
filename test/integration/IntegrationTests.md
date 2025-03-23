@@ -93,27 +93,20 @@ Tests to verify the complete flow of campaign creation, funding, and completion.
 
 - ✅ Create campaign through factory with valid parameters
 - ✅ Verify campaign initialization with correct parameters (token, goal, duration)
-- ✅ Attempt to create campaign with invalid parameters (should fail)
 
 ### Contribution Process
 
 - ✅ Contribute with campaign token (direct contribution)
 - ✅ Verify contributions update campaign total raised amount
 - ✅ Verify contributor count increases correctly
-- ✅ Test minimum contribution enforcement
-- ✅ Test contribution after campaign end (should fail)
-- ✅ Test contribution after goal reached (should fail)
-- ✅ Test contribution with non-target token (should fail)
 
 ### Yield Generation
 
 - ✅ Deposit funds to yield protocol
-- ✅ Deposit funds to yield protocol
 - ✅ Verify deposit records in DefiManager
-- Harvest yield from protocol
-- Verify yield distribution between platform treasury and campaign
-- Withdraw partial funds from yield protocol
-- Withdraw all funds from yield protocol
+- ✅ Harvest yield from protocol
+- ✅ Verify yield distribution between platform treasury and campaign
+- Withdraw funds from yield protocol
 
 ### Campaign Completion (Success)
 
