@@ -40,6 +40,8 @@ contract Campaign is Ownable, ReentrancyGuard, PlatformAdminAccessControl {
     uint8 private constant ERR_NO_YIELD = 14;
     uint8 private constant ERR_NOT_TARGET_TOKEN = 15;
     uint8 private constant ERR_YIELD_ALREADY_CLAIMED = 16;
+    uint8 private constant ERR_NO_ATOKENS = 17;
+    uint8 private constant ERR_NO_YIELD_TO_HARVEST = 18;
 
     // External contract references
     IDefiIntegrationManager public immutable defiManager;
@@ -251,6 +253,34 @@ contract Campaign is Ownable, ReentrancyGuard, PlatformAdminAccessControl {
     }
 
     function _harvestYield(address token, address initiator) internal {
+        // Cache external calls
+        address aTokenAddress = defiManager.getATokenAddress(token);
+        if (aTokenAddress == address(0)) {
+            revert CampaignError(ERR_INVALID_ADDRESS, aTokenAddress, 0);
+        }
+
+        // Get deposit balances
+        uint256 initialATokenBalance = defiManager.aaveDeposits(
+            address(this),
+            token
+        );
+        if (initialATokenBalance == 0) {
+            revert CampaignError(ERR_NO_ATOKENS, address(this), 0);
+        }
+
+        // Check for yield
+        IERC20 aToken = IERC20(aTokenAddress);
+
+        uint256 currentATokenBalance = aToken.balanceOf(address(this));
+        if (currentATokenBalance <= initialATokenBalance) {
+            revert CampaignError(ERR_NO_YIELD_TO_HARVEST, address(this), 0);
+        }
+
+        // Calculate and transfer yield
+        uint256 currentYield = currentATokenBalance - initialATokenBalance;
+        aToken.safeTransfer(address(defiManager), currentYield);
+
+        // Harvest and update totals
         (uint256 _contributorYield, ) = defiManager.harvestYield(token);
         totalHarvestedYield += _contributorYield;
 

@@ -47,4 +47,11 @@ interface IDefiIntegrationManager {
     function aavePool() external view returns (IAavePool);
 
     function getPlatformTreasury() external view returns (address);
+
+    function getATokenAddress(address _token) external view returns (address);
+
+    function aaveDeposits(
+        address _campaign,
+        address _token
+    ) external view returns (uint256);
 }
