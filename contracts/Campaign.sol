@@ -408,7 +408,14 @@ contract Campaign is Ownable, ReentrancyGuard, PlatformAdminAccessControl {
         view
         returns (uint256 inContract, uint256 inYield, uint256 total)
     {
-        inYield = defiManager.getDepositedAmount(address(this), campaignToken);
+        address aTokenAddress = defiManager.getATokenAddress(campaignToken);
+        if (aTokenAddress == address(0)) {
+            revert CampaignError(ERR_INVALID_ADDRESS, aTokenAddress, 0);
+        }
+
+        IERC20 aToken = IERC20(aTokenAddress);
+
+        inYield = aToken.balanceOf(address(this));
         inContract = IERC20(campaignToken).balanceOf(address(this));
         total = inContract + inYield;
         return (inContract, inYield, total);

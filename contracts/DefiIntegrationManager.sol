@@ -287,6 +287,9 @@ contract DefiIntegrationManager is
             token.safeTransfer(msg.sender, creatorYield);
             token.safeTransfer(treasury, platformYield);
 
+            uint256 currentATokenBalance = aToken.balanceOf(msg.sender);
+            aaveDeposits[msg.sender][_token] = currentATokenBalance;
+
             emit DefiOperation(
                 OP_YIELD_HARVESTED,
                 msg.sender,

@@ -107,8 +107,9 @@ Tests to verify the complete flow of campaign creation, funding, and completion.
 
 ### Yield Generation
 
-- Deposit funds to yield protocol
-- Verify deposit records in DefiManager
+- ✅ Deposit funds to yield protocol
+- ✅ Deposit funds to yield protocol
+- ✅ Verify deposit records in DefiManager
 - Harvest yield from protocol
 - Verify yield distribution between platform treasury and campaign
 - Withdraw partial funds from yield protocol
