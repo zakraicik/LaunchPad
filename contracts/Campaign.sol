@@ -421,12 +421,6 @@ contract Campaign is Ownable, ReentrancyGuard, PlatformAdminAccessControl {
         return defiManager.getDepositedPrincipalAmount(address(this), token);
     }
 
-    function getCurrentYieldRate(
-        address token
-    ) external view returns (uint256) {
-        return defiManager.getCurrentYieldRate(token);
-    }
-
     function setAdminOverride(bool _adminOverride) external onlyPlatformAdmin {
         adminOverride = _adminOverride;
         emit AdminOverrideSet(_adminOverride, msg.sender);

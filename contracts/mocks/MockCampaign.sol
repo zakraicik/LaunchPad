@@ -83,13 +83,7 @@ contract MockCampaign {
     // Helper functions for testing
 
     function getDepositedAmount(address token) external view returns (uint256) {
-        return defiManager.getDepositedAmount(address(this), token);
-    }
-
-    function getCurrentYieldRate(
-        address token
-    ) external view returns (uint256) {
-        return defiManager.getCurrentYieldRate(token);
+        return defiManager.getDepositedPrincipalAmount(address(this), token);
     }
 
     // Receive funds
