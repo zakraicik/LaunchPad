@@ -19,13 +19,19 @@ abstract contract PlatformAdminAccessControl {
         _;
     }
 
+    function isAdminOverrideActive() public view virtual returns (bool) {
+        return false;
+    }
+
     modifier onlyPlatformAdminAfterGrace() {
         if (!platformAdmin.platformAdmins(msg.sender))
             revert NotAuthorizedAdmin(msg.sender);
 
-        (bool isGraceOver, uint256 timeRemaining) = platformAdmin
-            .isGracePeriodOver(address(this));
-        if (!isGraceOver) revert GracePeriodNotOver(timeRemaining);
+        if (!isAdminOverrideActive()) {
+            (bool isGraceOver, uint256 timeRemaining) = platformAdmin
+                .isGracePeriodOver(address(this));
+            if (!isGraceOver) revert GracePeriodNotOver(timeRemaining);
+        }
 
         _;
     }

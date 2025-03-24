@@ -304,6 +304,10 @@ contract Campaign is Ownable, ReentrancyGuard, PlatformAdminAccessControl {
         return totalAmountRaised >= campaignGoalAmount;
     }
 
+    function isAdminOverrideActive() public view override returns (bool) {
+        return adminOverride;
+    }
+
     function setAdminOverride(bool _adminOverride) external onlyPlatformAdmin {
         adminOverride = _adminOverride;
         emit AdminOverrideSet(_adminOverride, msg.sender);

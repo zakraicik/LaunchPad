@@ -4,7 +4,10 @@ import { Contract, Log } from 'ethers'
 
 import { time } from '@nomicfoundation/hardhat-network-helpers'
 import { loadFixture } from '@nomicfoundation/hardhat-network-helpers'
-import { anyValue } from '@nomicfoundation/hardhat-chai-matchers/withArgs'
+import {
+  anyUint,
+  anyValue
+} from '@nomicfoundation/hardhat-chai-matchers/withArgs'
 
 import {
   PlatformAdmin,
@@ -262,6 +265,7 @@ describe('Base Mainnet Integration Tests', function () {
     const ERR_FUNDS_CLAIMED = 12
     const ERR_ALREADY_REFUNDED = 10
     const ERR_GOAL_REACHED = 8
+    const OP_SHARE_UPDATED = 2
 
     it('Deploy supporting contracts and set initial state correctly', async function () {
       const {
@@ -1081,7 +1085,7 @@ describe('Base Mainnet Integration Tests', function () {
         .withArgs(ERR_ALREADY_REFUNDED, contributor2.address, 0)
     })
 
-    it('Should allow platform admin to claim funds for refunds after if owner fails to do it', async function () {
+    it('Should allow platform admin to claim funds after grace period', async function () {
       const {
         usdc,
         campaignContractFactory,
@@ -1217,7 +1221,147 @@ describe('Base Mainnet Integration Tests', function () {
         .withArgs(ERR_FUNDS_CLAIMED, ethers.ZeroAddress, 0)
     })
 
-    it('Should revert for contributions in non-target token', async function () {})
+    it('Should prevent platform admin to claim funds before grace period is over (non emergency)', async function () {
+      const {
+        usdc,
+        campaignContractFactory,
+        creator1,
+        contributor1,
+        contributor2,
+        defiIntegrationManager,
+        IERC20ABI,
+        deployer
+      } = await loadFixture(deployPlatformFixture)
+
+      const usdcDecimals = await usdc.decimals()
+      const CAMPAIGN_GOAL = ethers.parseUnits('500', usdcDecimals)
+      const CAMPAIGN_DURATION = 60
+
+      // Deploy campaign
+      const tx = await campaignContractFactory
+        .connect(creator1)
+        .deploy(await usdc.getAddress(), CAMPAIGN_GOAL, CAMPAIGN_DURATION)
+
+      const receipt = await tx.wait()
+      if (!receipt) throw new Error('Transaction failed')
+
+      const event = receipt.logs.find(log => {
+        try {
+          const parsed = campaignContractFactory.interface.parseLog(log)
+          return parsed && parsed.name === 'FactoryOperation'
+        } catch {
+          return false
+        }
+      })
+
+      if (!event) throw new Error('Event failed')
+
+      const parsedEvent = campaignContractFactory.interface.parseLog(event)
+      if (!parsedEvent) throw new Error('Event failed')
+
+      const campaignAddress = parsedEvent.args[1]
+
+      const Campaign = await ethers.getContractFactory('Campaign')
+      const campaign = Campaign.attach(campaignAddress) as unknown as Campaign
+
+      // First contribution
+      const contributionAmount1 = ethers.parseUnits('150', usdcDecimals)
+      await usdc
+        .connect(contributor1)
+        .approve(campaignAddress, contributionAmount1)
+
+      await campaign
+        .connect(contributor1)
+        .contribute(await usdc.getAddress(), contributionAmount1)
+
+      // Second contribution (different contributor)
+      const contributionAmount2 = ethers.parseUnits('150', usdcDecimals)
+      await usdc
+        .connect(contributor2)
+        .approve(campaignAddress, contributionAmount2)
+
+      await campaign
+        .connect(contributor2)
+        .contribute(await usdc.getAddress(), contributionAmount2)
+
+      // Third contribution (first contributor again)
+      const contributionAmount3 = ethers.parseUnits('130', usdcDecimals)
+      await usdc
+        .connect(contributor1)
+        .approve(campaignAddress, contributionAmount3)
+
+      await campaign
+        .connect(contributor1)
+        .contribute(await usdc.getAddress(), contributionAmount3)
+
+      expect(await campaign.isCampaignSuccessful()).to.be.false
+
+      await network.provider.send('evm_increaseTime', [
+        60 * 60 * 24 * CAMPAIGN_DURATION
+      ])
+
+      await network.provider.send('evm_mine')
+
+      // Using ethers provider directly
+      const currentBlock = await ethers.provider.getBlock('latest')
+      if (!currentBlock) throw new Error('Current block not found')
+      const currentTimestamp = currentBlock.timestamp
+
+      const campaignEndTime = await campaign.campaignEndTime()
+      const gracePeriodEnd =
+        Number(campaignEndTime) + Number(GRACE_PERIOD * 24 * 60 * 60)
+
+      const timeRemainingUntilGracePeriodEnds =
+        gracePeriodEnd - currentTimestamp
+
+      expect(await campaign.isCampaignActive()).to.be.false
+
+      const aTokenAddress = await defiIntegrationManager.getATokenAddress(
+        await usdc.getAddress()
+      )
+
+      let aToken: IERC20Metadata
+
+      aToken = (await ethers.getContractAt(
+        IERC20ABI,
+        aTokenAddress
+      )) as unknown as IERC20Metadata
+
+      const aTokenBalance = await aToken.balanceOf(campaignAddress)
+
+      //Fails with grace period
+      await expect(campaign.connect(deployer).claimFundsAdmin())
+        .to.be.revertedWithCustomError(campaign, 'GracePeriodNotOver')
+        .withArgs(anyUint)
+
+      const aTokenBalanceAfterFailedClaim = await aToken.balanceOf(
+        campaignAddress
+      )
+
+      //Admin can override; this particular campaign is unsuccesful
+      await expect(campaign.connect(deployer).setAdminOverride(true))
+        .to.emit(campaign, 'AdminOverrideSet')
+        .withArgs(true, deployer.address)
+
+      const forRefunds = await campaign.totalAmountRaised()
+
+      await expect(campaign.connect(deployer).claimFundsAdmin())
+        .to.emit(campaign, 'FundsOperation')
+        .withArgs(
+          ethers.getAddress(await usdc.getAddress()),
+          await aToken.balanceOf(campaignAddress),
+          OP_CLAIM_FUNDS,
+          deployer.address
+        )
+
+      expect(await usdc.balanceOf(creator1.address)).to.equal(0)
+
+      expect(await usdc.balanceOf(campaignAddress)).to.equal(forRefunds)
+
+      expect(
+        await usdc.balanceOf(await yieldDistributor.platformTreasury())
+      ).to.be.closeTo(aTokenBalanceAfterFailedClaim - forRefunds, 10)
+    })
   })
 
   describe('Token Integration', function () {

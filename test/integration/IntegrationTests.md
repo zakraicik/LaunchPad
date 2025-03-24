@@ -123,7 +123,6 @@ Tests focused on token functionality and interactions.
 - ✅ Remove token from registry
 - ✅ Disable token support temporarily
 - ✅ Re-enable token support
-- Update token minimum contribution
 
 ### Token Error Handling
 
@@ -140,39 +139,24 @@ Tests for interactions with external DeFi protocols.
 - ✅ Test automatic deposit to Aave during contribution
 - ✅ Test complete withdrawal from Aave during fund claim
 - ✅ Verify yield accumulation over time
-- Test handling of yield rate changes
-- Verify response to liquidity constraints
 
 ### Yield Distribution
 
 - ✅ Test platform fee calculation with successful campaigns
 - ✅ Test platform fee calculation with failed campaigns
 - ✅ Verify fee distribution to treasury during withdrawal
-- Test updating platform fee percentage
 
 ## 4. Admin Control Tests
 
-Tests for administrative functions and controls.
+Tests for administrative controls.
 
-### Platform Admin Access
-
-- Test admin access control validation
-- Add new platform admin
-- Remove platform admin
-- Test non-admin restricted function access (should fail)
-
-### Grace Period Mechanics
-
-- Test grace period calculation
-- Admin intervention before grace period (should fail)
-- Admin intervention after grace period
-- Update grace period length
-
-### Admin Override Functions
-
-- Test admin campaign override flag
-- Test admin funds claim functionality
-- Test emergency fund withdrawal by admin
+- ✅ Test admin access control validation
+- ✅ Admin intervention before grace period (should fail)
+- ✅ Admin intervention after grace period
+- ✅ Test admin campaign override flag (emergency fund withdrawal by admin)
+- ✅ Test admin funds claim functionality
+- ✅ Test admin intervention after owner abandonment
+- Test with failing external contracts
 
 ## 5. Edge Cases and Recovery Tests
 
@@ -182,18 +166,10 @@ Testing resilience and handling of exceptional conditions.
 
 - Verify gas usage for large contributor counts
 - Test gas efficiency of key operations (contribution, fund claiming)
-- Compare gas costs before and after optimizations
-
-### Error Recovery
-
-- Test admin intervention after owner abandonment
-- Test with failing external contracts
-- Verify graceful handling of reverted transactions
 
 ### Security Scenarios
 
 - Test reentrancy protection
-- Verify access control in critical functions
 - Test with malicious input data
 - Verify funds safety across different yield accumulation scenarios
 
