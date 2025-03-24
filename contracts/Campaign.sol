@@ -19,8 +19,7 @@ contract Campaign is Ownable, ReentrancyGuard, PlatformAdminAccessControl {
 
     // Operation types for FundsOperation event
     uint8 private constant OP_DEPOSIT = 1;
-    uint8 private constant OP_HARVEST = 2;
-    uint8 private constant OP_WITHDRAW = 3;
+    uint8 private constant OP_WITHDRAW = 2;
 
     // Error codes - more specific but still compact
     uint8 private constant ERR_INVALID_ADDRESS = 1;
@@ -31,13 +30,12 @@ contract Campaign is Ownable, ReentrancyGuard, PlatformAdminAccessControl {
     uint8 private constant ERR_CAMPAIGN_NOT_ACTIVE = 6;
     uint8 private constant ERR_CAMPAIGN_STILL_ACTIVE = 7;
     uint8 private constant ERR_GOAL_REACHED = 8;
-    uint8 private constant ERR_GOAL_NOT_REACHED = 9;
-    uint8 private constant ERR_ETH_NOT_ACCEPTED = 10;
-    uint8 private constant ERR_ALREADY_REFUNDED = 11;
-    uint8 private constant ERR_NOTHING_TO_REFUND = 12;
-    uint8 private constant ERR_FUNDS_CLAIMED = 13;
-    uint8 private constant ERR_NOT_TARGET_TOKEN = 14;
-    uint8 private constant ERR_NOTHING_TO_WITHDRAW = 15;
+    uint8 private constant ERR_ETH_NOT_ACCEPTED = 9;
+    uint8 private constant ERR_ALREADY_REFUNDED = 10;
+    uint8 private constant ERR_NOTHING_TO_REFUND = 11;
+    uint8 private constant ERR_FUNDS_CLAIMED = 12;
+    uint8 private constant ERR_NOT_TARGET_TOKEN = 13;
+    uint8 private constant ERR_NOTHING_TO_WITHDRAW = 14;
 
     // External contract references
     IDefiIntegrationManager public immutable defiManager;
@@ -50,7 +48,6 @@ contract Campaign is Ownable, ReentrancyGuard, PlatformAdminAccessControl {
     // Campaign financial parameters
     uint256 public immutable campaignGoalAmount;
     uint256 public totalAmountRaised;
-    uint256 public totalHarvestedYield;
 
     // Campaign timing parameters (packed for gas efficiency)
     uint64 public immutable campaignStartTime;
@@ -203,8 +200,8 @@ contract Campaign is Ownable, ReentrancyGuard, PlatformAdminAccessControl {
         defiManager.depositToYieldProtocol(token, amount);
 
         // Emit events last
-        emit FundsOperation(token, amount, OP_DEPOSIT, msg.sender);
         emit Contribution(msg.sender, amount);
+        emit FundsOperation(token, amount, OP_DEPOSIT, msg.sender);
     }
 
     function requestRefund() external nonReentrant {

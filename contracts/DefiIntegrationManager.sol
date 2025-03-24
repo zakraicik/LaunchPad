@@ -23,7 +23,6 @@ contract DefiIntegrationManager is
     uint8 private constant OP_CONFIG_UPDATED = 3;
 
     // Error codes
-    uint8 private constant ERR_UNAUTHORIZED = 1;
     uint8 private constant ERR_ZERO_AMOUNT = 2;
     uint8 private constant ERR_TOKEN_NOT_SUPPORTED = 3;
     uint8 private constant ERR_YIELD_DEPOSIT_FAILED = 4;
@@ -142,10 +141,6 @@ contract DefiIntegrationManager is
         IERC20(_token).safeIncreaseAllowance(address(aavePool), _amount);
 
         try aavePool.supply(_token, _amount, msg.sender, 0) {
-            if (aToken == address(0)) {
-                revert DefiError(ERR_INVALID_ADDRESS, aToken);
-            }
-
             aaveBalances[_token][msg.sender] += _amount;
 
             emit DefiOperation(
@@ -184,7 +179,10 @@ contract DefiIntegrationManager is
                 (uint256 creatorShare, uint256 platformShare) = yieldDistributor
                     .calculateYieldShares(remaining);
 
-                IERC20(_token).safeTransfer(msg.sender, creatorShare);
+                IERC20(_token).safeTransfer(
+                    msg.sender,
+                    coverRefunds + creatorShare
+                );
                 IERC20(_token).safeTransfer(
                     yieldDistributor.platformTreasury(),
                     platformShare
