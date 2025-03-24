@@ -20,33 +20,27 @@ contract DefiIntegrationManager is
     // Operation types for events
     uint8 private constant OP_YIELD_DEPOSITED = 1;
     uint8 private constant OP_YIELD_WITHDRAWN = 2;
-    uint8 private constant OP_YIELD_HARVESTED = 3;
-    uint8 private constant OP_CONFIG_UPDATED = 4;
+    uint8 private constant OP_CONFIG_UPDATED = 3;
 
     // Error codes
     uint8 private constant ERR_UNAUTHORIZED = 1;
     uint8 private constant ERR_ZERO_AMOUNT = 2;
-    uint8 private constant ERR_INSUFFICIENT_DEPOSIT = 3;
-    uint8 private constant ERR_TOKEN_NOT_SUPPORTED = 4;
-    uint8 private constant ERR_YIELD_DEPOSIT_FAILED = 5;
-    uint8 private constant ERR_YIELD_WITHDRAWAL_FAILED = 6;
-    uint8 private constant ERR_INVALID_ADDRESS = 7;
-    uint8 private constant ERR_INVALID_CONSTRUCTOR = 8;
-    uint8 private constant ERR_NO_YIELD = 9;
-    uint8 private constant ERR_WITHDRAWAL_MISMATCH = 10;
-    uint8 private constant ERR_FAILED_GET_ATOKEN = 11;
+    uint8 private constant ERR_TOKEN_NOT_SUPPORTED = 3;
+    uint8 private constant ERR_YIELD_DEPOSIT_FAILED = 4;
+    uint8 private constant ERR_YIELD_WITHDRAWAL_FAILED = 5;
+    uint8 private constant ERR_INVALID_ADDRESS = 6;
+    uint8 private constant ERR_INVALID_CONSTRUCTOR = 7;
+    uint8 private constant ERR_PRINCIPAL_WITHDRAWAL_FAILED = 8;
 
     // External contracts
     IAavePool public aavePool;
     ITokenRegistry public tokenRegistry;
     IYieldDistributor public yieldDistributor;
 
-    // Storage
-    mapping(address => mapping(address => uint256)) public aavePrincipalBalance; //formerly aaveDeposits
-    mapping(address => mapping(address => uint256)) public yieldBaseline;
+    mapping(address => mapping(address => uint256)) public aaveBalances;
 
     // Consolidated error
-    error DefiError(uint8 code, address addr, uint256 value);
+    error DefiError(uint8 code, address addr);
 
     // Consolidated event
     event DefiOperation(
@@ -73,15 +67,15 @@ contract DefiIntegrationManager is
         address _owner
     ) Ownable(_owner) PlatformAdminAccessControl(_platformAdmin) {
         if (_aavePool == address(0)) {
-            revert DefiError(ERR_INVALID_CONSTRUCTOR, _aavePool, 0);
+            revert DefiError(ERR_INVALID_CONSTRUCTOR, _aavePool);
         }
 
         if (_tokenRegistry == address(0)) {
-            revert DefiError(ERR_INVALID_CONSTRUCTOR, _tokenRegistry, 3);
+            revert DefiError(ERR_INVALID_CONSTRUCTOR, _tokenRegistry);
         }
 
         if (_yieldDistributor == address(0)) {
-            revert DefiError(ERR_INVALID_CONSTRUCTOR, _yieldDistributor, 4);
+            revert DefiError(ERR_INVALID_CONSTRUCTOR, _yieldDistributor);
         }
 
         aavePool = IAavePool(_aavePool);
@@ -93,7 +87,7 @@ contract DefiIntegrationManager is
         address _tokenRegistry
     ) external onlyPlatformAdmin {
         if (_tokenRegistry == address(0)) {
-            revert DefiError(ERR_INVALID_ADDRESS, _tokenRegistry, 0);
+            revert DefiError(ERR_INVALID_ADDRESS, _tokenRegistry);
         }
 
         address oldRegistry = address(tokenRegistry);
@@ -106,7 +100,7 @@ contract DefiIntegrationManager is
         address _yieldDistributor
     ) external onlyPlatformAdmin {
         if (_yieldDistributor == address(0)) {
-            revert DefiError(ERR_INVALID_ADDRESS, _yieldDistributor, 0);
+            revert DefiError(ERR_INVALID_ADDRESS, _yieldDistributor);
         }
 
         address oldDistributor = address(yieldDistributor);
@@ -117,7 +111,7 @@ contract DefiIntegrationManager is
 
     function setAavePool(address _aavePool) external onlyPlatformAdmin {
         if (_aavePool == address(0)) {
-            revert DefiError(ERR_INVALID_ADDRESS, _aavePool, 0);
+            revert DefiError(ERR_INVALID_ADDRESS, _aavePool);
         }
 
         address oldAavePool = address(aavePool);
@@ -133,15 +127,15 @@ contract DefiIntegrationManager is
         address aToken = getATokenAddress(_token);
 
         if (aToken == address(0)) {
-            revert DefiError(ERR_INVALID_ADDRESS, aToken, 0);
+            revert DefiError(ERR_INVALID_ADDRESS, aToken);
         }
 
         if (_amount <= 0) {
-            revert DefiError(ERR_ZERO_AMOUNT, _token, _amount);
+            revert DefiError(ERR_ZERO_AMOUNT, _token);
         }
 
         if (!tokenRegistry.isTokenSupported(_token)) {
-            revert DefiError(ERR_TOKEN_NOT_SUPPORTED, _token, 0);
+            revert DefiError(ERR_TOKEN_NOT_SUPPORTED, _token);
         }
 
         IERC20(_token).safeTransferFrom(msg.sender, address(this), _amount);
@@ -149,13 +143,10 @@ contract DefiIntegrationManager is
 
         try aavePool.supply(_token, _amount, msg.sender, 0) {
             if (aToken == address(0)) {
-                revert DefiError(ERR_INVALID_ADDRESS, aToken, 0);
+                revert DefiError(ERR_INVALID_ADDRESS, aToken);
             }
 
-            uint256 aTokenBalance = IERC20(aToken).balanceOf(msg.sender);
-
-            aavePrincipalBalance[msg.sender][_token] += aTokenBalance;
-            yieldBaseline[msg.sender][_token] += aTokenBalance;
+            aaveBalances[_token][msg.sender] += _amount;
 
             emit DefiOperation(
                 OP_YIELD_DEPOSITED,
@@ -166,28 +157,41 @@ contract DefiIntegrationManager is
                 0
             );
         } catch {
-            revert DefiError(ERR_YIELD_DEPOSIT_FAILED, _token, _amount);
+            revert DefiError(ERR_YIELD_DEPOSIT_FAILED, _token);
         }
     }
 
     function withdrawFromYieldProtocol(
-        address _token
+        address _token,
+        bool campaignSuccessful
     ) external nonReentrant returns (uint256) {
-        uint256 amount = aavePrincipalBalance[msg.sender][_token];
-
-        if (amount <= 0) {
-            revert DefiError(ERR_ZERO_AMOUNT, _token, amount);
-        }
-
-        try aavePool.withdraw(_token, amount, address(this)) returns (
+        try aavePool.withdraw(_token, type(uint).max, address(this)) returns (
             uint256 withdrawn
         ) {
-            if (withdrawn != amount) {
-                revert DefiError(ERR_WITHDRAWAL_MISMATCH, _token, amount);
-            }
+            if (campaignSuccessful) {
+                (uint256 creatorShare, uint256 platformShare) = yieldDistributor
+                    .calculateYieldShares(withdrawn);
 
-            aavePrincipalBalance[msg.sender][_token] = 0;
-            IERC20(_token).safeTransfer(msg.sender, withdrawn);
+                IERC20(_token).safeTransfer(msg.sender, creatorShare);
+                IERC20(_token).safeTransfer(
+                    yieldDistributor.platformTreasury(),
+                    platformShare
+                );
+            } else {
+                uint256 coverRefunds = aaveBalances[_token][msg.sender];
+                uint256 remaining = withdrawn - coverRefunds;
+
+                (uint256 creatorShare, uint256 platformShare) = yieldDistributor
+                    .calculateYieldShares(remaining);
+
+                IERC20(_token).safeTransfer(msg.sender, creatorShare);
+                IERC20(_token).safeTransfer(
+                    yieldDistributor.platformTreasury(),
+                    platformShare
+                );
+
+                aaveBalances[_token][msg.sender] = 0;
+            }
 
             emit DefiOperation(
                 OP_YIELD_WITHDRAWN,
@@ -200,75 +204,7 @@ contract DefiIntegrationManager is
 
             return withdrawn;
         } catch {
-            revert DefiError(ERR_YIELD_WITHDRAWAL_FAILED, _token, amount);
-        }
-    }
-
-    function harvestYield(
-        address _token
-    )
-        external
-        nonReentrant
-        returns (uint256 creatorYield, uint256 platformYield)
-    {
-        // Check if user has any deposits
-        if (yieldBaseline[msg.sender][_token] <= 0) {
-            revert DefiError(ERR_INSUFFICIENT_DEPOSIT, _token, 0);
-        }
-
-        // Cache external calls
-        address aTokenAddress = getATokenAddress(_token);
-        if (aTokenAddress == address(0)) {
-            revert DefiError(ERR_INVALID_ADDRESS, aTokenAddress, 0);
-        }
-
-        // Get current balance
-        IERC20 aToken = IERC20(aTokenAddress);
-        uint256 receivedATokens = aToken.balanceOf(address(this));
-        if (receivedATokens == 0) {
-            revert DefiError(ERR_NO_YIELD, _token, 0);
-        }
-
-        // Withdraw tokens
-        try aavePool.withdraw(_token, receivedATokens, address(this)) returns (
-            uint256 withdrawn
-        ) {
-            if (withdrawn != receivedATokens) {
-                revert DefiError(
-                    ERR_WITHDRAWAL_MISMATCH,
-                    _token,
-                    receivedATokens
-                );
-            }
-
-            // Calculate and distribute yield
-            (creatorYield, platformYield) = yieldDistributor
-                .calculateYieldShares(withdrawn);
-            address treasury = yieldDistributor.platformTreasury();
-
-            // Transfer tokens
-            IERC20 token = IERC20(_token);
-            token.safeTransfer(msg.sender, creatorYield);
-            token.safeTransfer(treasury, platformYield);
-
-            uint256 currentATokenBalance = aToken.balanceOf(msg.sender);
-            yieldBaseline[msg.sender][_token] = currentATokenBalance;
-            aavePrincipalBalance[msg.sender][_token] = currentATokenBalance; //ensure no rounding errors
-
-            emit DefiOperation(
-                OP_YIELD_HARVESTED,
-                msg.sender,
-                _token,
-                treasury,
-                creatorYield,
-                platformYield
-            );
-        } catch {
-            revert DefiError(
-                ERR_YIELD_WITHDRAWAL_FAILED,
-                _token,
-                receivedATokens
-            );
+            revert DefiError(ERR_PRINCIPAL_WITHDRAWAL_FAILED, _token);
         }
     }
 
@@ -282,25 +218,6 @@ contract DefiIntegrationManager is
         } catch {
             return 0;
         }
-    }
-
-    function getDepositedPrincipalAmount(
-        address campaign,
-        address token
-    ) external view returns (uint256 amount) {
-        if (campaign == address(0)) {
-            revert DefiError(ERR_INVALID_ADDRESS, campaign, 0);
-        }
-
-        if (token == address(0)) {
-            revert DefiError(ERR_INVALID_ADDRESS, token, 0);
-        }
-
-        if (!tokenRegistry.isTokenSupported(token)) {
-            revert DefiError(ERR_TOKEN_NOT_SUPPORTED, token, 0);
-        }
-
-        return aavePrincipalBalance[campaign][token];
     }
 
     function getPlatformTreasury() external view returns (address) {

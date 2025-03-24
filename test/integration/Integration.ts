@@ -1499,7 +1499,7 @@ describe('Base Mainnet Integration Tests', function () {
     })
 
     it('Should allow owner to withdraw funds from yield protocol', async function () {
-      const OP_DEPOSIT = 1
+      const OP_WITHDRAW = 3
 
       const {
         usdc,
@@ -1563,6 +1563,144 @@ describe('Base Mainnet Integration Tests', function () {
       await campaign
         .connect(creator1)
         .depositToYieldProtocol(await usdc.getAddress())
+
+      const initialPrincipalBalance =
+        await defiIntegrationManager.getDepositedPrincipalAmount(
+          campaignAddress,
+          await usdc.getAddress()
+        )
+
+      const withdrawTx = await campaign
+        .connect(creator1)
+        .withdrawFromYieldProtocol(await usdc.getAddress())
+
+      const withdrawReceipt = await withdrawTx.wait()
+
+      if (!withdrawReceipt) {
+        throw new Error('Transaction failed')
+      }
+
+      const withdrawEvent: any = withdrawReceipt.logs.find(log => {
+        try {
+          const parsed = campaign.interface.parseLog(log)
+          return parsed && parsed.name === 'FundsOperation'
+        } catch {
+          return false
+        }
+      })
+
+      if (!withdrawEvent) {
+        throw new Error('Withdraw event failed')
+      }
+
+      expect(withdrawEvent.args[0]).to.equal(
+        ethers.getAddress(await usdc.getAddress())
+      )
+      expect(withdrawEvent.args[1]).to.equal(initialPrincipalBalance)
+      expect(withdrawEvent.args[2]).to.equal(OP_WITHDRAW)
+      expect(withdrawEvent.args[3]).to.equal(0)
+      expect(withdrawEvent.args[4]).to.equal(
+        ethers.getAddress(creator1.address)
+      )
+
+      const finalPrincipalBalance =
+        await defiIntegrationManager.getDepositedPrincipalAmount(
+          campaignAddress,
+          await usdc.getAddress()
+        )
+      expect(finalPrincipalBalance).to.equal(0)
+    })
+
+    it('Should allow owner to correctly withdraw principal after yield has been generated', async function () {
+      const OP_WITHDRAW = 3
+
+      const {
+        usdc,
+        campaignContractFactory,
+        creator1,
+        contributor1,
+        IERC20ABI
+      } = await loadFixture(deployPlatformFixture)
+
+      const usdcDecimals = await usdc.decimals()
+      const CAMPAIGN_GOAL = ethers.parseUnits('25000', usdcDecimals)
+      const CAMPAIGN_DURATION = 60
+
+      const defiIntegrationManagerAddress =
+        await defiIntegrationManager.getAddress()
+
+      //Campaign 1
+      const tx = await campaignContractFactory
+        .connect(creator1)
+        .deploy(await usdc.getAddress(), CAMPAIGN_GOAL, CAMPAIGN_DURATION)
+
+      const receipt = await tx.wait()
+
+      if (!receipt) {
+        throw new Error('Transaction failed')
+      }
+
+      const event = receipt.logs.find(log => {
+        try {
+          const parsed = campaignContractFactory.interface.parseLog(log)
+          return parsed && parsed.name === 'FactoryOperation'
+        } catch {
+          return false
+        }
+      })
+
+      if (!event) {
+        throw new Error('Event failed')
+      }
+
+      const parsedEvent = campaignContractFactory.interface.parseLog(event)
+      if (!parsedEvent) {
+        throw new Error('Event failed')
+      }
+
+      const campaignAddress = parsedEvent.args[1]
+
+      const Campaign = await ethers.getContractFactory('Campaign')
+      const campaign = Campaign.attach(campaignAddress) as unknown as Campaign
+
+      const contributionAmount = ethers.parseUnits('100', usdcDecimals)
+
+      await usdc
+        .connect(contributor1)
+        .approve(campaignAddress, contributionAmount)
+
+      await campaign
+        .connect(contributor1)
+        .contribute(await usdc.getAddress(), contributionAmount)
+
+      await campaign
+        .connect(creator1)
+        .depositToYieldProtocol(await usdc.getAddress())
+
+      await network.provider.send('evm_increaseTime', [60 * 60 * 24 * 20]) // 30 days
+      await network.provider.send('evm_mine')
+
+      const aTokenAddress = await defiIntegrationManager.getATokenAddress(
+        await usdc.getAddress()
+      )
+
+      let aToken: IERC20Metadata
+
+      aToken = (await ethers.getContractAt(
+        IERC20ABI,
+        aTokenAddress
+      )) as unknown as IERC20Metadata
+
+      const initialaTokenBalance = await aToken.balanceOf(campaignAddress)
+      const initialPrincipalBalance =
+        await defiIntegrationManager.getDepositedPrincipalAmount(
+          campaignAddress,
+          await usdc.getAddress()
+        )
+
+      await campaign
+        .connect(creator1)
+        .withdrawFromYieldProtocol(await usdc.getAddress())
     })
   })
 })

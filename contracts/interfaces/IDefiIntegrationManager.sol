@@ -9,7 +9,8 @@ interface IDefiIntegrationManager {
     function depositToYieldProtocol(address _token, uint256 _amount) external;
 
     function withdrawFromYieldProtocol(
-        address _token
+        address _token,
+        bool _campaignSuccessful
     ) external returns (uint256);
 
     function harvestYield(

@@ -22,7 +22,7 @@ const config: HardhatUserConfig = {
     hardhat: {
       forking: {
         url: 'https://base-mainnet.g.alchemy.com/v2/A8wE4FsZsP3eTlR0DSDh3w5nU7wdPyUG',
-        blockNumber: 27890275 // Use a recent block number
+        blockNumber: 27890280 // Use a recent block number
       },
       chains: {
         8453: {

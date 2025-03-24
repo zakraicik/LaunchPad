@@ -20,8 +20,8 @@ contract YieldDistributor is Ownable, PlatformAdminAccessControl {
 
     // State variables
     address public platformTreasury;
-    uint16 public platformYieldShare = 2000;
-    uint16 public constant maximumYieldShare = 5000;
+    uint16 public platformYieldShare = 10;
+    uint16 public constant maximumYieldShare = 200;
 
     // Consolidated errors
     error YieldDistributorError(uint8 code, address addr, uint256 value);

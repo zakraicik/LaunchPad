@@ -36,12 +36,8 @@ contract Campaign is Ownable, ReentrancyGuard, PlatformAdminAccessControl {
     uint8 private constant ERR_ALREADY_REFUNDED = 11;
     uint8 private constant ERR_NOTHING_TO_REFUND = 12;
     uint8 private constant ERR_FUNDS_CLAIMED = 13;
-    uint8 private constant ERR_NO_YIELD = 14;
-    uint8 private constant ERR_NOT_TARGET_TOKEN = 15;
-    uint8 private constant ERR_YIELD_ALREADY_CLAIMED = 16;
-    uint8 private constant ERR_NO_ATOKENS = 17;
-    uint8 private constant ERR_NO_YIELD_TO_HARVEST = 18;
-    uint8 private constant ERR_NO_PRINCIPAL_TO_WITHDRAW = 19;
+    uint8 private constant ERR_NOT_TARGET_TOKEN = 14;
+    uint8 private constant ERR_NOTHING_TO_WITHDRAW = 15;
 
     // External contract references
     IDefiIntegrationManager public immutable defiManager;
@@ -60,7 +56,7 @@ contract Campaign is Ownable, ReentrancyGuard, PlatformAdminAccessControl {
     uint64 public immutable campaignStartTime;
     uint64 public immutable campaignEndTime;
     uint64 public immutable campaignDuration;
-    bool public hasClaimedYield;
+    bool public hasClaimedFunds;
 
     uint32 public contributorsCount;
 
@@ -74,7 +70,7 @@ contract Campaign is Ownable, ReentrancyGuard, PlatformAdminAccessControl {
     // Events
     event Contribution(address indexed contributor, uint256 amount);
     event RefundIssued(address indexed contributor, uint256 amount);
-    event FundsClaimed(address indexed owner, uint256 amount);
+    event FundsClaimed(address indexed initiator, uint256 amount);
     event AdminOverrideSet(bool indexed status, address indexed admin);
 
     // Enhanced with operation details while maintaining single event definition
@@ -82,11 +78,8 @@ contract Campaign is Ownable, ReentrancyGuard, PlatformAdminAccessControl {
         address indexed token,
         uint256 amount,
         uint8 opType,
-        uint256 yieldAmount, // Additional data for harvest operations
-        address initiator // Who initiated the operation
+        address initiator
     );
-
-    event YieldClaimed(address indexed creator, uint256 creatorAmount);
 
     // Consolidated errors with error codes
     error CampaignError(uint8 code, address addr, uint256 value);
@@ -184,13 +177,7 @@ contract Campaign is Ownable, ReentrancyGuard, PlatformAdminAccessControl {
         if (!tokenRegistry.isTokenSupported(token))
             revert CampaignError(ERR_TOKEN_NOT_SUPPORTED, token, 0);
 
-        TokenOperations.safeTransferFrom(
-            campaignToken,
-            msg.sender,
-            address(this),
-            amount
-        );
-
+        // First update state variables
         if (!isContributor[msg.sender]) {
             contributorsCount++;
             isContributor[msg.sender] = true;
@@ -199,6 +186,24 @@ contract Campaign is Ownable, ReentrancyGuard, PlatformAdminAccessControl {
         contributions[msg.sender] += amount;
         totalAmountRaised += amount;
 
+        // Then handle external transfers (CEI pattern)
+        TokenOperations.safeTransferFrom(
+            campaignToken,
+            msg.sender,
+            address(this),
+            amount
+        );
+
+        TokenOperations.safeIncreaseAllowance(
+            token,
+            address(defiManager),
+            amount
+        );
+
+        defiManager.depositToYieldProtocol(token, amount);
+
+        // Emit events last
+        emit FundsOperation(token, amount, OP_DEPOSIT, msg.sender);
         emit Contribution(msg.sender, amount);
     }
 
@@ -225,164 +230,55 @@ contract Campaign is Ownable, ReentrancyGuard, PlatformAdminAccessControl {
         emit RefundIssued(msg.sender, refundAmount);
     }
 
-    function depositToYieldProtocol(
-        address token
-    ) external onlyOwner nonReentrant {
-        if (!isCampaignActive())
-            revert CampaignError(ERR_CAMPAIGN_NOT_ACTIVE, address(0), 0);
-
-        uint256 amount = IERC20(token).balanceOf(address(this));
-
-        TokenOperations.safeIncreaseAllowance(
-            token,
-            address(defiManager),
-            amount
-        );
-        defiManager.depositToYieldProtocol(token, amount);
-
-        emit FundsOperation(token, amount, OP_DEPOSIT, 0, msg.sender);
+    function claimFunds() external onlyOwner nonReentrant {
+        _claimRaisedFunds();
     }
 
-    function harvestYield(address token) external onlyOwner nonReentrant {
-        _harvestYield(token, msg.sender);
-    }
-
-    function harvestYieldAdmin(
-        address token
-    ) external onlyPlatformAdminAfterGrace nonReentrant {
-        _harvestYield(token, msg.sender);
-    }
-
-    function _harvestYield(address token, address initiator) internal {
-        // Cache external calls
-        address aTokenAddress = defiManager.getATokenAddress(token);
-        if (aTokenAddress == address(0)) {
-            revert CampaignError(ERR_INVALID_ADDRESS, aTokenAddress, 0);
-        }
-
-        // Get deposit balances
-        uint256 initialATokenBalance = defiManager.yieldBaseline(
-            address(this),
-            token
-        );
-        if (initialATokenBalance == 0) {
-            revert CampaignError(ERR_NO_ATOKENS, address(this), 0);
-        }
-
-        // Check for yield
-        IERC20 aToken = IERC20(aTokenAddress);
-
-        uint256 currentATokenBalance = aToken.balanceOf(address(this));
-        if (currentATokenBalance <= initialATokenBalance) {
-            revert CampaignError(ERR_NO_YIELD_TO_HARVEST, address(this), 0);
-        }
-
-        // Calculate and transfer yield
-        uint256 currentYield = currentATokenBalance - initialATokenBalance;
-        aToken.safeTransfer(address(defiManager), currentYield);
-
-        // Harvest and update totals
-        (uint256 _contributorYield, ) = defiManager.harvestYield(token);
-        totalHarvestedYield += _contributorYield;
-
-        emit FundsOperation(token, 0, OP_HARVEST, _contributorYield, initiator);
-    }
-
-    function withdrawFromYieldProtocol(
-        address token
-    ) external onlyOwner nonReentrant {
-        _withdrawFromYield(token, msg.sender);
-    }
-
-    function withdrawFromYieldProtocolAdmin(
-        address token
-    ) external onlyPlatformAdminAfterGrace nonReentrant {
-        _withdrawFromYield(token, msg.sender);
-    }
-
-    function _withdrawFromYield(address token, address initiator) internal {
-        address aTokenAddress = defiManager.getATokenAddress(token);
-        if (aTokenAddress == address(0)) {
-            revert CampaignError(ERR_INVALID_ADDRESS, aTokenAddress, 0);
-        }
-
-        uint256 principalBalance = defiManager.aavePrincipalBalance(
-            address(this),
-            token
-        );
-        if (principalBalance == 0) {
-            revert CampaignError(
-                ERR_NO_PRINCIPAL_TO_WITHDRAW,
-                address(this),
-                0
-            );
-        }
-
-        IERC20 aToken = IERC20(aTokenAddress);
-
-        aToken.safeTransfer(address(defiManager), principalBalance);
-
-        uint256 withdrawn = defiManager.withdrawFromYieldProtocol(token);
-
-        emit FundsOperation(token, withdrawn, OP_WITHDRAW, 0, initiator);
-    }
-
-    function claimYield() external onlyOwner nonReentrant {
-        if (isCampaignActive())
-            revert CampaignError(ERR_CAMPAIGN_STILL_ACTIVE, address(0), 0);
-        if (!isCampaignSuccessful())
-            revert CampaignError(
-                ERR_GOAL_NOT_REACHED,
-                address(0),
-                totalAmountRaised
-            );
-        if (hasClaimedYield)
-            revert CampaignError(ERR_YIELD_ALREADY_CLAIMED, msg.sender, 0);
-
-        if (totalHarvestedYield == 0)
-            revert CampaignError(ERR_NO_YIELD, address(0), 0);
-
-        hasClaimedYield = true;
-
-        TokenOperations.safeTransfer(
-            campaignToken,
-            owner(),
-            totalHarvestedYield
-        );
-
-        emit YieldClaimed(owner(), totalHarvestedYield);
-    }
-
-    function claimYieldAdmin()
+    function claimFundsAdmin()
         external
         onlyPlatformAdminAfterGrace
         nonReentrant
     {
+        _claimRaisedFunds();
+    }
+
+    function _claimRaisedFunds() internal {
         if (isCampaignActive())
             revert CampaignError(ERR_CAMPAIGN_STILL_ACTIVE, address(0), 0);
-        if (!isCampaignSuccessful())
-            revert CampaignError(
-                ERR_GOAL_NOT_REACHED,
-                address(0),
-                totalAmountRaised
-            );
-        if (hasClaimedYield)
-            revert CampaignError(ERR_YIELD_ALREADY_CLAIMED, msg.sender, 0);
 
-        if (totalHarvestedYield == 0)
-            revert CampaignError(ERR_NO_YIELD, address(0), 0);
+        if (hasClaimedFunds)
+            revert CampaignError(ERR_FUNDS_CLAIMED, address(0), 0);
 
-        hasClaimedYield = true;
+        address aTokenAddress = defiManager.getATokenAddress(campaignToken);
+        if (aTokenAddress == address(0)) {
+            revert CampaignError(ERR_INVALID_ADDRESS, aTokenAddress, 0);
+        }
 
-        address platformTreasury = defiManager
-            .yieldDistributor()
-            .platformTreasury();
+        IERC20 aToken = IERC20(aTokenAddress);
 
-        TokenOperations.safeTransfer(
+        uint256 aTokenBalance = aToken.balanceOf(address(this));
+
+        if (aTokenBalance == 0) {
+            revert CampaignError(ERR_NOTHING_TO_WITHDRAW, address(0), 0);
+        }
+
+        aToken.safeTransfer(address(defiManager), aTokenBalance);
+
+        uint256 withdrawn = defiManager.withdrawFromYieldProtocol(
             campaignToken,
-            platformTreasury,
-            totalHarvestedYield
+            isCampaignSuccessful()
         );
+
+        hasClaimedFunds = true;
+
+        emit FundsOperation(
+            campaignToken,
+            withdrawn,
+            OP_WITHDRAW,
+            address(this)
+        );
+
+        emit FundsClaimed(address(this), withdrawn);
     }
 
     function isCampaignActive() public view returns (bool) {
@@ -397,28 +293,6 @@ contract Campaign is Ownable, ReentrancyGuard, PlatformAdminAccessControl {
 
     function isCampaignSuccessful() public view returns (bool) {
         return totalAmountRaised >= campaignGoalAmount;
-    }
-
-    function getAvailableBalance()
-        public
-        view
-        returns (uint256 inContract, uint256 inYield, uint256 total)
-    {
-        address aTokenAddress = defiManager.getATokenAddress(campaignToken);
-        if (aTokenAddress == address(0)) {
-            revert CampaignError(ERR_INVALID_ADDRESS, aTokenAddress, 0);
-        }
-
-        IERC20 aToken = IERC20(aTokenAddress);
-
-        inYield = aToken.balanceOf(address(this));
-        inContract = IERC20(campaignToken).balanceOf(address(this));
-        total = inContract + inYield;
-        return (inContract, inYield, total);
-    }
-
-    function getDepositedAmount(address token) external view returns (uint256) {
-        return defiManager.getDepositedPrincipalAmount(address(this), token);
     }
 
     function setAdminOverride(bool _adminOverride) external onlyPlatformAdmin {
