@@ -1,6 +1,6 @@
 # Crowdfunding Platform Integration Tests
 
-This document outlines comprehensive integration tests for the blockchain crowdfunding platform with yield-generating capabilities.
+This document outlines comprehensive integration tests for the blockchain crowdfunding platform with automatic yield-generating capabilities.
 
 ## Hardhat Configuration
 
@@ -31,7 +31,7 @@ const config: HardhatUserConfig = {
     hardhat: {
       forking: {
         url: 'https://base-mainnet.g.alchemy.com/v2/A8wE4FsZsP3eTlR0DSDh3w5nU7wdPyUG',
-        blockNumber: 27890275 // Use a recent block number
+        blockNumber: 27890280 // Use a recent block number
       },
       chains: {
         8453: {
@@ -57,11 +57,6 @@ const config: HardhatUserConfig = {
         abi: IERC20ABI
       },
       {
-        name: 'MANTRA',
-        address: '0x3992b27da26848c2b19cea6fd25ad5568b68ab98',
-        abi: IERC20ABI
-      },
-      {
         name: 'WBTC',
         address: '0x0555e30da8f98308edb960aa94c0db47230d2b9c',
         abi: IERC20ABI
@@ -81,7 +76,7 @@ export default config
 ### Key Configuration Details:
 
 1. **Solidity Version**: 0.8.28 with optimization enabled
-2. **Network Forking**: Tests run against a forked Base mainnet with block 27890275
+2. **Network Forking**: Tests run against a forked Base mainnet with block 27890280
 3. **Gas Reporter**: Tracks gas usage for optimizing contract deployment and functions
 4. **Remote Contracts**: Includes configuration for real tokens and protocols on Base
 
@@ -96,35 +91,27 @@ Tests to verify the complete flow of campaign creation, funding, and completion.
 
 ### Contribution Process
 
-- ✅ Contribute with campaign token (direct contribution)
+- ✅ Contribute with campaign token (auto-deposits to yield protocol)
 - ✅ Verify contributions update campaign total raised amount
 - ✅ Verify contributor count increases correctly
-
-### Yield Generation
-
-- ✅ Deposit funds to yield protocol
-- ✅ Verify deposit records in DefiManager
-- ✅ Harvest yield from protocol
-- ✅ Verify yield distribution between platform treasury and campaign
-- Withdraw funds from yield protocol
+- ✅ Verify aToken balances in the campaign contract
+- ✅ Verify deposit records in DefiIntegrationManager
+- ✅ Test multiple contributors to a single campaign
 
 ### Campaign Completion (Success)
 
-- End campaign with goal achieved
-- Creator claims yield after successful campaign
-- Owner claims funds after successful campaign
-- Attempt to claim yield before campaign end (should fail)
-- Attempt to claim funds before campaign end (should fail)
-- Verify yield can only be claimed once
+- ✅ End campaign with goal achieved
+- ✅ Owner claims funds after successful campaign
+- ✅ Verify platform fee is distributed correctly
+- ✅ Verify funds can only be claimed once
 
 ### Campaign Completion (Failure)
 
-- End campaign without reaching goal
-- Contributors request refunds
-- Verify refund amount matches contribution
-- Attempt creator yield claim after failed campaign (should fail)
-- Attempt owner funds claim after failed campaign (should fail)
-- Attempt double refund (should fail)
+- ✅ End campaign without reaching goal
+- ✅ Contributors request refunds
+- ✅ Verify refund amount matches contribution
+- ✅ Verify platform only takes fee from yield, not principal on failed campaigns
+- ✅ Attempt double refund (should fail)
 
 ## 2. Token Integration Tests
 
@@ -132,17 +119,17 @@ Tests focused on token functionality and interactions.
 
 ### Token Registry
 
-- Add new token to registry with minimum contribution
-- Remove token from registry
-- Disable token support temporarily
-- Re-enable token support
+- ✅ Add new token to registry with minimum contribution
+- ✅ Remove token from registry
+- ✅ Disable token support temporarily
+- ✅ Re-enable token support
 - Update token minimum contribution
 
 ### Token Error Handling
 
 - ✅ Test contribution with unsupported token (should fail)
-- Test with insufficient allowance (should fail)
-- Verify zero-amount operations are rejected
+- ✅ Test with insufficient allowance (should fail)
+- ✅ Verify zero-amount operations are rejected
 
 ## 3. DeFi Integration Tests
 
@@ -150,18 +137,18 @@ Tests for interactions with external DeFi protocols.
 
 ### Aave Integration
 
-- Test deposit to Aave
-- Test withdrawal from Aave
-- Verify yield calculation from Aave
+- ✅ Test automatic deposit to Aave during contribution
+- ✅ Test complete withdrawal from Aave during fund claim
+- ✅ Verify yield accumulation over time
 - Test handling of yield rate changes
 - Verify response to liquidity constraints
 
 ### Yield Distribution
 
-- Test platform fee calculation
-- Verify yield distribution to treasury during harvest
-- Verify remaining yield goes to campaign owner on claim
-- Test updating platform yield share percentage
+- ✅ Test platform fee calculation with successful campaigns
+- ✅ Test platform fee calculation with failed campaigns
+- ✅ Verify fee distribution to treasury during withdrawal
+- Test updating platform fee percentage
 
 ## 4. Admin Control Tests
 
@@ -184,7 +171,7 @@ Tests for administrative functions and controls.
 ### Admin Override Functions
 
 - Test admin campaign override flag
-- Test admin yield claim functionality
+- Test admin funds claim functionality
 - Test emergency fund withdrawal by admin
 
 ## 5. Edge Cases and Recovery Tests
@@ -194,7 +181,7 @@ Testing resilience and handling of exceptional conditions.
 ### Gas Optimization
 
 - Verify gas usage for large contributor counts
-- Test gas efficiency of key operations
+- Test gas efficiency of key operations (contribution, fund claiming)
 - Compare gas costs before and after optimizations
 
 ### Error Recovery
@@ -208,7 +195,7 @@ Testing resilience and handling of exceptional conditions.
 - Test reentrancy protection
 - Verify access control in critical functions
 - Test with malicious input data
-- Verify funds safety in edge case scenarios
+- Verify funds safety across different yield accumulation scenarios
 
 ## Running the Tests
 
@@ -230,4 +217,4 @@ npx hardhat test ./test/integration/Campaign.test.ts
 4. **Use tags to categorize tests** for selective running (`describe.skip`, `it.only`, etc.)
 5. **Create reusable fixtures** with hardhat-fixture plugin to speed up tests
 
-By implementing these tests, you'll have comprehensive coverage of your crowdfunding platform's functionality and edge cases.
+By implementing these tests, you'll have comprehensive coverage of your crowdfunding platform's functionality and edge cases, reflecting the simplified design with automatic yield generation.

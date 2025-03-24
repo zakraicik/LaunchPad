@@ -10,7 +10,8 @@ interface IDefiIntegrationManager {
 
     function withdrawFromYieldProtocol(
         address _token,
-        bool _campaignSuccessful
+        bool _campaignSuccessful,
+        uint256 _coverRefunds
     ) external returns (uint256);
 
     function harvestYield(

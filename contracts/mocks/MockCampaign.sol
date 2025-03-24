@@ -66,10 +66,15 @@ contract MockCampaign {
         emit FundsDeposited(token, amount);
     }
 
-    function withdrawAllFromYield(address token, bool isSuccessful) external {
+    function withdrawAllFromYield(
+        address token,
+        bool isSuccessful,
+        uint256 coverRefunds
+    ) external {
         uint256 withdrawn = defiManager.withdrawFromYieldProtocol(
             token,
-            isSuccessful
+            isSuccessful,
+            coverRefunds
         );
         totalWithdrawn += withdrawn;
 

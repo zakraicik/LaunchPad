@@ -19,7 +19,7 @@ contract Campaign is Ownable, ReentrancyGuard, PlatformAdminAccessControl {
 
     // Operation types for FundsOperation event
     uint8 private constant OP_DEPOSIT = 1;
-    uint8 private constant OP_WITHDRAW = 2;
+    uint8 private constant OP_CLAIM_FUNDS = 2;
 
     // Error codes - more specific but still compact
     uint8 private constant ERR_INVALID_ADDRESS = 1;
@@ -36,7 +36,7 @@ contract Campaign is Ownable, ReentrancyGuard, PlatformAdminAccessControl {
     uint8 private constant ERR_FUNDS_CLAIMED = 12;
     uint8 private constant ERR_NOT_TARGET_TOKEN = 13;
     uint8 private constant ERR_NOTHING_TO_WITHDRAW = 14;
-
+    uint8 private constant ERR_FUNDS_NOT_CLAIMED = 15;
     // External contract references
     IDefiIntegrationManager public immutable defiManager;
     ITokenRegistry public immutable tokenRegistry;
@@ -155,11 +155,11 @@ contract Campaign is Ownable, ReentrancyGuard, PlatformAdminAccessControl {
 
     function contribute(address token, uint256 amount) external nonReentrant {
         if (amount == 0)
-            revert CampaignError(ERR_INVALID_AMOUNT, address(0), amount);
+            revert CampaignError(ERR_INVALID_AMOUNT, token, amount);
         if (token != campaignToken)
             revert CampaignError(ERR_NOT_TARGET_TOKEN, token, 0);
         if (!isCampaignActive())
-            revert CampaignError(ERR_CAMPAIGN_NOT_ACTIVE, address(0), 0);
+            revert CampaignError(ERR_CAMPAIGN_NOT_ACTIVE, token, 0);
         if (totalAmountRaised >= campaignGoalAmount)
             revert CampaignError(
                 ERR_GOAL_REACHED,
@@ -169,7 +169,7 @@ contract Campaign is Ownable, ReentrancyGuard, PlatformAdminAccessControl {
 
         (uint256 minAmount, ) = tokenRegistry.getMinContributionAmount(token);
         if (amount < minAmount)
-            revert CampaignError(ERR_INVALID_AMOUNT, address(0), amount);
+            revert CampaignError(ERR_INVALID_AMOUNT, token, amount);
 
         if (!tokenRegistry.isTokenSupported(token))
             revert CampaignError(ERR_TOKEN_NOT_SUPPORTED, token, 0);
@@ -213,6 +213,9 @@ contract Campaign is Ownable, ReentrancyGuard, PlatformAdminAccessControl {
                 address(0),
                 totalAmountRaised
             );
+        if (!hasClaimedFunds) {
+            revert CampaignError(ERR_FUNDS_NOT_CLAIMED, address(0), 0);
+        }
         if (hasBeenRefunded[msg.sender])
             revert CampaignError(ERR_ALREADY_REFUNDED, msg.sender, 0);
 
@@ -228,7 +231,15 @@ contract Campaign is Ownable, ReentrancyGuard, PlatformAdminAccessControl {
     }
 
     function claimFunds() external onlyOwner nonReentrant {
-        _claimRaisedFunds();
+        _claimFunds();
+
+        if (isCampaignSuccessful()) {
+            TokenOperations.safeTransfer(
+                campaignToken,
+                owner(),
+                IERC20(campaignToken).balanceOf(address(this))
+            );
+        }
     }
 
     function claimFundsAdmin()
@@ -236,10 +247,10 @@ contract Campaign is Ownable, ReentrancyGuard, PlatformAdminAccessControl {
         onlyPlatformAdminAfterGrace
         nonReentrant
     {
-        _claimRaisedFunds();
+        _claimFunds();
     }
 
-    function _claimRaisedFunds() internal {
+    function _claimFunds() internal {
         if (isCampaignActive())
             revert CampaignError(ERR_CAMPAIGN_STILL_ACTIVE, address(0), 0);
 
@@ -263,7 +274,8 @@ contract Campaign is Ownable, ReentrancyGuard, PlatformAdminAccessControl {
 
         uint256 withdrawn = defiManager.withdrawFromYieldProtocol(
             campaignToken,
-            isCampaignSuccessful()
+            isCampaignSuccessful(),
+            totalAmountRaised
         );
 
         hasClaimedFunds = true;
@@ -271,8 +283,8 @@ contract Campaign is Ownable, ReentrancyGuard, PlatformAdminAccessControl {
         emit FundsOperation(
             campaignToken,
             withdrawn,
-            OP_WITHDRAW,
-            address(this)
+            OP_CLAIM_FUNDS,
+            msg.sender
         );
 
         emit FundsClaimed(address(this), withdrawn);
@@ -295,5 +307,17 @@ contract Campaign is Ownable, ReentrancyGuard, PlatformAdminAccessControl {
     function setAdminOverride(bool _adminOverride) external onlyPlatformAdmin {
         adminOverride = _adminOverride;
         emit AdminOverrideSet(_adminOverride, msg.sender);
+    }
+
+    function getATokenBalance() public view returns (uint256) {
+        address aTokenAddress = defiManager.getATokenAddress(campaignToken);
+        if (aTokenAddress == address(0)) {
+            revert CampaignError(ERR_INVALID_ADDRESS, aTokenAddress, 0);
+        }
+        return IERC20(aTokenAddress).balanceOf(address(this));
+    }
+
+    function getCampaignTokenBalance() public view returns (uint256) {
+        return IERC20(campaignToken).balanceOf(address(this));
     }
 }

@@ -158,7 +158,8 @@ contract DefiIntegrationManager is
 
     function withdrawFromYieldProtocol(
         address _token,
-        bool campaignSuccessful
+        bool campaignSuccessful,
+        uint256 coverRefunds
     ) external nonReentrant returns (uint256) {
         try aavePool.withdraw(_token, type(uint).max, address(this)) returns (
             uint256 withdrawn
@@ -173,19 +174,12 @@ contract DefiIntegrationManager is
                     platformShare
                 );
             } else {
-                uint256 coverRefunds = aaveBalances[_token][msg.sender];
                 uint256 remaining = withdrawn - coverRefunds;
 
-                (uint256 creatorShare, uint256 platformShare) = yieldDistributor
-                    .calculateYieldShares(remaining);
-
-                IERC20(_token).safeTransfer(
-                    msg.sender,
-                    coverRefunds + creatorShare
-                );
+                IERC20(_token).safeTransfer(msg.sender, coverRefunds);
                 IERC20(_token).safeTransfer(
                     yieldDistributor.platformTreasury(),
-                    platformShare
+                    remaining
                 );
 
                 aaveBalances[_token][msg.sender] = 0;
