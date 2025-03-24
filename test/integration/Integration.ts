@@ -682,7 +682,7 @@ describe('Base Mainnet Integration Tests', function () {
       const atokenBalance = await aToken.balanceOf(campaignAddress)
 
       expect(
-        await defiIntegrationManager.aaveDeposits(
+        await defiIntegrationManager.yieldBaseline(
           campaignAddress,
           await usdc.getAddress()
         )
@@ -748,7 +748,7 @@ describe('Base Mainnet Integration Tests', function () {
       ).to.equal(contributionAmount2)
 
       expect(
-        await defiIntegrationManager.aaveDeposits(
+        await defiIntegrationManager.yieldBaseline(
           campaignAddress2,
           await usdc.getAddress()
         )
@@ -835,7 +835,7 @@ describe('Base Mainnet Integration Tests', function () {
       )) as unknown as IERC20Metadata
 
       const aTokenBalance = await aToken.balanceOf(campaignAddress)
-      const initialATokenBalance = await defiIntegrationManager.aaveDeposits(
+      const initialATokenBalance = await defiIntegrationManager.yieldBaseline(
         campaignAddress,
         await usdc.getAddress()
       )
@@ -886,7 +886,7 @@ describe('Base Mainnet Integration Tests', function () {
       const aTokenBalanceAfterHarvest = await aToken.balanceOf(campaignAddress)
 
       expect(
-        await defiIntegrationManager.aaveDeposits(
+        await defiIntegrationManager.yieldBaseline(
           campaignAddress,
           await usdc.getAddress()
         )
@@ -988,7 +988,7 @@ describe('Base Mainnet Integration Tests', function () {
       )) as unknown as IERC20Metadata
 
       // Record initial deposit
-      const initialATokenBalance = await defiIntegrationManager.aaveDeposits(
+      const initialATokenBalance = await defiIntegrationManager.yieldBaseline(
         campaignAddress,
         await usdc.getAddress()
       )
@@ -1317,12 +1317,12 @@ describe('Base Mainnet Integration Tests', function () {
       )) as unknown as IERC20Metadata
 
       // Record initial deposits
-      const initialATokenBalance1 = await defiIntegrationManager.aaveDeposits(
+      const initialATokenBalance1 = await defiIntegrationManager.yieldBaseline(
         campaignAddress1,
         await usdc.getAddress()
       )
 
-      const initialATokenBalance2 = await defiIntegrationManager.aaveDeposits(
+      const initialATokenBalance2 = await defiIntegrationManager.yieldBaseline(
         campaignAddress2,
         await usdc.getAddress()
       )
@@ -1484,18 +1484,85 @@ describe('Base Mainnet Integration Tests', function () {
       )
 
       expect(
-        await defiIntegrationManager.aaveDeposits(
+        await defiIntegrationManager.yieldBaseline(
           campaignAddress1,
           await usdc.getAddress()
         )
       ).to.equal(aTokenBalanceAfterHarvest1)
 
       expect(
-        await defiIntegrationManager.aaveDeposits(
+        await defiIntegrationManager.yieldBaseline(
           campaignAddress2,
           await usdc.getAddress()
         )
       ).to.equal(aTokenBalanceAfterHarvest2)
+    })
+
+    it('Should allow owner to withdraw funds from yield protocol', async function () {
+      const OP_DEPOSIT = 1
+
+      const {
+        usdc,
+        campaignContractFactory,
+        creator1,
+        contributor1,
+        IERC20ABI
+      } = await loadFixture(deployPlatformFixture)
+
+      const usdcDecimals = await usdc.decimals()
+      const CAMPAIGN_GOAL = ethers.parseUnits('500', usdcDecimals)
+      const CAMPAIGN_DURATION = 60
+
+      const defiIntegrationManagerAddress =
+        await defiIntegrationManager.getAddress()
+
+      //Campaign 1
+      const tx = await campaignContractFactory
+        .connect(creator1)
+        .deploy(await usdc.getAddress(), CAMPAIGN_GOAL, CAMPAIGN_DURATION)
+
+      const receipt = await tx.wait()
+
+      if (!receipt) {
+        throw new Error('Transaction failed')
+      }
+
+      const event = receipt.logs.find(log => {
+        try {
+          const parsed = campaignContractFactory.interface.parseLog(log)
+          return parsed && parsed.name === 'FactoryOperation'
+        } catch {
+          return false
+        }
+      })
+
+      if (!event) {
+        throw new Error('Event failed')
+      }
+
+      const parsedEvent = campaignContractFactory.interface.parseLog(event)
+      if (!parsedEvent) {
+        throw new Error('Event failed')
+      }
+
+      const campaignAddress = parsedEvent.args[1]
+
+      const Campaign = await ethers.getContractFactory('Campaign')
+      const campaign = Campaign.attach(campaignAddress) as unknown as Campaign
+
+      const contributionAmount = ethers.parseUnits('100', usdcDecimals)
+
+      await usdc
+        .connect(contributor1)
+        .approve(campaignAddress, contributionAmount)
+
+      await campaign
+        .connect(contributor1)
+        .contribute(await usdc.getAddress(), contributionAmount)
+
+      await campaign
+        .connect(creator1)
+        .depositToYieldProtocol(await usdc.getAddress())
     })
   })
 })

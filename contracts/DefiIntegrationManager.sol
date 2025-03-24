@@ -42,7 +42,8 @@ contract DefiIntegrationManager is
     IYieldDistributor public yieldDistributor;
 
     // Storage
-    mapping(address => mapping(address => uint256)) public aaveDeposits;
+    mapping(address => mapping(address => uint256)) public aavePrincipalBalance; //formerly aaveDeposits
+    mapping(address => mapping(address => uint256)) public yieldBaseline;
 
     // Consolidated error
     error DefiError(uint8 code, address addr, uint256 value);
@@ -153,7 +154,8 @@ contract DefiIntegrationManager is
 
             uint256 aTokenBalance = IERC20(aToken).balanceOf(msg.sender);
 
-            aaveDeposits[msg.sender][_token] += aTokenBalance;
+            aavePrincipalBalance[msg.sender][_token] += aTokenBalance;
+            yieldBaseline[msg.sender][_token] += aTokenBalance;
 
             emit DefiOperation(
                 OP_YIELD_DEPOSITED,
@@ -171,7 +173,7 @@ contract DefiIntegrationManager is
     function withdrawFromYieldProtocol(
         address _token
     ) external nonReentrant returns (uint256) {
-        uint256 amount = aaveDeposits[msg.sender][_token];
+        uint256 amount = aavePrincipalBalance[msg.sender][_token];
 
         if (amount <= 0) {
             revert DefiError(ERR_ZERO_AMOUNT, _token, amount);
@@ -184,7 +186,7 @@ contract DefiIntegrationManager is
                 revert DefiError(ERR_WITHDRAWAL_MISMATCH, _token, amount);
             }
 
-            aaveDeposits[msg.sender][_token] = 0;
+            aavePrincipalBalance[msg.sender][_token] = 0;
             IERC20(_token).safeTransfer(msg.sender, withdrawn);
 
             emit DefiOperation(
@@ -210,7 +212,7 @@ contract DefiIntegrationManager is
         returns (uint256 creatorYield, uint256 platformYield)
     {
         // Check if user has any deposits
-        if (aaveDeposits[msg.sender][_token] <= 0) {
+        if (yieldBaseline[msg.sender][_token] <= 0) {
             revert DefiError(ERR_INSUFFICIENT_DEPOSIT, _token, 0);
         }
 
@@ -250,7 +252,8 @@ contract DefiIntegrationManager is
             token.safeTransfer(treasury, platformYield);
 
             uint256 currentATokenBalance = aToken.balanceOf(msg.sender);
-            aaveDeposits[msg.sender][_token] = currentATokenBalance;
+            yieldBaseline[msg.sender][_token] = currentATokenBalance;
+            aavePrincipalBalance[msg.sender][_token] = currentATokenBalance; //ensure no rounding errors
 
             emit DefiOperation(
                 OP_YIELD_HARVESTED,
@@ -297,14 +300,14 @@ contract DefiIntegrationManager is
             revert DefiError(ERR_TOKEN_NOT_SUPPORTED, token, 0);
         }
 
-        return aaveDeposits[campaign][token];
+        return aavePrincipalBalance[campaign][token];
     }
 
     function getCurrentYield(
         address campaign,
         address token
     ) external view returns (uint256 yieldAmount) {
-        uint256 deposited = aaveDeposits[campaign][token];
+        uint256 deposited = aavePrincipalBalance[campaign][token];
         if (deposited == 0) {
             return 0;
         }

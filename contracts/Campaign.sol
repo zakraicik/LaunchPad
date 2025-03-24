@@ -21,7 +21,6 @@ contract Campaign is Ownable, ReentrancyGuard, PlatformAdminAccessControl {
     uint8 private constant OP_DEPOSIT = 1;
     uint8 private constant OP_HARVEST = 2;
     uint8 private constant OP_WITHDRAW = 3;
-    uint8 private constant OP_WITHDRAW_ALL = 4;
 
     // Error codes - more specific but still compact
     uint8 private constant ERR_INVALID_ADDRESS = 1;
@@ -261,7 +260,7 @@ contract Campaign is Ownable, ReentrancyGuard, PlatformAdminAccessControl {
         }
 
         // Get deposit balances
-        uint256 initialATokenBalance = defiManager.aaveDeposits(
+        uint256 initialATokenBalance = defiManager.yieldBaseline(
             address(this),
             token
         );
@@ -291,19 +290,24 @@ contract Campaign is Ownable, ReentrancyGuard, PlatformAdminAccessControl {
     function withdrawFromYieldProtocol(
         address token
     ) external onlyOwner nonReentrant {
-        _withdrawAllFromYield(token, msg.sender);
+        _withdrawFromYield(token, msg.sender);
     }
 
     function withdrawFromYieldProtocolAdmin(
         address token
     ) external onlyPlatformAdminAfterGrace nonReentrant {
-        _withdrawAllFromYield(token, msg.sender);
+        _withdrawFromYield(token, msg.sender);
     }
 
-    function _withdrawAllFromYield(address token, address initiator) internal {
+    function _withdrawFromYield(address token, address initiator) internal {
+        // uint256 principalBalance = defiManager.aaveDeposits(
+        //     address(this),
+        //     token
+        // );
+
         uint256 withdrawn = defiManager.withdrawFromYieldProtocol(token);
 
-        emit FundsOperation(token, withdrawn, OP_WITHDRAW_ALL, 0, initiator);
+        emit FundsOperation(token, withdrawn, OP_WITHDRAW, 0, initiator);
     }
 
     function claimYield() external onlyOwner nonReentrant {

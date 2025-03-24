@@ -45,7 +45,12 @@ interface IDefiIntegrationManager {
 
     function getATokenAddress(address _token) external view returns (address);
 
-    function aaveDeposits(
+    function aavePrincipalBalance(
+        address _campaign,
+        address _token
+    ) external view returns (uint256);
+
+    function yieldBaseline(
         address _campaign,
         address _token
     ) external view returns (uint256);
