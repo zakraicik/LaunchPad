@@ -41,6 +41,7 @@ contract Campaign is Ownable, ReentrancyGuard, PlatformAdminAccessControl {
     uint8 private constant ERR_YIELD_ALREADY_CLAIMED = 16;
     uint8 private constant ERR_NO_ATOKENS = 17;
     uint8 private constant ERR_NO_YIELD_TO_HARVEST = 18;
+    uint8 private constant ERR_NO_PRINCIPAL_TO_WITHDRAW = 19;
 
     // External contract references
     IDefiIntegrationManager public immutable defiManager;
@@ -300,10 +301,26 @@ contract Campaign is Ownable, ReentrancyGuard, PlatformAdminAccessControl {
     }
 
     function _withdrawFromYield(address token, address initiator) internal {
-        // uint256 principalBalance = defiManager.aaveDeposits(
-        //     address(this),
-        //     token
-        // );
+        address aTokenAddress = defiManager.getATokenAddress(token);
+        if (aTokenAddress == address(0)) {
+            revert CampaignError(ERR_INVALID_ADDRESS, aTokenAddress, 0);
+        }
+
+        uint256 principalBalance = defiManager.aavePrincipalBalance(
+            address(this),
+            token
+        );
+        if (principalBalance == 0) {
+            revert CampaignError(
+                ERR_NO_PRINCIPAL_TO_WITHDRAW,
+                address(this),
+                0
+            );
+        }
+
+        IERC20 aToken = IERC20(aTokenAddress);
+
+        aToken.safeTransfer(address(defiManager), principalBalance);
 
         uint256 withdrawn = defiManager.withdrawFromYieldProtocol(token);
 
@@ -401,7 +418,7 @@ contract Campaign is Ownable, ReentrancyGuard, PlatformAdminAccessControl {
     }
 
     function getDepositedAmount(address token) external view returns (uint256) {
-        return defiManager.getDepositedAmount(address(this), token);
+        return defiManager.getDepositedPrincipalAmount(address(this), token);
     }
 
     function getCurrentYieldRate(

@@ -16,11 +16,7 @@ interface IDefiIntegrationManager {
         address _token
     ) external returns (uint256 creatorYield, uint256 platformYield);
 
-    function getCurrentYieldRate(
-        address token
-    ) external view returns (uint256 yieldRate);
-
-    function getDepositedAmount(
+    function getDepositedPrincipalAmount(
         address campaign,
         address token
     ) external view returns (uint256 amount);
