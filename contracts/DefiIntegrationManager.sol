@@ -18,18 +18,17 @@ contract DefiIntegrationManager is
     using SafeERC20 for IERC20;
 
     // Operation types for events
-    uint8 private constant OP_YIELD_DEPOSITED = 1;
-    uint8 private constant OP_YIELD_WITHDRAWN = 2;
+    uint8 private constant OP_DEPOSITED = 1;
+    uint8 private constant OP_WITHDRAWN = 2;
     uint8 private constant OP_CONFIG_UPDATED = 3;
 
     // Error codes
-    uint8 private constant ERR_ZERO_AMOUNT = 2;
-    uint8 private constant ERR_TOKEN_NOT_SUPPORTED = 3;
-    uint8 private constant ERR_YIELD_DEPOSIT_FAILED = 4;
-    uint8 private constant ERR_YIELD_WITHDRAWAL_FAILED = 5;
-    uint8 private constant ERR_INVALID_ADDRESS = 6;
-    uint8 private constant ERR_INVALID_CONSTRUCTOR = 7;
-    uint8 private constant ERR_PRINCIPAL_WITHDRAWAL_FAILED = 8;
+    uint8 private constant ERR_ZERO_AMOUNT = 1;
+    uint8 private constant ERR_TOKEN_NOT_SUPPORTED = 2;
+    uint8 private constant ERR_DEPOSIT_FAILED = 3;
+    uint8 private constant ERR_WITHDRAWAL_FAILED = 4;
+    uint8 private constant ERR_INVALID_ADDRESS = 5;
+    uint8 private constant ERR_INVALID_CONSTRUCTOR = 6;
 
     // External contracts
     IAavePool public aavePool;
@@ -75,6 +74,10 @@ contract DefiIntegrationManager is
 
         if (_yieldDistributor == address(0)) {
             revert DefiError(ERR_INVALID_CONSTRUCTOR, _yieldDistributor);
+        }
+
+        if (_platformAdmin == address(0)) {
+            revert DefiError(ERR_INVALID_CONSTRUCTOR, _platformAdmin);
         }
 
         aavePool = IAavePool(_aavePool);
@@ -123,6 +126,17 @@ contract DefiIntegrationManager is
         address _token,
         uint256 _amount
     ) external nonReentrant {
+        bool tokenExists;
+        try tokenRegistry.isTokenSupported(_token) {
+            tokenExists = true;
+        } catch {
+            tokenExists = false;
+        }
+
+        if (!tokenExists) {
+            revert DefiError(ERR_TOKEN_NOT_SUPPORTED, _token);
+        }
+
         address aToken = getATokenAddress(_token);
 
         if (aToken == address(0)) {
@@ -144,7 +158,7 @@ contract DefiIntegrationManager is
             aaveBalances[_token][msg.sender] += _amount;
 
             emit DefiOperation(
-                OP_YIELD_DEPOSITED,
+                OP_DEPOSITED,
                 msg.sender,
                 _token,
                 address(0),
@@ -152,7 +166,7 @@ contract DefiIntegrationManager is
                 0
             );
         } catch {
-            revert DefiError(ERR_YIELD_DEPOSIT_FAILED, _token);
+            revert DefiError(ERR_DEPOSIT_FAILED, _token);
         }
     }
 
@@ -181,12 +195,12 @@ contract DefiIntegrationManager is
                     yieldDistributor.platformTreasury(),
                     remaining
                 );
-
-                aaveBalances[_token][msg.sender] = 0;
             }
 
+            aaveBalances[_token][msg.sender] = 0;
+
             emit DefiOperation(
-                OP_YIELD_WITHDRAWN,
+                OP_WITHDRAWN,
                 msg.sender,
                 _token,
                 address(0),
@@ -196,7 +210,7 @@ contract DefiIntegrationManager is
 
             return withdrawn;
         } catch {
-            revert DefiError(ERR_PRINCIPAL_WITHDRAWAL_FAILED, _token);
+            revert DefiError(ERR_WITHDRAWAL_FAILED, _token);
         }
     }
 

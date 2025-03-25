@@ -256,6 +256,7 @@ export async function deployPlatformFixture () {
     IERC20ABI,
     AAVE_POOL_ADDRESS,
     GRACE_PERIOD,
-    otherAdmin
+    otherAdmin,
+    aavePool
   }
 }
