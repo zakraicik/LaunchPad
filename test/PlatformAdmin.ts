@@ -1,8 +1,11 @@
 import { token } from '../typechain-types/@openzeppelin/contracts'
 
 import { expect } from 'chai'
-import { ethers } from 'hardhat'
+import { ethers, network } from 'hardhat'
 import { loadFixture } from '@nomicfoundation/hardhat-network-helpers'
+import { deployPlatformFixture } from './fixture'
+
+import { Campaign } from '../typechain-types'
 
 describe('PlatformAdmin', function () {
   const OP_ADMIN_ADDED = 1
@@ -17,60 +20,25 @@ describe('PlatformAdmin', function () {
   const ERR_ADMIN_ALREADY_EXISTS = 5
   const ERR_CANT_REMOVE_OWNER = 6
 
-  async function deployPlatformAdmin () {
-    const CAMPAIGN_GOAL_AMOUNT = 5
-    const CAMPAIGN_DURATION = 30
-
-    const GRACE_PERIOD = 7
-
-    const [owner, otherAdmin, user1, user2, mockToken, defiManager] =
-      await ethers.getSigners()
-
-    // Deploy a mock campaign for testing grace period
-    const mockCampaign = await ethers.deployContract('MockCampaign', [
-      owner.address,
-      mockToken, //don't need real mock token for this
-      CAMPAIGN_GOAL_AMOUNT,
-      CAMPAIGN_DURATION,
-      defiManager //don't need real defi manager for this
-    ])
-    await mockCampaign.waitForDeployment()
-
-    // Deploy PlatformAdmin contract
-    const platformAdmin = await ethers.deployContract('PlatformAdmin', [
-      GRACE_PERIOD,
-      owner.address
-    ])
-    await platformAdmin.waitForDeployment()
-
-    return {
-      platformAdmin,
-      mockCampaign,
-      owner,
-      otherAdmin,
-      user1,
-      user2,
-      GRACE_PERIOD
-    }
-  }
-
   describe('Deployment', function () {
     it('Should deploy successfully', async function () {
-      const { platformAdmin } = await loadFixture(deployPlatformAdmin)
+      const { platformAdmin } = await loadFixture(deployPlatformFixture)
       expect(await platformAdmin.getAddress()).to.be.properAddress
     })
 
     it('Should set the correct initial grace period', async function () {
       const { platformAdmin, GRACE_PERIOD } = await loadFixture(
-        deployPlatformAdmin
+        deployPlatformFixture
       )
       expect(await platformAdmin.gracePeriod()).to.equal(GRACE_PERIOD)
     })
 
     it('Should set owner as platform admin', async function () {
-      const { platformAdmin, owner } = await loadFixture(deployPlatformAdmin)
-      expect(await platformAdmin.owner()).to.equal(owner.address)
-      expect(await platformAdmin.platformAdmins(owner.address)).to.be.true
+      const { platformAdmin, deployer } = await loadFixture(
+        deployPlatformFixture
+      )
+      expect(await platformAdmin.owner()).to.equal(deployer.address)
+      expect(await platformAdmin.platformAdmins(deployer.address)).to.be.true
     })
 
     it('Should revert if grace period is zero', async function () {
@@ -90,8 +58,8 @@ describe('PlatformAdmin', function () {
 
   describe('Admin Management', function () {
     it('Should allow adding a new platform admin', async function () {
-      const { platformAdmin, owner, otherAdmin } = await loadFixture(
-        deployPlatformAdmin
+      const { platformAdmin, otherAdmin } = await loadFixture(
+        deployPlatformFixture
       )
 
       expect(await platformAdmin.platformAdmins(otherAdmin.address)).to.be.false
@@ -104,15 +72,19 @@ describe('PlatformAdmin', function () {
     })
 
     it('Should revert when adding an admin that already exists', async function () {
-      const { platformAdmin, owner } = await loadFixture(deployPlatformAdmin)
+      const { platformAdmin, deployer } = await loadFixture(
+        deployPlatformFixture
+      )
 
-      await expect(platformAdmin.addPlatformAdmin(owner.address))
+      await expect(platformAdmin.addPlatformAdmin(deployer.address))
         .to.be.revertedWithCustomError(platformAdmin, 'PlatformAdminError')
-        .withArgs(ERR_ADMIN_ALREADY_EXISTS, owner.address, 0)
+        .withArgs(ERR_ADMIN_ALREADY_EXISTS, deployer.address, 0)
     })
 
     it('Should revert when adding zero address as admin', async function () {
-      const { platformAdmin, owner } = await loadFixture(deployPlatformAdmin)
+      const { platformAdmin, deployer } = await loadFixture(
+        deployPlatformFixture
+      )
 
       await expect(platformAdmin.addPlatformAdmin(ethers.ZeroAddress))
         .to.be.revertedWithCustomError(platformAdmin, 'PlatformAdminError')
@@ -120,36 +92,38 @@ describe('PlatformAdmin', function () {
     })
 
     it('Should allow an admin to add another admin', async function () {
-      const { platformAdmin, owner, otherAdmin, user1 } = await loadFixture(
-        deployPlatformAdmin
-      )
+      const { platformAdmin, deployer, otherAdmin, contributor1 } =
+        await loadFixture(deployPlatformFixture)
 
       // First, owner adds otherAdmin
       await platformAdmin.addPlatformAdmin(otherAdmin.address)
 
-      // Then otherAdmin adds user1
+      // Then otherAdmin adds contributor1
       await expect(
-        platformAdmin.connect(otherAdmin).addPlatformAdmin(user1.address)
+        platformAdmin.connect(otherAdmin).addPlatformAdmin(contributor1.address)
       )
         .to.emit(platformAdmin, 'PlatformAdminOperation')
-        .withArgs(OP_ADMIN_ADDED, user1.address, 0, 0)
+        .withArgs(OP_ADMIN_ADDED, contributor1.address, 0, 0)
 
-      expect(await platformAdmin.platformAdmins(user1.address)).to.be.true
+      expect(await platformAdmin.platformAdmins(contributor1.address)).to.be
+        .true
     })
 
     it('Should revert when non-admin tries to add an admin', async function () {
-      const { platformAdmin, user1, user2 } = await loadFixture(
-        deployPlatformAdmin
+      const { platformAdmin, contributor1, creator2 } = await loadFixture(
+        deployPlatformFixture
       )
 
-      await expect(platformAdmin.connect(user1).addPlatformAdmin(user2.address))
+      await expect(
+        platformAdmin.connect(contributor1).addPlatformAdmin(creator2.address)
+      )
         .to.be.revertedWithCustomError(platformAdmin, 'PlatformAdminError')
-        .withArgs(ERR_NOT_AUTHORIZED, user1.address, 0)
+        .withArgs(ERR_NOT_AUTHORIZED, contributor1.address, 0)
     })
 
     it('Should allow removing an admin', async function () {
-      const { platformAdmin, owner, otherAdmin } = await loadFixture(
-        deployPlatformAdmin
+      const { platformAdmin, deployer, otherAdmin } = await loadFixture(
+        deployPlatformFixture
       )
 
       // First, add an admin
@@ -165,28 +139,32 @@ describe('PlatformAdmin', function () {
     })
 
     it('Should revert when removing an admin that does not exist', async function () {
-      const { platformAdmin, user1 } = await loadFixture(deployPlatformAdmin)
+      const { platformAdmin, contributor1 } = await loadFixture(
+        deployPlatformFixture
+      )
 
-      await expect(platformAdmin.removePlatformAdmin(user1.address))
+      await expect(platformAdmin.removePlatformAdmin(contributor1.address))
         .to.be.revertedWithCustomError(platformAdmin, 'PlatformAdminError')
-        .withArgs(ERR_ADMIN_NOT_EXISTS, user1.address, 0)
+        .withArgs(ERR_ADMIN_NOT_EXISTS, contributor1.address, 0)
     })
 
     it('Should revert when non-admin tries to remove an admin', async function () {
-      const { platformAdmin, owner, user1 } = await loadFixture(
-        deployPlatformAdmin
+      const { platformAdmin, deployer, contributor1 } = await loadFixture(
+        deployPlatformFixture
       )
 
       await expect(
-        platformAdmin.connect(user1).removePlatformAdmin(owner.address)
+        platformAdmin
+          .connect(contributor1)
+          .removePlatformAdmin(deployer.address)
       )
         .to.be.revertedWithCustomError(platformAdmin, 'PlatformAdminError')
-        .withArgs(ERR_NOT_AUTHORIZED, user1.address, 0)
+        .withArgs(ERR_NOT_AUTHORIZED, contributor1.address, 0)
     })
 
     it('Should revert when trying to remove the owner', async function () {
-      const { platformAdmin, owner, otherAdmin } = await loadFixture(
-        deployPlatformAdmin
+      const { platformAdmin, deployer, otherAdmin } = await loadFixture(
+        deployPlatformFixture
       )
 
       // Add otherAdmin first
@@ -194,36 +172,38 @@ describe('PlatformAdmin', function () {
 
       // Try to remove the owner
       await expect(
-        platformAdmin.connect(otherAdmin).removePlatformAdmin(owner.address)
+        platformAdmin.connect(otherAdmin).removePlatformAdmin(deployer.address)
       )
         .to.be.revertedWithCustomError(platformAdmin, 'PlatformAdminError')
-        .withArgs(ERR_CANT_REMOVE_OWNER, owner.address, 0)
+        .withArgs(ERR_CANT_REMOVE_OWNER, deployer.address, 0)
     })
 
     it('Should allow an admin to remove another admin', async function () {
-      const { platformAdmin, owner, otherAdmin, user1 } = await loadFixture(
-        deployPlatformAdmin
-      )
+      const { platformAdmin, deployer, otherAdmin, contributor1 } =
+        await loadFixture(deployPlatformFixture)
 
       // Add both admins
       await platformAdmin.addPlatformAdmin(otherAdmin.address)
-      await platformAdmin.addPlatformAdmin(user1.address)
+      await platformAdmin.addPlatformAdmin(contributor1.address)
 
-      // otherAdmin removes user1
+      // otherAdmin removes contributor1
       await expect(
-        platformAdmin.connect(otherAdmin).removePlatformAdmin(user1.address)
+        platformAdmin
+          .connect(otherAdmin)
+          .removePlatformAdmin(contributor1.address)
       )
         .to.emit(platformAdmin, 'PlatformAdminOperation')
-        .withArgs(OP_ADMIN_REMOVED, user1.address, 0, 0)
+        .withArgs(OP_ADMIN_REMOVED, contributor1.address, 0, 0)
 
-      expect(await platformAdmin.platformAdmins(user1.address)).to.be.false
+      expect(await platformAdmin.platformAdmins(contributor1.address)).to.be
+        .false
     })
   })
 
   describe('Grace Period Management', function () {
     it('Should allow owner to update grace period', async function () {
-      const { platformAdmin, GRACE_PERIOD, owner } = await loadFixture(
-        deployPlatformAdmin
+      const { platformAdmin, GRACE_PERIOD } = await loadFixture(
+        deployPlatformFixture
       )
 
       const newGracePeriod = 14
@@ -241,7 +221,7 @@ describe('PlatformAdmin', function () {
     })
 
     it('Should revert when setting grace period to zero', async function () {
-      const { platformAdmin } = await loadFixture(deployPlatformAdmin)
+      const { platformAdmin } = await loadFixture(deployPlatformFixture)
 
       await expect(platformAdmin.updateGracePeriod(0))
         .to.be.revertedWithCustomError(platformAdmin, 'PlatformAdminError')
@@ -250,7 +230,7 @@ describe('PlatformAdmin', function () {
 
     it('Should revert when non-owner tries to update grace period', async function () {
       const { platformAdmin, otherAdmin } = await loadFixture(
-        deployPlatformAdmin
+        deployPlatformFixture
       )
 
       // Add otherAdmin first
@@ -268,33 +248,60 @@ describe('PlatformAdmin', function () {
 
   describe('Grace Period Checking', function () {
     it('Should correctly report when a campaign is active', async function () {
-      const { platformAdmin, mockCampaign, GRACE_PERIOD } = await loadFixture(
-        deployPlatformAdmin
-      )
+      const {
+        platformAdmin,
+        GRACE_PERIOD,
+        campaignContractFactory,
+        creator1,
+        usdc
+      } = await loadFixture(deployPlatformFixture)
 
-      // Get the current blockchain timestamp
-      const latestBlock = await ethers.provider.getBlock('latest')
-      if (!latestBlock) {
-        throw new Error('Latest block not found')
+      const usdcDecimals = await usdc.decimals()
+
+      const CAMPAIGN_GOAL = ethers.parseUnits('500', usdcDecimals)
+      const CAMPAIGN_DURATION = 60
+
+      const tx = await campaignContractFactory
+        .connect(creator1)
+        .deploy(await usdc.getAddress(), CAMPAIGN_GOAL, CAMPAIGN_DURATION)
+
+      const receipt = await tx.wait()
+
+      if (!receipt) {
+        throw new Error('Transaction failed')
       }
-      const currentBlockTime = latestBlock.timestamp
 
-      // Mock campaign responses
-      await mockCampaign.setCampaignActive(true)
+      const event = receipt.logs.find(log => {
+        try {
+          const parsed = campaignContractFactory.interface.parseLog(log)
+          return parsed && parsed.name === 'FactoryOperation'
+        } catch {
+          return false
+        }
+      })
 
-      // Set campaign end time to 5 days from the current block time
-      const campaignEndTime = currentBlockTime + 5 * 24 * 60 * 60
-      await mockCampaign.setCampaignEndTime(campaignEndTime)
+      if (!event) {
+        throw new Error('Event failed')
+      }
+
+      const parsedEvent = campaignContractFactory.interface.parseLog(event)
+      if (!parsedEvent) {
+        throw new Error('Event failed')
+      }
+
+      const campaignAddress = parsedEvent.args[1]
+
+      const Campaign = await ethers.getContractFactory('Campaign')
+      const campaign = Campaign.attach(campaignAddress) as unknown as Campaign
 
       const [isOver, timeRemaining] = await platformAdmin.isGracePeriodOver(
-        await mockCampaign.getAddress()
+        campaignAddress
       )
 
-      // Campaign is active, so grace period should not be over
       expect(isOver).to.be.false
 
-      // Time remaining should be approximately 5 days campaign + GRACE_PERIOD days
-      const expectedTimeRemaining = (5 + GRACE_PERIOD) * 24 * 60 * 60
+      const expectedTimeRemaining =
+        (CAMPAIGN_DURATION + GRACE_PERIOD) * 24 * 60 * 60
       // Allow for a small deviation
       expect(timeRemaining).to.be.closeTo(
         BigInt(expectedTimeRemaining),
@@ -303,33 +310,67 @@ describe('PlatformAdmin', function () {
     })
 
     it('Should correctly report when a campaign is inactive but grace period is not over', async function () {
-      const { platformAdmin, mockCampaign, GRACE_PERIOD } = await loadFixture(
-        deployPlatformAdmin
-      )
+      const {
+        platformAdmin,
+        GRACE_PERIOD,
+        campaignContractFactory,
+        creator1,
+        usdc
+      } = await loadFixture(deployPlatformFixture)
 
-      // Get the current blockchain timestamp
-      const latestBlock = await ethers.provider.getBlock('latest')
-      if (!latestBlock) {
-        throw new Error('Latest block not found')
+      const usdcDecimals = await usdc.decimals()
+
+      const CAMPAIGN_GOAL = ethers.parseUnits('500', usdcDecimals)
+      const CAMPAIGN_DURATION = 60
+
+      const tx = await campaignContractFactory
+        .connect(creator1)
+        .deploy(await usdc.getAddress(), CAMPAIGN_GOAL, CAMPAIGN_DURATION)
+
+      const receipt = await tx.wait()
+
+      if (!receipt) {
+        throw new Error('Transaction failed')
       }
-      const currentBlockTime = latestBlock.timestamp
 
-      // Mock campaign responses
-      await mockCampaign.setCampaignActive(false)
+      const event = receipt.logs.find(log => {
+        try {
+          const parsed = campaignContractFactory.interface.parseLog(log)
+          return parsed && parsed.name === 'FactoryOperation'
+        } catch {
+          return false
+        }
+      })
 
-      // Set campaign end time to 3 days ago (from blockchain perspective)
-      const campaignEndTime = currentBlockTime - 3 * 24 * 60 * 60
-      await mockCampaign.setCampaignEndTime(campaignEndTime)
+      if (!event) {
+        throw new Error('Event failed')
+      }
+
+      const parsedEvent = campaignContractFactory.interface.parseLog(event)
+      if (!parsedEvent) {
+        throw new Error('Event failed')
+      }
+
+      const campaignAddress = parsedEvent.args[1]
+
+      const Campaign = await ethers.getContractFactory('Campaign')
+      const campaign = Campaign.attach(campaignAddress) as unknown as Campaign
+
+      await network.provider.send('evm_increaseTime', [
+        60 * 60 * 24 * (CAMPAIGN_DURATION + 1)
+      ]) // 30 days
+
+      await network.provider.send('evm_mine')
 
       const [isOver, timeRemaining] = await platformAdmin.isGracePeriodOver(
-        await mockCampaign.getAddress()
+        campaignAddress
       )
 
-      // Campaign is inactive, but only 3 days passed (out of GRACE_PERIOD days)
+      expect(await campaign.isCampaignActive()).to.be.false
       expect(isOver).to.be.false
 
       // Time remaining should be approximately (GRACE_PERIOD - 3) days
-      const expectedTimeRemaining = (GRACE_PERIOD - 3) * 24 * 60 * 60
+      const expectedTimeRemaining = (GRACE_PERIOD - 1) * 24 * 60 * 60
       // Allow for a small deviation
       expect(timeRemaining).to.be.closeTo(
         BigInt(expectedTimeRemaining),
@@ -338,23 +379,62 @@ describe('PlatformAdmin', function () {
     })
 
     it('Should correctly report when grace period is over', async function () {
-      const { platformAdmin, mockCampaign, GRACE_PERIOD } = await loadFixture(
-        deployPlatformAdmin
-      )
+      const {
+        platformAdmin,
+        GRACE_PERIOD,
+        campaignContractFactory,
+        creator1,
+        usdc
+      } = await loadFixture(deployPlatformFixture)
 
-      // Mock campaign responses
-      await mockCampaign.setCampaignActive(false)
+      const usdcDecimals = await usdc.decimals()
 
-      // Set campaign end time to 10 days ago (more than grace period)
-      const currentTime = Math.floor(Date.now() / 1000)
-      const campaignEndTime = currentTime - 10 * 24 * 60 * 60
-      await mockCampaign.setCampaignEndTime(campaignEndTime)
+      const CAMPAIGN_GOAL = ethers.parseUnits('500', usdcDecimals)
+      const CAMPAIGN_DURATION = 60
+
+      const tx = await campaignContractFactory
+        .connect(creator1)
+        .deploy(await usdc.getAddress(), CAMPAIGN_GOAL, CAMPAIGN_DURATION)
+
+      const receipt = await tx.wait()
+
+      if (!receipt) {
+        throw new Error('Transaction failed')
+      }
+
+      const event = receipt.logs.find(log => {
+        try {
+          const parsed = campaignContractFactory.interface.parseLog(log)
+          return parsed && parsed.name === 'FactoryOperation'
+        } catch {
+          return false
+        }
+      })
+
+      if (!event) {
+        throw new Error('Event failed')
+      }
+
+      const parsedEvent = campaignContractFactory.interface.parseLog(event)
+      if (!parsedEvent) {
+        throw new Error('Event failed')
+      }
+
+      const campaignAddress = parsedEvent.args[1]
+
+      const Campaign = await ethers.getContractFactory('Campaign')
+      const campaign = Campaign.attach(campaignAddress) as unknown as Campaign
+
+      await network.provider.send('evm_increaseTime', [
+        60 * 60 * 24 * (CAMPAIGN_DURATION + GRACE_PERIOD + 1)
+      ]) // 30 days
+
+      await network.provider.send('evm_mine')
 
       const [isOver, timeRemaining] = await platformAdmin.isGracePeriodOver(
-        await mockCampaign.getAddress()
+        campaignAddress
       )
 
-      // Grace period should be over
       expect(isOver).to.be.true
       expect(timeRemaining).to.equal(0)
     })

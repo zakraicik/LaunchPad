@@ -1,263 +1,17 @@
 import { expect } from 'chai'
 import { ethers, network } from 'hardhat'
-import { Contract, Log } from 'ethers'
 
-import { time } from '@nomicfoundation/hardhat-network-helpers'
 import { loadFixture } from '@nomicfoundation/hardhat-network-helpers'
+import { deployPlatformFixture } from '../fixture'
+
 import {
   anyUint,
   anyValue
 } from '@nomicfoundation/hardhat-chai-matchers/withArgs'
 
-import {
-  PlatformAdmin,
-  TokenRegistry,
-  YieldDistributor,
-  DefiIntegrationManager,
-  CampaignContractFactory,
-  Campaign,
-  IERC20Metadata
-} from '../../typechain-types'
+import { Campaign, IERC20Metadata } from '../../typechain-types'
 
 describe('Base Mainnet Integration Tests', function () {
-  //Whales
-  const USDC_WHALE_ADDRESS = '0x0b0a5886664376f59c351ba3f598c8a8b4d0a6f3'
-  const WBTC_WHALE_ADDRESS = '0x48cce57c4d2dbb31eaf79575abf482bbb8dc071d'
-
-  // External contracts addresses
-  const AAVE_POOL_ADDRESS = '0xa238dd80c259a72e81d7e4664a9801593f98d1c5' //AAVE v3
-  const USDC_ADDRESS = '0x833589fcd6edb6e08f4c7c32d4f71b54bda02913' //USDC on Base
-  const WBTC = '0x0555e30da8f98308edb960aa94c0db47230d2b9c' //Wrapped BTC on base
-
-  // Constants for testing
-
-  const GRACE_PERIOD = 7 // 7 days grace period
-  const GAS_LIMIT = 5000000
-
-  let usdc: IERC20Metadata
-  let wbtc: IERC20Metadata
-
-  let aavePool: Contract
-  let platformAdmin: PlatformAdmin
-  let tokenRegistry: TokenRegistry
-  let yieldDistributor: YieldDistributor
-  let defiIntegrationManager: DefiIntegrationManager
-  let campaignContractFactory: CampaignContractFactory
-  let campaign: Campaign
-
-  // Main fixture that deploys the entire platform and sets up test environment
-  async function deployPlatformFixture () {
-    // Impersonate the ETH whale
-
-    await network.provider.request({
-      method: 'hardhat_impersonateAccount',
-      params: [USDC_WHALE_ADDRESS]
-    })
-
-    await network.provider.request({
-      method: 'hardhat_impersonateAccount',
-      params: [WBTC_WHALE_ADDRESS]
-    })
-
-    const usdc_whale = await ethers.getSigner(USDC_WHALE_ADDRESS)
-    const wbtc_whale = await ethers.getSigner(WBTC_WHALE_ADDRESS)
-
-    const [
-      deployer,
-      platformTreasury,
-      creator1,
-      creator2,
-      contributor1,
-      contributor2,
-      contributor3
-    ] = await ethers.getSigners() //All accounts are prefunded with 10,000 ETH
-
-    const feeData = await ethers.provider.getFeeData()
-    const maxFeePerGas = feeData.maxFeePerGas
-    const maxPriorityFeePerGas = feeData.maxPriorityFeePerGas
-
-    //USDC ABI for testing
-    const IERC20ABI = [
-      'function totalSupply() external view returns (uint256)',
-      'function decimals() external view returns (uint8)',
-      'function approve(address spender, uint256 amount) external returns (bool)',
-      'function transfer(address to, uint256 amount) external returns (bool)',
-      'function balanceOf(address account) external view returns (uint256)'
-    ]
-
-    // Aave Pool ABI for testing
-    const AAVE_POOL_ABI = [
-      'function supply(address asset, uint256 amount, address onBehalfOf, uint16 referralCode) external',
-      'function withdraw(address asset, uint256 amount, address to) external returns (uint256)',
-      'function getReserveData(address asset) external view returns (tuple(uint256 unbacked, uint256 accruedToTreasury, uint256 totalAToken, uint256 totalStableDebt, uint256 totalVariableDebt, uint256 liquidityRate, uint256 variableBorrowRate, uint256 stableBorrowRate, uint256 averageStableBorrowRate, uint256 liquidityIndex, uint256 variableBorrowIndex, uint40 lastUpdateTimestamp))'
-    ]
-
-    // Initialize contracts with signer using getContractAt to fund contributor accounts
-
-    usdc = (await ethers.getContractAt(
-      IERC20ABI,
-      USDC_ADDRESS
-    )) as unknown as IERC20Metadata
-
-    wbtc = (await ethers.getContractAt(
-      IERC20ABI,
-      WBTC
-    )) as unknown as IERC20Metadata
-
-    // Send ETH to whales
-    await deployer.sendTransaction({
-      to: USDC_WHALE_ADDRESS,
-      value: ethers.parseEther('5.0'),
-      gasLimit: GAS_LIMIT,
-      maxFeePerGas: maxFeePerGas,
-      maxPriorityFeePerGas: maxPriorityFeePerGas
-    })
-
-    await deployer.sendTransaction({
-      to: WBTC_WHALE_ADDRESS,
-      value: ethers.parseEther('5.0'),
-      gasLimit: GAS_LIMIT,
-      maxFeePerGas: maxFeePerGas,
-      maxPriorityFeePerGas: maxPriorityFeePerGas
-    })
-
-    aavePool = await ethers.getContractAt(AAVE_POOL_ABI, AAVE_POOL_ADDRESS)
-
-    //Deploy PlatformAdmin
-    platformAdmin = await ethers.deployContract(
-      'PlatformAdmin',
-      [GRACE_PERIOD, deployer.address],
-      {
-        maxFeePerGas,
-        maxPriorityFeePerGas,
-        gasLimit: GAS_LIMIT
-      }
-    )
-
-    await platformAdmin.waitForDeployment()
-
-    //Deploy TokenRegistry
-    tokenRegistry = await ethers.deployContract(
-      'TokenRegistry',
-      [deployer.address, await platformAdmin.getAddress()],
-      {
-        maxFeePerGas,
-        maxPriorityFeePerGas,
-        gasLimit: GAS_LIMIT
-      }
-    )
-
-    await tokenRegistry.waitForDeployment()
-
-    //Add tokens to TokenRegistry
-    await tokenRegistry.addToken(USDC_ADDRESS, 1)
-
-    yieldDistributor = await ethers.deployContract(
-      'YieldDistributor',
-      [
-        platformTreasury.address,
-        await platformAdmin.getAddress(),
-        deployer.address
-      ],
-      {
-        maxFeePerGas,
-        maxPriorityFeePerGas,
-        gasLimit: GAS_LIMIT
-      }
-    )
-
-    await yieldDistributor.waitForDeployment()
-
-    defiIntegrationManager = await ethers.deployContract(
-      'DefiIntegrationManager',
-      [
-        AAVE_POOL_ADDRESS,
-        await tokenRegistry.getAddress(),
-        await yieldDistributor.getAddress(),
-        await platformAdmin.getAddress(),
-        deployer.address
-      ],
-      {
-        maxFeePerGas,
-        maxPriorityFeePerGas,
-        gasLimit: GAS_LIMIT
-      }
-    )
-
-    await defiIntegrationManager.waitForDeployment()
-
-    campaignContractFactory = await ethers.deployContract(
-      'CampaignContractFactory',
-      [
-        await defiIntegrationManager.getAddress(),
-        await platformAdmin.getAddress(),
-        deployer.address
-      ],
-      {
-        maxFeePerGas,
-        maxPriorityFeePerGas,
-        gasLimit: GAS_LIMIT
-      }
-    )
-
-    await campaignContractFactory.waitForDeployment()
-
-    //Fund Contributors
-    const usdcDecimals = await usdc.decimals()
-    const usdTransferAmount = ethers.parseUnits('1000000', usdcDecimals)
-
-    const wbtcDecimals = await wbtc.decimals()
-    const wbtcTransferAmount = ethers.parseUnits('.01', wbtcDecimals)
-
-    await usdc
-      .connect(usdc_whale)
-      .transfer(contributor1.address, usdTransferAmount, {
-        gasLimit: GAS_LIMIT, // Adjust based on the complexity of the transfer
-        maxFeePerGas: maxFeePerGas,
-        maxPriorityFeePerGas: maxPriorityFeePerGas
-      })
-    await usdc
-      .connect(usdc_whale)
-      .transfer(contributor2.address, usdTransferAmount, {
-        gasLimit: GAS_LIMIT, // Adjust based on the complexity of the transfer
-        maxFeePerGas: maxFeePerGas,
-        maxPriorityFeePerGas: maxPriorityFeePerGas
-      })
-    await usdc
-      .connect(usdc_whale)
-      .transfer(contributor3.address, usdTransferAmount, {
-        gasLimit: GAS_LIMIT, // Adjust based on the complexity of the transfer
-        maxFeePerGas: maxFeePerGas,
-        maxPriorityFeePerGas: maxPriorityFeePerGas
-      })
-
-    await wbtc
-      .connect(wbtc_whale)
-      .transfer(contributor1.address, wbtcTransferAmount, {
-        gasLimit: GAS_LIMIT, // Adjust based on the complexity of the transfer
-        maxFeePerGas: maxFeePerGas,
-        maxPriorityFeePerGas: maxPriorityFeePerGas
-      })
-
-    return {
-      usdc,
-      wbtc,
-      deployer,
-      creator1,
-      creator2,
-      contributor1,
-      contributor2,
-      contributor3,
-      platformTreasury,
-      platformAdmin,
-      tokenRegistry,
-      yieldDistributor,
-      defiIntegrationManager,
-      campaignContractFactory,
-      IERC20ABI
-    }
-  }
-
   describe('Campaign Lifecycle', function () {
     const OP_CAMPAIGN_CREATED = 1
     const OP_DEPOSIT = 1
@@ -275,7 +29,9 @@ describe('Base Mainnet Integration Tests', function () {
         tokenRegistry,
         yieldDistributor,
         defiIntegrationManager,
-        campaignContractFactory
+        campaignContractFactory,
+        AAVE_POOL_ADDRESS,
+        GRACE_PERIOD
       } = await loadFixture(deployPlatformFixture)
 
       //PlatformAdmin
@@ -391,7 +147,6 @@ describe('Base Mainnet Integration Tests', function () {
         campaignContractFactory,
         creator1,
         contributor1,
-        contributor2,
         defiIntegrationManager,
         IERC20ABI
       } = await loadFixture(deployPlatformFixture)
@@ -632,7 +387,8 @@ describe('Base Mainnet Integration Tests', function () {
         contributor1,
         contributor2,
         defiIntegrationManager,
-        IERC20ABI
+        IERC20ABI,
+        yieldDistributor
       } = await loadFixture(deployPlatformFixture)
 
       const usdcDecimals = await usdc.decimals()
@@ -777,7 +533,8 @@ describe('Base Mainnet Integration Tests', function () {
         contributor1,
         contributor2,
         defiIntegrationManager,
-        IERC20ABI
+        IERC20ABI,
+        yieldDistributor
       } = await loadFixture(deployPlatformFixture)
 
       const usdcDecimals = await usdc.decimals()
@@ -912,7 +669,8 @@ describe('Base Mainnet Integration Tests', function () {
         contributor1,
         contributor2,
         defiIntegrationManager,
-        IERC20ABI
+        IERC20ABI,
+        yieldDistributor
       } = await loadFixture(deployPlatformFixture)
 
       const usdcDecimals = await usdc.decimals()
@@ -1094,7 +852,9 @@ describe('Base Mainnet Integration Tests', function () {
         contributor2,
         defiIntegrationManager,
         IERC20ABI,
-        deployer
+        deployer,
+        yieldDistributor,
+        GRACE_PERIOD
       } = await loadFixture(deployPlatformFixture)
 
       const usdcDecimals = await usdc.decimals()
@@ -1230,7 +990,9 @@ describe('Base Mainnet Integration Tests', function () {
         contributor2,
         defiIntegrationManager,
         IERC20ABI,
-        deployer
+        deployer,
+        yieldDistributor,
+        GRACE_PERIOD
       } = await loadFixture(deployPlatformFixture)
 
       const usdcDecimals = await usdc.decimals()
@@ -1337,6 +1099,8 @@ describe('Base Mainnet Integration Tests', function () {
       const aTokenBalanceAfterFailedClaim = await aToken.balanceOf(
         campaignAddress
       )
+
+      expect(aTokenBalanceAfterFailedClaim).to.equal(aTokenBalance)
 
       //Admin can override; this particular campaign is unsuccesful
       await expect(campaign.connect(deployer).setAdminOverride(true))
@@ -1534,7 +1298,6 @@ describe('Base Mainnet Integration Tests', function () {
         campaignContractFactory,
         creator1,
         deployer,
-        contributor1,
         wbtc
       } = await loadFixture(deployPlatformFixture)
 
@@ -1607,7 +1370,6 @@ describe('Base Mainnet Integration Tests', function () {
         campaignContractFactory,
         creator1,
         deployer,
-        contributor1,
         usdc
       } = await loadFixture(deployPlatformFixture)
 
@@ -1642,9 +1404,13 @@ describe('Base Mainnet Integration Tests', function () {
     })
 
     it('Should allow platform admin to toggle token support', async function () {
-      const { tokenRegistry, deployer, creator1, usdc } = await loadFixture(
-        deployPlatformFixture
-      )
+      const {
+        tokenRegistry,
+        deployer,
+        creator1,
+        usdc,
+        campaignContractFactory
+      } = await loadFixture(deployPlatformFixture)
 
       const usdcDecimals = await usdc.decimals()
 
