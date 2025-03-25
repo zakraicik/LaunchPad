@@ -79,7 +79,7 @@ describe('Base Mainnet Integration Tests', function () {
       )
     })
 
-    it('Should allow creates to deploy a campaign(s)', async function () {
+    it('Should allow creators to deploy a campaign(s)', async function () {
       const { usdc, campaignContractFactory, creator1 } = await loadFixture(
         deployPlatformFixture
       )
