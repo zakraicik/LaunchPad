@@ -29,6 +29,7 @@ contract DefiIntegrationManager is
     uint8 private constant ERR_WITHDRAWAL_FAILED = 4;
     uint8 private constant ERR_INVALID_ADDRESS = 5;
     uint8 private constant ERR_INVALID_CONSTRUCTOR = 6;
+    uint8 private constant ERR_WITHDRAWAL_DOESNT_BALANCE = 7;
 
     // External contracts
     IAavePool public aavePool;
@@ -95,7 +96,7 @@ contract DefiIntegrationManager is
         address oldRegistry = address(tokenRegistry);
         tokenRegistry = ITokenRegistry(_tokenRegistry);
 
-        emit ConfigUpdated(1, oldRegistry, _tokenRegistry);
+        emit ConfigUpdated(OP_CONFIG_UPDATED, oldRegistry, _tokenRegistry);
     }
 
     function setYieldDistributor(
@@ -108,7 +109,11 @@ contract DefiIntegrationManager is
         address oldDistributor = address(yieldDistributor);
         yieldDistributor = IYieldDistributor(_yieldDistributor);
 
-        emit ConfigUpdated(2, oldDistributor, _yieldDistributor);
+        emit ConfigUpdated(
+            OP_CONFIG_UPDATED,
+            oldDistributor,
+            _yieldDistributor
+        );
     }
 
     function setAavePool(address _aavePool) external onlyPlatformAdmin {
@@ -119,7 +124,7 @@ contract DefiIntegrationManager is
         address oldAavePool = address(aavePool);
         aavePool = IAavePool(_aavePool);
 
-        emit ConfigUpdated(3, oldAavePool, _aavePool);
+        emit ConfigUpdated(OP_CONFIG_UPDATED, oldAavePool, _aavePool);
     }
 
     function depositToYieldProtocol(
@@ -127,16 +132,17 @@ contract DefiIntegrationManager is
         uint256 _amount
     ) external nonReentrant {
         bool tokenExists;
-        try tokenRegistry.isTokenSupported(_token) {
+        bool isSupported;
+        try tokenRegistry.isTokenSupported(_token) returns (bool supported) {
             tokenExists = true;
+            isSupported = supported;
         } catch {
             tokenExists = false;
         }
 
-        if (!tokenExists) {
+        if (!tokenExists || !isSupported) {
             revert DefiError(ERR_TOKEN_NOT_SUPPORTED, _token);
         }
-
         address aToken = getATokenAddress(_token);
 
         if (aToken == address(0)) {
@@ -175,9 +181,17 @@ contract DefiIntegrationManager is
         bool campaignSuccessful,
         uint256 coverRefunds
     ) external nonReentrant returns (uint256) {
+        address aTokenAddress = getATokenAddress(_token);
+
+        uint256 aTokenBalance = IERC20(aTokenAddress).balanceOf(address(this));
+
         try aavePool.withdraw(_token, type(uint).max, address(this)) returns (
             uint256 withdrawn
         ) {
+            if (aTokenBalance != withdrawn) {
+                revert DefiError(ERR_WITHDRAWAL_DOESNT_BALANCE, _token);
+            }
+
             if (campaignSuccessful) {
                 (uint256 creatorShare, uint256 platformShare) = yieldDistributor
                     .calculateYieldShares(withdrawn);

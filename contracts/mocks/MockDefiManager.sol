@@ -2,108 +2,98 @@
 pragma solidity ^0.8.28;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
 import "../interfaces/ITokenRegistry.sol";
 import "../interfaces/IYieldDistributor.sol";
+import "../interfaces/IAavePool.sol";
+import "../abstracts/PlatformAdminAccessControl.sol";
 
-contract MockDefiManager {
-    // Custom errors matching real implementation
-    error UnauthorizedAddress();
-    error ZeroAmount(uint256 amount);
-    error InsufficientDeposit(
-        address token,
-        uint256 requested,
-        uint256 available
-    );
-    error TokenNotSupported(address token);
-    error YieldDepositFailed(string reason);
-    error YieldwithdrawalFailed(string reason);
-    error NoYield(address token);
-    error TokensAreTheSame(address fromToken, address outToken);
-    error SwapFailed(string reason);
-    error NotPlatformAdmin();
-    error InvalidAddress();
+contract MockDefiManager is
+    Ownable,
+    ReentrancyGuard,
+    PlatformAdminAccessControl
+{
+    using SafeERC20 for IERC20;
+
+    // Operation types for events (matching real implementation)
+    uint8 private constant OP_DEPOSITED = 1;
+    uint8 private constant OP_WITHDRAWN = 2;
+    uint8 private constant OP_CONFIG_UPDATED = 3;
+
+    // Error codes (matching real implementation)
+    uint8 private constant ERR_ZERO_AMOUNT = 1;
+    uint8 private constant ERR_TOKEN_NOT_SUPPORTED = 2;
+    uint8 private constant ERR_DEPOSIT_FAILED = 3;
+    uint8 private constant ERR_WITHDRAWAL_FAILED = 4;
+    uint8 private constant ERR_INVALID_ADDRESS = 5;
+    uint8 private constant ERR_INVALID_CONSTRUCTOR = 6;
+    uint8 private constant ERR_WITHDRAWAL_DOESNT_BALANCE = 7;
+
+    // External contracts
+    IAavePool public aavePool;
+    ITokenRegistry public tokenRegistry;
+    IYieldDistributor public yieldDistributor;
 
     // State tracking
-    bool public authorizeSuccess = true;
+    mapping(address => mapping(address => uint256)) public aaveBalances;
+    mapping(address => address) public mockATokenAddresses;
+
+    // Mock control variables
     bool public depositSuccess = true;
     bool public withdrawSuccess = true;
-    bool public harvestSuccess = true;
-    bool public swapSuccess = true;
+    bool public withdrawalBalanceCheck = true;
 
-    // Access control
-    address public owner;
-    address public platformAdmin;
+    // Consolidated error
+    error DefiError(uint8 code, address addr);
 
-    mapping(address => bool) public authorizedCampaigns;
-    mapping(address => mapping(address => uint256)) public aaveDeposits; // Campaign -> token -> amount
-
-    // Interface contracts
-    address public mockTokenRegistryAddress;
-    address public mockYieldDistributorAddress;
-
-    // Mock yield parameters
-    uint256 public yieldRate = 1000; // 10% annually in basis points
-    uint256 public constant UNISWAP_FEE_TIER = 3000; // 0.3%
-
-    // Events (matching real implementation)
-    event YieldDeposited(
-        address indexed campaign,
+    // Consolidated event
+    event DefiOperation(
+        uint8 opType,
+        address indexed sender,
         address indexed token,
-        uint256 amount
+        address indexed secondToken,
+        uint256 amount,
+        uint256 secondAmount
     );
-    event YieldWithdrawn(
-        address indexed campaign,
-        address indexed token,
-        uint256 amount
+
+    // Configuration update event
+    event ConfigUpdated(
+        uint8 configType,
+        address oldAddress,
+        address newAddress
     );
-    event YieldHarvested(
-        address indexed campaign,
-        address indexed token,
-        uint256 totalYield,
-        uint256 creatorShare,
-        uint256 platformShare
-    );
-    event TokenSwapped(
-        address indexed fromToken,
-        address indexed toToken,
-        uint256 amountIn,
-        uint256 amountOut
-    );
-    event CampaignAuthorized(address indexed campaign);
 
     constructor(
-        address _tokenRegistryAddress,
-        address _yieldDistributorAddress,
+        address _aavePool,
+        address _tokenRegistry,
+        address _yieldDistributor,
         address _platformAdmin,
         address _owner
-    ) {
-        if (
-            _tokenRegistryAddress == address(0) ||
-            _yieldDistributorAddress == address(0) ||
-            _platformAdmin == address(0) ||
-            _owner == address(0)
-        ) {
-            revert InvalidAddress();
+    ) Ownable(_owner) PlatformAdminAccessControl(_platformAdmin) {
+        if (_aavePool == address(0)) {
+            revert DefiError(ERR_INVALID_CONSTRUCTOR, _aavePool);
         }
 
-        mockTokenRegistryAddress = _tokenRegistryAddress;
-        mockYieldDistributorAddress = _yieldDistributorAddress;
-        platformAdmin = _platformAdmin;
-        owner = _owner;
-    }
-
-    modifier onlyPlatformAdmin() {
-        if (msg.sender != platformAdmin) {
-            revert NotPlatformAdmin();
+        if (_tokenRegistry == address(0)) {
+            revert DefiError(ERR_INVALID_CONSTRUCTOR, _tokenRegistry);
         }
-        _;
+
+        if (_yieldDistributor == address(0)) {
+            revert DefiError(ERR_INVALID_CONSTRUCTOR, _yieldDistributor);
+        }
+
+        if (_platformAdmin == address(0)) {
+            revert DefiError(ERR_INVALID_CONSTRUCTOR, _platformAdmin);
+        }
+
+        aavePool = IAavePool(_aavePool);
+        tokenRegistry = ITokenRegistry(_tokenRegistry);
+        yieldDistributor = IYieldDistributor(_yieldDistributor);
     }
 
-    // Control functions for testing
-    function setAuthorizeSuccess(bool success) external {
-        authorizeSuccess = success;
-    }
-
+    // Mock control functions
     function setDepositSuccess(bool success) external {
         depositSuccess = success;
     }
@@ -112,221 +102,178 @@ contract MockDefiManager {
         withdrawSuccess = success;
     }
 
-    function setHarvestSuccess(bool success) external {
-        harvestSuccess = success;
+    function setWithdrawalBalanceCheck(bool check) external {
+        withdrawalBalanceCheck = check;
     }
 
-    function setSwapSuccess(bool success) external {
-        swapSuccess = success;
+    function setMockATokenAddress(address token, address aToken) external {
+        mockATokenAddresses[token] = aToken;
     }
 
-    function setYieldRate(uint256 _yieldRate) external {
-        yieldRate = _yieldRate;
-    }
-
-    function simulateDeposit(
-        address campaign,
-        address token,
-        uint256 amount
-    ) external {
-        aaveDeposits[campaign][token] += amount;
-    }
-
-    // Interface implementation
-    function authorizeCampaign(address campaign) external returns (bool) {
-        if (!authorizeSuccess) {
-            revert UnauthorizedAddress();
+    // Interface implementation matching real DefiIntegrationManager
+    function setTokenRegistry(
+        address _tokenRegistry
+    ) external onlyPlatformAdmin {
+        if (_tokenRegistry == address(0)) {
+            revert DefiError(ERR_INVALID_ADDRESS, _tokenRegistry);
         }
-        authorizedCampaigns[campaign] = true;
-        emit CampaignAuthorized(campaign);
-        return true;
+
+        address oldRegistry = address(tokenRegistry);
+        tokenRegistry = ITokenRegistry(_tokenRegistry);
+
+        emit ConfigUpdated(1, oldRegistry, _tokenRegistry);
     }
 
-    function tokenRegistry() external view returns (ITokenRegistry) {
-        return ITokenRegistry(mockTokenRegistryAddress);
+    function setYieldDistributor(
+        address _yieldDistributor
+    ) external onlyPlatformAdmin {
+        if (_yieldDistributor == address(0)) {
+            revert DefiError(ERR_INVALID_ADDRESS, _yieldDistributor);
+        }
+
+        address oldDistributor = address(yieldDistributor);
+        yieldDistributor = IYieldDistributor(_yieldDistributor);
+
+        emit ConfigUpdated(2, oldDistributor, _yieldDistributor);
     }
 
-    function yieldDistributor() external view returns (IYieldDistributor) {
-        return IYieldDistributor(mockYieldDistributorAddress);
+    function setAavePool(address _aavePool) external onlyPlatformAdmin {
+        if (_aavePool == address(0)) {
+            revert DefiError(ERR_INVALID_ADDRESS, _aavePool);
+        }
+
+        address oldAavePool = address(aavePool);
+        aavePool = IAavePool(_aavePool);
+
+        emit ConfigUpdated(3, oldAavePool, _aavePool);
     }
 
-    function depositToYieldProtocol(address token, uint256 amount) external {
+    function depositToYieldProtocol(
+        address _token,
+        uint256 _amount
+    ) external nonReentrant {
         if (!depositSuccess) {
-            revert YieldDepositFailed("Deposit failed");
+            revert DefiError(ERR_DEPOSIT_FAILED, _token);
         }
 
-        if (amount <= 0) {
-            revert ZeroAmount(amount);
+        if (_amount <= 0) {
+            revert DefiError(ERR_ZERO_AMOUNT, _token);
         }
 
-        // Validate token via registry
-        ITokenRegistry registry = ITokenRegistry(mockTokenRegistryAddress);
-        if (!registry.isTokenSupported(token)) {
-            revert TokenNotSupported(token);
+        bool tokenExists;
+        bool isSupported;
+        try tokenRegistry.isTokenSupported(_token) returns (bool supported) {
+            tokenExists = true;
+            isSupported = supported;
+        } catch {
+            tokenExists = false;
         }
 
-        // Transfer tokens from sender
-        bool success = IERC20(token).transferFrom(
+        if (!tokenExists || !isSupported) {
+            revert DefiError(ERR_TOKEN_NOT_SUPPORTED, _token);
+        }
+
+        address aToken = getATokenAddress(_token);
+        if (aToken == address(0)) {
+            revert DefiError(ERR_INVALID_ADDRESS, aToken);
+        }
+
+        // Transfer tokens from sender (matching real implementation)
+        IERC20(_token).safeTransferFrom(msg.sender, address(this), _amount);
+
+        // Mock the supply to Aave
+        aaveBalances[_token][msg.sender] += _amount;
+
+        emit DefiOperation(
+            OP_DEPOSITED,
             msg.sender,
-            address(this),
-            amount
+            _token,
+            address(0),
+            _amount,
+            0
         );
-        if (!success) {
-            revert YieldDepositFailed("Token transfer failed");
-        }
-
-        // Update deposits for the calling campaign
-        aaveDeposits[msg.sender][token] += amount;
-
-        emit YieldDeposited(msg.sender, token, amount);
     }
 
     function withdrawFromYieldProtocol(
-        address token
-    ) external returns (uint256) {
+        address _token,
+        bool campaignSuccessful,
+        uint256 coverRefunds
+    ) external nonReentrant returns (uint256) {
         if (!withdrawSuccess) {
-            revert YieldwithdrawalFailed("Withdrawal failed");
+            revert DefiError(ERR_WITHDRAWAL_FAILED, _token);
         }
 
-        uint256 withdrawAmount = aaveDeposits[msg.sender][token];
+        address aTokenAddress = getATokenAddress(_token);
+        uint256 aTokenBalance = IERC20(aTokenAddress).balanceOf(address(this));
+        uint256 withdrawn = aTokenBalance; // Default to match
 
-        if (withdrawAmount == 0) {
-            revert ZeroAmount(withdrawAmount);
+        // Simulate the withdrawal balance check
+        if (!withdrawalBalanceCheck) {
+            withdrawn = aTokenBalance / 2; // Simulate mismatch
+            revert DefiError(ERR_WITHDRAWAL_DOESNT_BALANCE, _token);
         }
 
-        aaveDeposits[msg.sender][token] = 0;
-        bool success = IERC20(token).transfer(msg.sender, withdrawAmount);
-        if (!success) {
-            revert YieldwithdrawalFailed("Token transfer failed");
+        if (campaignSuccessful) {
+            (uint256 creatorShare, uint256 platformShare) = yieldDistributor
+                .calculateYieldShares(withdrawn);
+
+            IERC20(_token).safeTransfer(msg.sender, creatorShare);
+            IERC20(_token).safeTransfer(
+                yieldDistributor.platformTreasury(),
+                platformShare
+            );
+        } else {
+            uint256 remaining = withdrawn - coverRefunds;
+
+            IERC20(_token).safeTransfer(msg.sender, coverRefunds);
+            IERC20(_token).safeTransfer(
+                yieldDistributor.platformTreasury(),
+                remaining
+            );
         }
 
-        emit YieldWithdrawn(msg.sender, token, withdrawAmount);
+        aaveBalances[_token][msg.sender] = 0;
 
-        return withdrawAmount;
-    }
-
-    function harvestYield(address token) external returns (uint256, uint256) {
-        if (!harvestSuccess) {
-            revert YieldwithdrawalFailed("Harvest failed");
-        }
-
-        uint256 depositAmount = aaveDeposits[msg.sender][token];
-        if (depositAmount == 0) {
-            revert NoYield(token);
-        }
-
-        // Calculate yield based on deposit amount and yield rate
-        uint256 totalYield = (depositAmount * yieldRate) / 10000;
-
-        if (totalYield == 0) {
-            revert NoYield(token);
-        }
-
-        // Use the actual YieldDistributor logic to calculate shares
-        IYieldDistributor distributor = IYieldDistributor(
-            mockYieldDistributorAddress
-        );
-        (uint256 creatorYield, uint256 platformYield) = distributor
-            .calculateYieldShares(totalYield);
-
-        // Transfer to campaign
-        bool success = IERC20(token).transfer(msg.sender, creatorYield);
-        if (!success) {
-            revert YieldwithdrawalFailed("Token transfer failed");
-        }
-
-        // Transfer to platform treasury
-        address treasury = distributor.platformTreasury();
-        success = IERC20(token).transfer(treasury, platformYield);
-        if (!success) {
-            revert YieldwithdrawalFailed("Token transfer to treasury failed");
-        }
-
-        emit YieldHarvested(
+        emit DefiOperation(
+            OP_WITHDRAWN,
             msg.sender,
-            token,
-            totalYield,
-            creatorYield,
-            platformYield
+            _token,
+            address(0),
+            withdrawn,
+            0
         );
 
-        return (creatorYield, platformYield);
+        return withdrawn;
     }
 
     function getCurrentYieldRate(
         address token
     ) external view returns (uint256) {
-        return yieldRate;
+        // Mock implementation
+        return 500; // 5% in basis points
     }
 
-    function getDepositedAmount(
-        address campaign,
-        address token
-    ) external view returns (uint256) {
-        return aaveDeposits[campaign][token];
+    function getPlatformTreasury() external view returns (address) {
+        return yieldDistributor.platformTreasury();
     }
 
-    function isCampaignAuthorized(
-        address campaign
-    ) external view returns (bool) {
-        return authorizedCampaigns[campaign];
+    function getATokenAddress(address _token) public view returns (address) {
+        // Check if we have a mock aToken address set
+        if (mockATokenAddresses[_token] != address(0)) {
+            return mockATokenAddresses[_token];
+        }
+
+        // Default mock implementation
+        return
+            address(
+                uint160(uint256(keccak256(abi.encodePacked("aToken", _token))))
+            );
     }
 
-    function swapTokenForTarget(
-        address fromToken,
-        uint256 amount,
-        address toToken
-    ) external returns (uint256) {
-        if (!swapSuccess) {
-            revert SwapFailed("Swap failed");
-        }
-
-        if (amount <= 0) {
-            revert ZeroAmount(amount);
-        }
-
-        // Token validation
-        ITokenRegistry registry = ITokenRegistry(mockTokenRegistryAddress);
-        if (!registry.isTokenSupported(fromToken)) {
-            revert TokenNotSupported(fromToken);
-        }
-
-        if (!registry.isTokenSupported(toToken)) {
-            revert TokenNotSupported(toToken);
-        }
-
-        if (fromToken == toToken) {
-            revert TokensAreTheSame(fromToken, toToken);
-        }
-
-        // Transfer tokens from caller
-        bool success = IERC20(fromToken).transferFrom(
-            msg.sender,
-            address(this),
-            amount
-        );
-        if (!success) {
-            revert SwapFailed("Token transfer failed");
-        }
-
-        uint256 receivedAmount = amount * 2; // 2:1 exchange rate for testing
-
-        success = IERC20(toToken).transfer(msg.sender, receivedAmount);
-        if (!success) {
-            revert SwapFailed("Token transfer failed");
-        }
-
-        emit TokenSwapped(fromToken, toToken, amount, receivedAmount);
-
-        return receivedAmount;
-    }
-
-    // Mock auxiliary functions to simulate realistic behavior
-    function unauthorizeCampaign(address campaign) external {
-        authorizedCampaigns[campaign] = false;
-    }
-
-    function getTokenRegistry() external view returns (ITokenRegistry) {
-        return ITokenRegistry(mockTokenRegistryAddress);
+    // Helper function for testing
+    function simulateATokenBalance(address _token, uint256 _balance) external {
+        address aTokenAddress = getATokenAddress(_token);
+        // This would require the test to deploy a mock aToken as well
+        // or to use a mocking framework to intercept the balanceOf call
     }
 }
