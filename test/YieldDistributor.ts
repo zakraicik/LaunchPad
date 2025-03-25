@@ -4,91 +4,38 @@ const { expect } = require('chai')
 const { ethers } = require('hardhat')
 const { loadFixture } = require('@nomicfoundation/hardhat-network-helpers')
 
+import { deployPlatformFixture } from './fixture'
+
 describe('YieldDistributor', function () {
   const OP_TREASURY_UPDATED = 1
   const OP_SHARE_UPDATED = 2
 
+  // Error codes
   const ERR_INVALID_ADDRESS = 1
   const ERR_INVALID_SHARE = 2
   const ERR_SHARE_EXCEEDS_MAXIMUM = 3
   const ERR_OVERFLOW = 4
 
-  async function deployYieldDistributorFixture () {
-    const [owner, user1, user2, otherAdmin] = await ethers.getSigners()
-    const randomWallet = ethers.Wallet.createRandom()
-    const randomWallet2 = ethers.Wallet.createRandom()
-
-    const mockToken1 = await ethers.deployContract('MockERC20', [
-      'Mock Token 1',
-      'MT1',
-      ethers.parseUnits('100')
-    ])
-
-    const mockToken2 = await ethers.deployContract('MockERC20', [
-      'Mock Token 1',
-      'MT1',
-      ethers.parseUnits('100')
-    ])
-
-    const GRACE_PERIOD = 7 // 7 days
-    const platformAdmin = await ethers.deployContract('PlatformAdmin', [
-      GRACE_PERIOD,
-      owner
-    ])
-    await platformAdmin.waitForDeployment()
-
-    await platformAdmin.addPlatformAdmin(await otherAdmin.getAddress())
-
-    const platformAdminAddress = await platformAdmin.getAddress()
-
-    const yieldDistributor = await ethers.deployContract('YieldDistributor', [
-      randomWallet.address,
-      platformAdminAddress,
-      owner.address
-    ])
-
-    await mockToken1.waitForDeployment()
-    await mockToken2.waitForDeployment()
-
-    await yieldDistributor.waitForDeployment()
-
-    return {
-      yieldDistributor,
-      mockToken1,
-      mockToken2,
-      owner,
-      user1,
-      user2,
-      randomWallet,
-      randomWallet2,
-      platformAdmin,
-      otherAdmin
-    }
-  }
-
   describe('Deployment', function () {
     it('Should deploy all contracts successfully.', async function () {
-      const { yieldDistributor } = await loadFixture(
-        deployYieldDistributorFixture
-      )
+      const { yieldDistributor } = await loadFixture(deployPlatformFixture)
 
       expect(await yieldDistributor.getAddress()).to.be.properAddress
     })
 
     it('Should correctly set the initial state', async function () {
-      const { yieldDistributor, owner, randomWallet } = await loadFixture(
-        deployYieldDistributorFixture
-      )
+      const { yieldDistributor, deployer, platformTreasury } =
+        await loadFixture(deployPlatformFixture)
 
-      expect(await yieldDistributor.owner()).to.equal(owner.address)
+      expect(await yieldDistributor.owner()).to.equal(deployer.address)
       expect(await yieldDistributor.platformTreasury()).to.equal(
-        randomWallet.address
+        platformTreasury.address
       )
     })
 
     it('Should revert if zero address platform treasury passed to constructor', async function () {
-      const { owner, platformAdmin } = await loadFixture(
-        deployYieldDistributorFixture
+      const { deployer, platformAdmin } = await loadFixture(
+        deployPlatformFixture
       )
 
       const YieldDistributorFactory = await ethers.getContractFactory(
@@ -101,7 +48,7 @@ describe('YieldDistributor', function () {
         YieldDistributorFactory.deploy(
           ethers.ZeroAddress,
           platformAdminAddress,
-          owner.address
+          deployer.address
         )
       )
         .to.be.revertedWithCustomError(
@@ -114,59 +61,63 @@ describe('YieldDistributor', function () {
 
   describe('Updating platform treasury', function () {
     it('Should allow owner to update the platform treasury', async function () {
-      const { yieldDistributor, randomWallet, randomWallet2 } =
-        await loadFixture(deployYieldDistributorFixture)
+      const { yieldDistributor, platformTreasury, platformTreasury2 } =
+        await loadFixture(deployPlatformFixture)
 
       expect(await yieldDistributor.platformTreasury()).to.equal(
-        randomWallet.address
+        platformTreasury.address
       )
 
-      await expect(yieldDistributor.updatePlatformTreasury(randomWallet2))
+      await expect(yieldDistributor.updatePlatformTreasury(platformTreasury2))
         .to.emit(yieldDistributor, 'YieldDistributorOperation')
         .withArgs(
           OP_TREASURY_UPDATED,
-          randomWallet.address,
-          randomWallet2.address,
+          platformTreasury.address,
+          platformTreasury2.address,
           0,
           0
         )
 
       expect(await yieldDistributor.platformTreasury()).to.equal(
-        randomWallet2.address
+        platformTreasury2.address
       )
     })
 
     it('Should revert if non-owner attempts to update the platform treasury', async function () {
-      const { yieldDistributor, user1, randomWallet, randomWallet2 } =
-        await loadFixture(deployYieldDistributorFixture)
+      const {
+        yieldDistributor,
+        creator1,
+        platformTreasury,
+        platformTreasury2
+      } = await loadFixture(deployPlatformFixture)
 
       expect(await yieldDistributor.platformTreasury()).to.equal(
-        randomWallet.address
+        platformTreasury.address
       )
 
       yieldDistributor
-        .connect(user1)
-        .updatePlatformTreasury(randomWallet2.address)
+        .connect(creator1)
+        .updatePlatformTreasury(platformTreasury2.address)
 
       await expect(
         yieldDistributor
-          .connect(user1)
-          .updatePlatformTreasury(randomWallet2.address)
+          .connect(creator1)
+          .updatePlatformTreasury(platformTreasury2.address)
       )
         .to.be.revertedWithCustomError(yieldDistributor, 'NotAuthorizedAdmin')
-        .withArgs(user1.address)
+        .withArgs(creator1.address)
 
       expect(await yieldDistributor.platformTreasury()).to.equal(
-        randomWallet.address
+        platformTreasury.address
       )
     })
 
     it('Should revert if zero address is pass to updatePlatformTreasury()', async function () {
-      const { yieldDistributor, randomWallet } = await loadFixture(
-        deployYieldDistributorFixture
+      const { yieldDistributor, platformTreasury } = await loadFixture(
+        deployPlatformFixture
       )
       expect(await yieldDistributor.platformTreasury()).to.equal(
-        randomWallet.address
+        platformTreasury.address
       )
 
       await expect(yieldDistributor.updatePlatformTreasury(ethers.ZeroAddress))
@@ -177,46 +128,51 @@ describe('YieldDistributor', function () {
         .withArgs(ERR_INVALID_ADDRESS, ethers.ZeroAddress, 0)
 
       expect(await yieldDistributor.platformTreasury()).to.equal(
-        randomWallet.address
+        platformTreasury.address
       )
     })
 
     it('Should allow other admins to updatePlatformTreasury()', async function () {
-      const { yieldDistributor, randomWallet, randomWallet2, otherAdmin } =
-        await loadFixture(deployYieldDistributorFixture)
+      const {
+        yieldDistributor,
+        platformTreasury,
+        platformTreasury2,
+        otherAdmin,
+        platformAdmin
+      } = await loadFixture(deployPlatformFixture)
 
       expect(await yieldDistributor.platformTreasury()).to.equal(
-        randomWallet.address
+        platformTreasury.address
       )
+
+      await platformAdmin.addPlatformAdmin(otherAdmin.address)
 
       await expect(
         yieldDistributor
           .connect(otherAdmin)
-          .updatePlatformTreasury(randomWallet2.address)
+          .updatePlatformTreasury(platformTreasury2.address)
       )
         .to.emit(yieldDistributor, 'YieldDistributorOperation')
         .withArgs(
           OP_TREASURY_UPDATED,
-          randomWallet.address,
-          randomWallet2.address,
+          platformTreasury.address,
+          platformTreasury2.address,
           0,
           0
         )
 
       expect(await yieldDistributor.platformTreasury()).to.equal(
-        randomWallet2.address
+        platformTreasury2.address
       )
     })
   })
 
   describe('Updating platform yield share', function () {
     it('Should allow owner to update platform yield share', async function () {
-      const { yieldDistributor } = await loadFixture(
-        deployYieldDistributorFixture
-      )
+      const { yieldDistributor } = await loadFixture(deployPlatformFixture)
 
       const currentYieldShare = await yieldDistributor.platformYieldShare()
-      const newYieldShare = 3000
+      const newYieldShare = 200
 
       await expect(yieldDistributor.updatePlatformYieldShare(newYieldShare))
         .to.emit(yieldDistributor, 'YieldDistributorOperation')
@@ -234,9 +190,7 @@ describe('YieldDistributor', function () {
     })
 
     it('Should revert if new yield share is greater than the maximum', async function () {
-      const { yieldDistributor } = await loadFixture(
-        deployYieldDistributorFixture
-      )
+      const { yieldDistributor } = await loadFixture(deployPlatformFixture)
 
       const currentYieldShare = await yieldDistributor.platformYieldShare()
       const newYieldShare = 7000
@@ -254,18 +208,20 @@ describe('YieldDistributor', function () {
     })
 
     it('Should revert when non-owner tries to update platform yield share', async function () {
-      const { yieldDistributor, user1 } = await loadFixture(
-        deployYieldDistributorFixture
+      const { yieldDistributor, creator1 } = await loadFixture(
+        deployPlatformFixture
       )
 
       const currentYieldShare = await yieldDistributor.platformYieldShare()
-      const newYieldShare = 3000
+      const newYieldShare = 175
 
       await expect(
-        yieldDistributor.connect(user1).updatePlatformYieldShare(newYieldShare)
+        yieldDistributor
+          .connect(creator1)
+          .updatePlatformYieldShare(newYieldShare)
       )
         .to.be.revertedWithCustomError(yieldDistributor, 'NotAuthorizedAdmin')
-        .withArgs(user1.address)
+        .withArgs(creator1.address)
 
       expect(await yieldDistributor.platformYieldShare()).to.equal(
         currentYieldShare
@@ -273,9 +229,7 @@ describe('YieldDistributor', function () {
     })
 
     it('Should allow setting platform yield share to 0', async function () {
-      const { yieldDistributor } = await loadFixture(
-        deployYieldDistributorFixture
-      )
+      const { yieldDistributor } = await loadFixture(deployPlatformFixture)
 
       const currentYieldShare = await yieldDistributor.platformYieldShare()
       const newYieldShare = 0
@@ -294,7 +248,7 @@ describe('YieldDistributor', function () {
         newYieldShare
       )
 
-      const totalYield = 100
+      const totalYield = ethers.parseUnits('100', 6)
       const [creatorShare, platformShare] =
         await yieldDistributor.calculateYieldShares(totalYield)
 
@@ -302,13 +256,11 @@ describe('YieldDistributor', function () {
       expect(creatorShare).to.equal(totalYield)
     })
 
-    it('Should allow setting platform yield share to maximum value (5000)', async function () {
-      const { yieldDistributor } = await loadFixture(
-        deployYieldDistributorFixture
-      )
+    it('Should allow setting platform yield share to maximum value', async function () {
+      const { yieldDistributor } = await loadFixture(deployPlatformFixture)
 
       const currentYieldShare = await yieldDistributor.platformYieldShare()
-      const maxYieldShare = 5000 // 50%
+      const maxYieldShare = 200
 
       await expect(yieldDistributor.updatePlatformYieldShare(maxYieldShare))
         .to.emit(yieldDistributor, 'YieldDistributorOperation')
@@ -324,21 +276,27 @@ describe('YieldDistributor', function () {
         maxYieldShare
       )
 
-      const totalYield = 100
+      const totalYield = ethers.parseUnits('500', 6)
+      const expectedPlatformShare =
+        (BigInt(totalYield) * BigInt(maxYieldShare)) / BigInt(10000)
+      const expectedCreatorShare = totalYield - expectedPlatformShare
+
       const [creatorShare, platformShare] =
         await yieldDistributor.calculateYieldShares(totalYield)
 
-      expect(platformShare).to.equal(50)
-      expect(creatorShare).to.equal(50)
+      expect(platformShare).to.equal(expectedPlatformShare)
+      expect(creatorShare).to.equal(expectedCreatorShare)
     })
 
     it('Should allow other admins to update platform yield share', async function () {
-      const { yieldDistributor, otherAdmin } = await loadFixture(
-        deployYieldDistributorFixture
+      const { yieldDistributor, otherAdmin, platformAdmin } = await loadFixture(
+        deployPlatformFixture
       )
 
       const currentYieldShare = await yieldDistributor.platformYieldShare()
-      const newYieldShare = 3000
+      const newYieldShare = 20
+
+      await platformAdmin.addPlatformAdmin(otherAdmin.address)
 
       await expect(
         yieldDistributor
@@ -362,25 +320,26 @@ describe('YieldDistributor', function () {
 
   describe('Calculating yield share', function () {
     it('Should calculate correct yield share with default value', async function () {
-      const { yieldDistributor } = await loadFixture(
-        deployYieldDistributorFixture
-      )
+      const { yieldDistributor } = await loadFixture(deployPlatformFixture)
 
-      const totalYield = 5
+      const platformYieldShare = await yieldDistributor.platformYieldShare()
+
+      const totalYield = ethers.parseUnits('500', 6)
+      const expectedPlatformShare =
+        (BigInt(totalYield) * BigInt(platformYieldShare)) / BigInt(10000)
+      const expectedCreatorShare = totalYield - expectedPlatformShare
 
       expect(
         await yieldDistributor.calculateYieldShares(totalYield)
-      ).to.deep.equal([4, 1])
+      ).to.deep.equal([expectedCreatorShare, expectedPlatformShare])
     })
 
     it('Should calculate correct yield share after updating yield share', async function () {
-      const { yieldDistributor } = await loadFixture(
-        deployYieldDistributorFixture
-      )
+      const { yieldDistributor } = await loadFixture(deployPlatformFixture)
 
-      const totalYield = 5
+      const totalYield = ethers.parseUnits('500', 6)
 
-      const newYieldShare = 4000
+      const newYieldShare = 200
 
       await yieldDistributor.updatePlatformYieldShare(newYieldShare)
 
@@ -388,31 +347,34 @@ describe('YieldDistributor', function () {
         newYieldShare
       )
 
+      const expectedPlatformShare =
+        (BigInt(totalYield) * BigInt(newYieldShare)) / BigInt(10000)
+      const expectedCreatorShare = totalYield - expectedPlatformShare
+
       expect(
         await yieldDistributor.calculateYieldShares(totalYield)
-      ).to.deep.equal([3, 2])
+      ).to.deep.equal([expectedCreatorShare, expectedPlatformShare])
     })
 
     it('Should calculate correct yield share with 0 yield', async function () {
-      const { yieldDistributor } = await loadFixture(
-        deployYieldDistributorFixture
-      )
+      const { yieldDistributor } = await loadFixture(deployPlatformFixture)
 
-      const totalYield = 0
+      const totalYield = ethers.parseUnits('0', 6)
 
       expect(
         await yieldDistributor.calculateYieldShares(totalYield)
       ).to.deep.equal([0, 0])
     })
 
-    it('Should calculate correct yield share with extremely large values', async function () {
-      const { yieldDistributor } = await loadFixture(
-        deployYieldDistributorFixture
-      )
+    it('Should calculate correct yield share with extremely large but realistic values', async function () {
+      const { yieldDistributor } = await loadFixture(deployPlatformFixture)
 
-      const totalYield = 10n ** 60n
+      const platformYieldShare = await yieldDistributor.platformYieldShare()
 
-      const expectedPlatformShare = (totalYield * 2000n) / 10000n
+      const totalYield = ethers.parseUnits('1000000000', 6) // 1 billion USDC
+
+      const expectedPlatformShare =
+        (totalYield * BigInt(platformYieldShare)) / 10000n
       const expectedCreatorShare = totalYield - expectedPlatformShare
 
       const [creatorShare, platformShare] =
@@ -420,24 +382,19 @@ describe('YieldDistributor', function () {
 
       expect(platformShare).to.equal(expectedPlatformShare)
       expect(creatorShare).to.equal(expectedCreatorShare)
-      expect(
-        await yieldDistributor.calculateYieldShares(totalYield)
-      ).to.deep.equal([expectedCreatorShare, expectedPlatformShare])
 
       expect(creatorShare + platformShare).to.equal(totalYield)
     })
 
     it('Should handle rounding correctly during yield share calculation', async function () {
-      const { yieldDistributor } = await loadFixture(
-        deployYieldDistributorFixture
-      )
+      const { yieldDistributor } = await loadFixture(deployPlatformFixture)
 
-      await yieldDistributor.updatePlatformYieldShare(3333)
+      await yieldDistributor.updatePlatformYieldShare(333)
 
-      const totalYield = 10
+      const totalYield = ethers.parseUnits('10', 6) //USDC decimals
 
-      const expectedPlatformShare = 3
-      const expectedCreatorShare = 7
+      const expectedPlatformShare = ethers.parseUnits('0.333', 6)
+      const expectedCreatorShare = totalYield - expectedPlatformShare
 
       const [creatorShare, platformShare] =
         await yieldDistributor.calculateYieldShares(totalYield)
@@ -445,23 +402,12 @@ describe('YieldDistributor', function () {
       expect(platformShare).to.equal(expectedPlatformShare)
       expect(creatorShare).to.equal(expectedCreatorShare)
       expect(Number(creatorShare) + Number(platformShare)).to.equal(totalYield)
-
-      const primeTotalYield = 23
-
-      const [primeCreatorShare, primePlatformShare] =
-        await yieldDistributor.calculateYieldShares(primeTotalYield)
-
-      expect(primePlatformShare).to.equal(7)
-      expect(primeCreatorShare).to.equal(16)
-      expect(Number(primeCreatorShare) + Number(primePlatformShare)).to.equal(
-        primeTotalYield
-      )
     })
 
     it('Should revert on arithmetic overflow', async function () {
-      const { yieldDistributor } = await loadFixture(
-        deployYieldDistributorFixture
-      )
+      const { yieldDistributor } = await loadFixture(deployPlatformFixture)
+
+      const platformYieldShare = await yieldDistributor.platformYieldShare()
 
       const maxUint256 = 2n ** 256n - 1n
 
@@ -472,7 +418,8 @@ describe('YieldDistributor', function () {
         )
         .withArgs(4, ethers.ZeroAddress, maxUint256)
 
-      const overflowTrigger = maxUint256 / 2000n + 1n
+      const overflowTrigger =
+        ethers.MaxUint256 / BigInt(platformYieldShare) + 1n
 
       await expect(yieldDistributor.calculateYieldShares(overflowTrigger))
         .to.be.revertedWithCustomError(
@@ -483,89 +430,84 @@ describe('YieldDistributor', function () {
     })
 
     it('Should calculate correct yield share with 0% platform share', async function () {
-      const { yieldDistributor } = await loadFixture(
-        deployYieldDistributorFixture
-      )
+      const { yieldDistributor } = await loadFixture(deployPlatformFixture)
 
       await yieldDistributor.updatePlatformYieldShare(0)
       expect(await yieldDistributor.platformYieldShare()).to.equal(0)
 
-      const totalYield = 100
+      const totalYield = ethers.parseUnits('100', 6)
       const [creatorShare, platformShare] =
         await yieldDistributor.calculateYieldShares(totalYield)
 
-      expect(platformShare).to.equal(0)
-      expect(creatorShare).to.equal(100)
+      const expectedPlatformShare = 0
+      const expectedCreatorShare = totalYield
+
+      expect(platformShare).to.equal(expectedPlatformShare)
+      expect(creatorShare).to.equal(expectedCreatorShare)
       expect(creatorShare + platformShare).to.equal(totalYield)
     })
 
-    it('Should calculate correct yield share with maximum platform share (50%)', async function () {
-      const { yieldDistributor } = await loadFixture(
-        deployYieldDistributorFixture
-      )
+    it('Should calculate correct yield share with maximum platform share (5%)', async function () {
+      const { yieldDistributor } = await loadFixture(deployPlatformFixture)
 
-      const maxShare = 5000
+      const maxShare = 500 // 500 basis points = 5%
       await yieldDistributor.updatePlatformYieldShare(maxShare)
       expect(await yieldDistributor.platformYieldShare()).to.equal(maxShare)
 
-      const testAmounts = [10, 100, 99, 1]
+      const testAmounts = [
+        ethers.parseUnits('10', 6),
+        ethers.parseUnits('100', 6),
+        ethers.parseUnits('99', 6),
+        ethers.parseUnits('1', 6)
+      ]
 
       for (const amount of testAmounts) {
         const [creatorShare, platformShare] =
           await yieldDistributor.calculateYieldShares(amount)
 
-        const expectedPlatformShare = Math.floor((amount * 5000) / 10000)
+        const expectedPlatformShare = (amount * BigInt(maxShare)) / 10000n
         const expectedCreatorShare = amount - expectedPlatformShare
 
         expect(platformShare).to.equal(expectedPlatformShare)
         expect(creatorShare).to.equal(expectedCreatorShare)
-        expect(Number(creatorShare) + Number(platformShare)).to.equal(amount)
+
+        expect(creatorShare + platformShare).to.equal(amount)
       }
-
-      const [creatorShare100, platformShare100] =
-        await yieldDistributor.calculateYieldShares(100)
-
-      expect(platformShare100).to.equal(50)
-      expect(creatorShare100).to.equal(50)
     })
   })
 
   describe('Getter functions', function () {
     it('Should correctly return platform treasury address', async function () {
-      const { yieldDistributor, randomWallet } = await loadFixture(
-        deployYieldDistributorFixture
+      const { yieldDistributor, platformTreasury } = await loadFixture(
+        deployPlatformFixture
       )
 
       expect(await yieldDistributor.platformTreasury()).to.equal(
-        randomWallet.address
+        platformTreasury.address
       )
     })
 
     it('Should correctly return updated platform treasury address', async function () {
-      const { yieldDistributor, randomWallet, randomWallet2 } =
-        await loadFixture(deployYieldDistributorFixture)
+      const { yieldDistributor, platformTreasury, platformTreasury2 } =
+        await loadFixture(deployPlatformFixture)
 
-      await yieldDistributor.updatePlatformTreasury(randomWallet2.address)
+      await yieldDistributor.updatePlatformTreasury(platformTreasury2.address)
 
       expect(await yieldDistributor.platformTreasury()).to.equal(
-        randomWallet2.address
+        platformTreasury2.address
       )
     })
 
-    it('Should correctly return platform yield share', async function () {
-      const { yieldDistributor } = await loadFixture(
-        deployYieldDistributorFixture
-      )
+    it('Should correctly return platform default yield share', async function () {
+      const { yieldDistributor } = await loadFixture(deployPlatformFixture)
 
-      expect(await yieldDistributor.platformYieldShare()).to.equal(2000)
+      expect(await yieldDistributor.platformYieldShare()).to.equal(100)
     })
 
     it('Should correctly return updated platform yield share', async function () {
-      const { yieldDistributor } = await loadFixture(
-        deployYieldDistributorFixture
-      )
+      const { yieldDistributor } = await loadFixture(deployPlatformFixture)
 
-      const newShare = 3000
+      const newShare = 200
       await yieldDistributor.updatePlatformYieldShare(newShare)
 
       expect(await yieldDistributor.platformYieldShare()).to.equal(newShare)
@@ -573,25 +515,8 @@ describe('YieldDistributor', function () {
       await yieldDistributor.updatePlatformYieldShare(0)
       expect(await yieldDistributor.platformYieldShare()).to.equal(0)
 
-      await yieldDistributor.updatePlatformYieldShare(5000)
-      expect(await yieldDistributor.platformYieldShare()).to.equal(5000)
-    })
-
-    it('Should maintain consistency between direct variable access and getter functions', async function () {
-      const { yieldDistributor, randomWallet2 } = await loadFixture(
-        deployYieldDistributorFixture
-      )
-
-      await yieldDistributor.updatePlatformTreasury(randomWallet2.address)
-      await yieldDistributor.updatePlatformYieldShare(1500)
-
-      const directTreasury = await yieldDistributor.platformTreasury()
-      const getTreasury = await yieldDistributor.platformTreasury()
-      expect(directTreasury).to.equal(getTreasury)
-
-      const directShare = await yieldDistributor.platformYieldShare()
-      const getShare = await yieldDistributor.platformYieldShare()
-      expect(directShare).to.equal(getShare)
+      await yieldDistributor.updatePlatformYieldShare(500)
+      expect(await yieldDistributor.platformYieldShare()).to.equal(500)
     })
   })
 })

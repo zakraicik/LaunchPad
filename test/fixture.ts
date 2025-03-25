@@ -61,6 +61,7 @@ export async function deployPlatformFixture () {
   const [
     deployer,
     platformTreasury,
+    platformTreasury2,
     creator1,
     creator2,
     contributor1,
@@ -246,6 +247,7 @@ export async function deployPlatformFixture () {
     contributor2,
     contributor3,
     platformTreasury,
+    platformTreasury2,
     platformAdmin,
     tokenRegistry,
     yieldDistributor,
