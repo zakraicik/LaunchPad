@@ -207,6 +207,29 @@ describe('YieldDistributor', function () {
       )
     })
 
+    it('Should revert if new yield share is too large to fit in uint16', async function () {
+      const { yieldDistributor } = await loadFixture(deployPlatformFixture)
+
+      const currentYieldShare = await yieldDistributor.platformYieldShare()
+
+      // Value larger than uint16 max (65535)
+      const tooLargeYieldShare = 70000
+
+      await expect(
+        yieldDistributor.updatePlatformYieldShare(tooLargeYieldShare)
+      )
+        .to.be.revertedWithCustomError(
+          yieldDistributor,
+          'YieldDistributorError'
+        )
+        .withArgs(ERR_INVALID_SHARE, ethers.ZeroAddress, tooLargeYieldShare)
+
+      // Verify state hasn't changed
+      expect(await yieldDistributor.platformYieldShare()).to.equal(
+        currentYieldShare
+      )
+    })
+
     it('Should revert when non-owner tries to update platform yield share', async function () {
       const { yieldDistributor, creator1 } = await loadFixture(
         deployPlatformFixture
