@@ -328,6 +328,77 @@ describe('CampaignContractFactory', function () {
         .withArgs(ERR_INVALID_DURATION, ethers.ZeroAddress, campaignDuration)
     })
 
+    it('Should allow deploying a campaign with the maximum allowed duration (365 days)', async function () {
+      const { campaignContractFactory, usdc } = await loadFixture(
+        deployPlatformFixture
+      )
+
+      const usdcAddress = await usdc.getAddress()
+      const campaignGoalAmount = ethers.parseUnits('10', await usdc.decimals())
+      const campaignDuration = 365 // Maximum allowed duration
+
+      // Deploy the campaign with max duration
+      const tx = await campaignContractFactory.deploy(
+        usdcAddress,
+        campaignGoalAmount,
+        campaignDuration
+      )
+      const receipt = await tx.wait()
+
+      if (!receipt) {
+        throw new Error('Transaction failed to return a receipt')
+      }
+
+      // Find the event
+      const event = receipt.logs.find(log => {
+        try {
+          const parsed = campaignContractFactory.interface.parseLog(log)
+          return parsed && parsed.name === 'FactoryOperation'
+        } catch {
+          return false
+        }
+      })
+
+      if (!event) {
+        throw new Error('Event failed')
+      }
+
+      const parsedEvent = campaignContractFactory.interface.parseLog(event)
+      if (!parsedEvent) {
+        throw new Error('Event failed')
+      }
+
+      // Get the campaign address
+      const campaignAddress = parsedEvent.args[1]
+
+      // Verify campaign was created
+      const Campaign = await ethers.getContractFactory('Campaign')
+      const campaign = Campaign.attach(campaignAddress) as unknown as Campaign
+
+      // Check that the duration was correctly set
+      expect(await campaign.campaignDuration()).to.equal(campaignDuration)
+    })
+
+    it('Should revert when deploying a campaign with duration > 365 days', async function () {
+      const { campaignContractFactory, usdc } = await loadFixture(
+        deployPlatformFixture
+      )
+
+      const usdcAddress = await usdc.getAddress()
+      const campaignGoalAmount = ethers.parseUnits('10', await usdc.decimals())
+      const campaignDuration = 366 // One day over maximum
+
+      await expect(
+        campaignContractFactory.deploy(
+          usdcAddress,
+          campaignGoalAmount,
+          campaignDuration
+        )
+      )
+        .to.be.revertedWithCustomError(campaignContractFactory, 'FactoryError')
+        .withArgs(ERR_INVALID_DURATION, ethers.ZeroAddress, campaignDuration)
+    })
+
     it('Should correctly manage campaigns from different creators', async function () {
       const { campaignContractFactory, deployer, creator1, usdc } =
         await loadFixture(deployPlatformFixture)
