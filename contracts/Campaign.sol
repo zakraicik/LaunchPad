@@ -244,21 +244,9 @@ contract Campaign is Ownable, ReentrancyGuard, PlatformAdminAccessControl {
 
     function claimFunds() external onlyOwner nonReentrant {
         _claimFunds();
-
-        if (isCampaignSuccessful()) {
-            TokenOperations.safeTransfer(
-                campaignToken,
-                owner(),
-                IERC20(campaignToken).balanceOf(address(this))
-            );
-        }
     }
 
-    function claimFundsAdmin()
-        external
-        onlyPlatformAdminAfterGrace
-        nonReentrant
-    {
+    function claimFundsAdmin() external onlyPlatformAdmin nonReentrant {
         _claimFunds();
     }
 
@@ -289,6 +277,14 @@ contract Campaign is Ownable, ReentrancyGuard, PlatformAdminAccessControl {
             isCampaignSuccessful(),
             totalAmountRaised
         );
+
+        if (isCampaignSuccessful()) {
+            TokenOperations.safeTransfer(
+                campaignToken,
+                owner(),
+                IERC20(campaignToken).balanceOf(address(this))
+            );
+        }
 
         hasClaimedFunds = true;
 

@@ -21,7 +21,6 @@ const WBTC = '0x0555e30da8f98308edb960aa94c0db47230d2b9c' //Wrapped BTC on base
 
 // Constants for testing
 
-const GRACE_PERIOD = 7 // 7 days grace period
 const GAS_LIMIT = 5000000
 
 let usdc: IERC20Metadata
@@ -116,7 +115,7 @@ export async function deployPlatformFixture () {
   //Deploy PlatformAdmin
   platformAdmin = await ethers.deployContract(
     'PlatformAdmin',
-    [GRACE_PERIOD, deployer.address],
+    [deployer.address],
     {
       maxFeePerGas,
       maxPriorityFeePerGas,
@@ -284,7 +283,6 @@ export async function deployPlatformFixture () {
     campaignContractFactory,
     IERC20ABI,
     AAVE_POOL_ADDRESS,
-    GRACE_PERIOD,
     otherAdmin,
     aavePool,
     campaign

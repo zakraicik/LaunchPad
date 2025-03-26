@@ -7,7 +7,6 @@ abstract contract PlatformAdminAccessControl {
     IPlatformAdmin public immutable platformAdmin;
 
     error NotAuthorizedAdmin(address sender);
-    error GracePeriodNotOver(uint256 timeRemaining);
 
     constructor(address _platformAdmin) {
         platformAdmin = IPlatformAdmin(_platformAdmin);
@@ -21,18 +20,5 @@ abstract contract PlatformAdminAccessControl {
 
     function isAdminOverrideActive() public view virtual returns (bool) {
         return false;
-    }
-
-    modifier onlyPlatformAdminAfterGrace() {
-        if (!platformAdmin.platformAdmins(msg.sender))
-            revert NotAuthorizedAdmin(msg.sender);
-
-        if (!isAdminOverrideActive()) {
-            (bool isGraceOver, uint256 timeRemaining) = platformAdmin
-                .isGracePeriodOver(address(this));
-            if (!isGraceOver) revert GracePeriodNotOver(timeRemaining);
-        }
-
-        _;
     }
 }
