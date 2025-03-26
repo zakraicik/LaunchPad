@@ -243,6 +243,8 @@ contract Campaign is Ownable, ReentrancyGuard, PlatformAdminAccessControl {
     }
 
     function claimFunds() external onlyOwner nonReentrant {
+        if (adminOverride)
+            revert CampaignError(ERR_ADMIN_OVERRIDE_ACTIVE, address(0), 0);
         _claimFunds();
     }
 
@@ -251,8 +253,10 @@ contract Campaign is Ownable, ReentrancyGuard, PlatformAdminAccessControl {
     }
 
     function _claimFunds() internal {
-        if (isCampaignActive() && !isCampaignSuccessful())
-            revert CampaignError(ERR_CAMPAIGN_STILL_ACTIVE, address(0), 0);
+        if (!adminOverride) {
+            if (isCampaignActive() && !isCampaignSuccessful())
+                revert CampaignError(ERR_CAMPAIGN_STILL_ACTIVE, address(0), 0);
+        }
 
         if (hasClaimedFunds)
             revert CampaignError(ERR_FUNDS_CLAIMED, address(0), 0);
