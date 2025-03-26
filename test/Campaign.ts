@@ -691,7 +691,7 @@ describe('Campaign', function () {
 
   describe('Fund Management', function () {
     describe('Claiming Funds', function () {
-      it.only('Should allow owner to claim funds when campaign is successful before campaign end date', async function () {
+      it('Should allow owner to claim funds when campaign is successful before campaign end date', async function () {
         const {
           defiIntegrationManager,
           campaign,
@@ -795,7 +795,1273 @@ describe('Campaign', function () {
           .withArgs(ERR_FUNDS_CLAIMED, ethers.ZeroAddress, 0)
       })
 
-      it('Should allow owner to claim funds when campaign is unsuccessful and distribute funds correctly', async function () {})
+      it('Should allow owner to claim funds when campaign is unsuccessful and distribute funds correctly', async function () {
+        const {
+          defiIntegrationManager,
+          campaign,
+          contributor1,
+          contributor2,
+          usdc,
+          creator1,
+          IERC20ABI,
+          platformTreasury
+        } = await loadFixture(deployPlatformFixture)
+
+        const usdcAddress = await usdc.getAddress()
+        const usdcDecimals = await usdc.decimals()
+
+        const aTokenAddress = await defiIntegrationManager.getATokenAddress(
+          usdcAddress
+        )
+
+        const aToken = await ethers.getContractAt(IERC20ABI, aTokenAddress)
+
+        const contributionAmount1 = ethers.parseUnits('400', usdcDecimals)
+        const contributionAmount2 = ethers.parseUnits('400', usdcDecimals)
+
+        await usdc
+          .connect(contributor1)
+          .approve(await campaign.getAddress(), contributionAmount1)
+
+        await campaign
+          .connect(contributor1)
+          .contribute(await usdc.getAddress(), contributionAmount1)
+
+        await usdc
+          .connect(contributor2)
+          .approve(await campaign.getAddress(), contributionAmount2)
+
+        await campaign
+          .connect(contributor2)
+          .contribute(await usdc.getAddress(), contributionAmount2)
+
+        await ethers.provider.send('evm_increaseTime', [
+          CAMPAIGN_DURATION * 24 * 60 * 60
+        ])
+
+        await ethers.provider.send('evm_mine')
+
+        expect(await campaign.isCampaignActive()).to.be.false //Not past campaign end date
+        expect(await campaign.isCampaignSuccessful()).to.be.false
+
+        const aTokenBalanceBeforeClaim = await aToken.balanceOf(
+          await campaign.getAddress()
+        )
+
+        const platformTreasuryBalanceBeforeClaim = await usdc.balanceOf(
+          platformTreasury.address
+        )
+
+        const campaignBalanceBeforeClaim = await usdc.balanceOf(
+          await campaign.getAddress()
+        )
+
+        const ownerBalanceBeforeClaim = await usdc.balanceOf(
+          await campaign.owner()
+        )
+
+        expect(aTokenBalanceBeforeClaim).to.be.greaterThan(0)
+
+        expect(await campaign.hasClaimedFunds()).to.be.false
+
+        await expect(campaign.connect(creator1).claimFunds())
+          .to.emit(campaign, 'FundsClaimed')
+          .withArgs(await campaign.getAddress(), anyUint)
+
+        expect(await campaign.hasClaimedFunds()).to.be.true
+
+        const coverRefunds = await campaign.totalAmountRaised()
+        const platformShare = aTokenBalanceBeforeClaim - coverRefunds
+
+        const aTokenBalanceAftereClaim = await aToken.balanceOf(
+          await campaign.getAddress()
+        )
+
+        expect(aTokenBalanceAftereClaim).to.be.closeTo(0, 1)
+
+        const platformTreasuryBalanceAfterClaim = await usdc.balanceOf(
+          await platformTreasury.address
+        )
+
+        const campaignBalanceAfterClaim = await usdc.balanceOf(
+          await campaign.getAddress()
+        )
+
+        const ownerBalanceAfterClaim = await usdc.balanceOf(
+          await campaign.owner()
+        )
+
+        expect(platformTreasuryBalanceAfterClaim).to.be.closeTo(
+          platformTreasuryBalanceBeforeClaim + platformShare,
+          1
+        )
+
+        expect(campaignBalanceAfterClaim).to.be.closeTo(
+          campaignBalanceBeforeClaim + coverRefunds,
+          1
+        )
+
+        expect(ownerBalanceAfterClaim).to.be.equal(ownerBalanceBeforeClaim)
+
+        await expect(campaign.connect(creator1).claimFunds())
+          .to.be.revertedWithCustomError(campaign, 'CampaignError')
+          .withArgs(ERR_FUNDS_CLAIMED, ethers.ZeroAddress, 0)
+      })
+
+      it('Should allow platformAdmin to claim funds after grace period when campaign is successful before campaign end date', async function () {
+        const {
+          defiIntegrationManager,
+          campaign,
+          contributor1,
+          contributor2,
+          usdc,
+          IERC20ABI,
+          yieldDistributor,
+          platformTreasury,
+          deployer
+        } = await loadFixture(deployPlatformFixture)
+
+        const usdcAddress = await usdc.getAddress()
+        const usdcDecimals = await usdc.decimals()
+
+        const aTokenAddress = await defiIntegrationManager.getATokenAddress(
+          usdcAddress
+        )
+
+        const aToken = await ethers.getContractAt(IERC20ABI, aTokenAddress)
+
+        const contributionAmount1 = ethers.parseUnits('400', usdcDecimals)
+        const contributionAmount2 = ethers.parseUnits('650', usdcDecimals)
+
+        await usdc
+          .connect(contributor1)
+          .approve(await campaign.getAddress(), contributionAmount1)
+
+        await campaign
+          .connect(contributor1)
+          .contribute(await usdc.getAddress(), contributionAmount1)
+
+        await ethers.provider.send('evm_increaseTime', [
+          (CAMPAIGN_DURATION - 5) * 24 * 60 * 60
+        ])
+
+        await ethers.provider.send('evm_mine')
+
+        await usdc
+          .connect(contributor2)
+          .approve(await campaign.getAddress(), contributionAmount2)
+
+        await campaign
+          .connect(contributor2)
+          .contribute(await usdc.getAddress(), contributionAmount2)
+
+        expect(await campaign.isCampaignActive()).to.be.true //Not past campaign end date
+        expect(await campaign.isCampaignSuccessful()).to.be.true
+
+        const aTokenBalanceBeforeClaim = await aToken.balanceOf(
+          await campaign.getAddress()
+        )
+
+        const platformTreasuryBalanceBeforeClaim = await usdc.balanceOf(
+          platformTreasury.address
+        )
+
+        const creatorBalanceBeforeClaim = await usdc.balanceOf(
+          await campaign.owner()
+        )
+
+        expect(aTokenBalanceBeforeClaim).to.be.greaterThan(0)
+
+        expect(await campaign.hasClaimedFunds()).to.be.false
+
+        await expect(campaign.connect(deployer).claimFundsAdmin())
+          .to.emit(campaign, 'FundsClaimed')
+          .withArgs(await campaign.getAddress(), anyUint)
+
+        expect(await campaign.hasClaimedFunds()).to.be.true
+
+        const { creatorShare, platformShare } =
+          await yieldDistributor.calculateYieldShares(aTokenBalanceBeforeClaim)
+
+        const aTokenBalanceAftereClaim = await aToken.balanceOf(
+          await campaign.getAddress()
+        )
+
+        expect(aTokenBalanceAftereClaim).to.be.closeTo(0, 1)
+
+        const platformTreasuryBalanceAfterClaim = await usdc.balanceOf(
+          await platformTreasury.address
+        )
+
+        const creatorBalanceAfterClaim = await usdc.balanceOf(
+          await campaign.owner()
+        )
+
+        expect(platformTreasuryBalanceAfterClaim).to.be.closeTo(
+          platformTreasuryBalanceBeforeClaim + platformShare,
+          1
+        )
+
+        expect(creatorBalanceAfterClaim).to.be.closeTo(
+          creatorBalanceBeforeClaim + creatorShare,
+          1
+        )
+
+        await expect(campaign.connect(deployer).claimFundsAdmin())
+          .to.be.revertedWithCustomError(campaign, 'CampaignError')
+          .withArgs(ERR_FUNDS_CLAIMED, ethers.ZeroAddress, 0)
+      })
+
+      it('Should allow platformAdmin to claim funds when campaign is unsuccessful and distribute funds correctly', async function () {
+        const {
+          defiIntegrationManager,
+          campaign,
+          contributor1,
+          contributor2,
+          usdc,
+          IERC20ABI,
+          platformTreasury,
+          deployer //admin
+        } = await loadFixture(deployPlatformFixture)
+
+        const usdcAddress = await usdc.getAddress()
+        const usdcDecimals = await usdc.decimals()
+
+        const aTokenAddress = await defiIntegrationManager.getATokenAddress(
+          usdcAddress
+        )
+
+        const aToken = await ethers.getContractAt(IERC20ABI, aTokenAddress)
+
+        const contributionAmount1 = ethers.parseUnits('400', usdcDecimals)
+        const contributionAmount2 = ethers.parseUnits('400', usdcDecimals)
+
+        await usdc
+          .connect(contributor1)
+          .approve(await campaign.getAddress(), contributionAmount1)
+
+        await campaign
+          .connect(contributor1)
+          .contribute(await usdc.getAddress(), contributionAmount1)
+
+        await usdc
+          .connect(contributor2)
+          .approve(await campaign.getAddress(), contributionAmount2)
+
+        await campaign
+          .connect(contributor2)
+          .contribute(await usdc.getAddress(), contributionAmount2)
+
+        await ethers.provider.send('evm_increaseTime', [
+          CAMPAIGN_DURATION * 24 * 60 * 60
+        ])
+
+        await ethers.provider.send('evm_mine')
+
+        expect(await campaign.isCampaignActive()).to.be.false //Not past campaign end date
+        expect(await campaign.isCampaignSuccessful()).to.be.false
+
+        const aTokenBalanceBeforeClaim = await aToken.balanceOf(
+          await campaign.getAddress()
+        )
+
+        const platformTreasuryBalanceBeforeClaim = await usdc.balanceOf(
+          platformTreasury.address
+        )
+
+        const campaignBalanceBeforeClaim = await usdc.balanceOf(
+          await campaign.getAddress()
+        )
+
+        const ownerBalanceBeforeClaim = await usdc.balanceOf(
+          await campaign.owner()
+        )
+
+        expect(aTokenBalanceBeforeClaim).to.be.greaterThan(0)
+
+        expect(await campaign.hasClaimedFunds()).to.be.false
+
+        await expect(campaign.connect(deployer).claimFundsAdmin())
+          .to.emit(campaign, 'FundsClaimed')
+          .withArgs(await campaign.getAddress(), anyUint)
+
+        expect(await campaign.hasClaimedFunds()).to.be.true
+
+        const coverRefunds = await campaign.totalAmountRaised()
+        const platformShare = aTokenBalanceBeforeClaim - coverRefunds
+
+        const aTokenBalanceAftereClaim = await aToken.balanceOf(
+          await campaign.getAddress()
+        )
+
+        expect(aTokenBalanceAftereClaim).to.be.closeTo(0, 1)
+
+        const platformTreasuryBalanceAfterClaim = await usdc.balanceOf(
+          await platformTreasury.address
+        )
+
+        const campaignBalanceAfterClaim = await usdc.balanceOf(
+          await campaign.getAddress()
+        )
+
+        const ownerBalanceAfterClaim = await usdc.balanceOf(
+          await campaign.owner()
+        )
+
+        expect(platformTreasuryBalanceAfterClaim).to.be.closeTo(
+          platformTreasuryBalanceBeforeClaim + platformShare,
+          1
+        )
+
+        expect(campaignBalanceAfterClaim).to.be.closeTo(
+          campaignBalanceBeforeClaim + coverRefunds,
+          1
+        )
+
+        expect(ownerBalanceAfterClaim).to.be.equal(ownerBalanceBeforeClaim)
+
+        await expect(campaign.connect(deployer).claimFundsAdmin())
+          .to.be.revertedWithCustomError(campaign, 'CampaignError')
+          .withArgs(ERR_FUNDS_CLAIMED, ethers.ZeroAddress, 0)
+      })
+
+      it('Should allow platformAdmin to claim funds when admin override is active', async function () {
+        const {
+          defiIntegrationManager,
+          campaign,
+          contributor1,
+          contributor2,
+          usdc,
+          IERC20ABI,
+          platformTreasury,
+          deployer //admin
+        } = await loadFixture(deployPlatformFixture)
+
+        const usdcAddress = await usdc.getAddress()
+        const usdcDecimals = await usdc.decimals()
+
+        const aTokenAddress = await defiIntegrationManager.getATokenAddress(
+          usdcAddress
+        )
+
+        const aToken = await ethers.getContractAt(IERC20ABI, aTokenAddress)
+
+        const contributionAmount1 = ethers.parseUnits('400', usdcDecimals)
+        const contributionAmount2 = ethers.parseUnits('400', usdcDecimals)
+
+        await usdc
+          .connect(contributor1)
+          .approve(await campaign.getAddress(), contributionAmount1)
+
+        await campaign
+          .connect(contributor1)
+          .contribute(await usdc.getAddress(), contributionAmount1)
+
+        await usdc
+          .connect(contributor2)
+          .approve(await campaign.getAddress(), contributionAmount2)
+
+        await campaign
+          .connect(contributor2)
+          .contribute(await usdc.getAddress(), contributionAmount2)
+
+        await ethers.provider.send('evm_mine')
+
+        expect(await campaign.isCampaignActive()).to.be.true //Not past campaign end date
+        expect(await campaign.isCampaignSuccessful()).to.be.false
+
+        const aTokenBalanceBeforeClaim = await aToken.balanceOf(
+          await campaign.getAddress()
+        )
+
+        const platformTreasuryBalanceBeforeClaim = await usdc.balanceOf(
+          platformTreasury.address
+        )
+
+        const campaignBalanceBeforeClaim = await usdc.balanceOf(
+          await campaign.getAddress()
+        )
+
+        const ownerBalanceBeforeClaim = await usdc.balanceOf(
+          await campaign.owner()
+        )
+
+        expect(aTokenBalanceBeforeClaim).to.be.greaterThan(0)
+
+        expect(await campaign.hasClaimedFunds()).to.be.false
+
+        await campaign.connect(deployer).setAdminOverride(true)
+
+        await expect(campaign.connect(deployer).claimFundsAdmin())
+          .to.emit(campaign, 'FundsClaimed')
+          .withArgs(await campaign.getAddress(), anyUint)
+
+        expect(await campaign.hasClaimedFunds()).to.be.true
+
+        const coverRefunds = await campaign.totalAmountRaised()
+        const platformShare = aTokenBalanceBeforeClaim - coverRefunds
+
+        const aTokenBalanceAftereClaim = await aToken.balanceOf(
+          await campaign.getAddress()
+        )
+
+        expect(aTokenBalanceAftereClaim).to.be.closeTo(0, 5)
+
+        const platformTreasuryBalanceAfterClaim = await usdc.balanceOf(
+          await platformTreasury.address
+        )
+
+        const campaignBalanceAfterClaim = await usdc.balanceOf(
+          await campaign.getAddress()
+        )
+
+        const ownerBalanceAfterClaim = await usdc.balanceOf(
+          await campaign.owner()
+        )
+
+        expect(platformTreasuryBalanceAfterClaim).to.be.closeTo(
+          platformTreasuryBalanceBeforeClaim + platformShare,
+          5
+        )
+
+        expect(campaignBalanceAfterClaim).to.be.closeTo(
+          campaignBalanceBeforeClaim + coverRefunds,
+          5
+        )
+
+        expect(ownerBalanceAfterClaim).to.be.equal(ownerBalanceBeforeClaim)
+
+        await expect(campaign.connect(deployer).claimFundsAdmin())
+          .to.be.revertedWithCustomError(campaign, 'CampaignError')
+          .withArgs(ERR_FUNDS_CLAIMED, ethers.ZeroAddress, 0)
+      })
+
+      it('Should prevent creator from claiming funds when admin override is active', async function () {
+        const {
+          defiIntegrationManager,
+          campaign,
+          contributor1,
+          contributor2,
+          usdc,
+          creator1,
+          deployer
+        } = await loadFixture(deployPlatformFixture)
+
+        const usdcAddress = await usdc.getAddress()
+        const usdcDecimals = await usdc.decimals()
+
+        const aTokenAddress = await defiIntegrationManager.getATokenAddress(
+          usdcAddress
+        )
+
+        const contributionAmount1 = ethers.parseUnits('400', usdcDecimals)
+        const contributionAmount2 = ethers.parseUnits('650', usdcDecimals)
+
+        await usdc
+          .connect(contributor1)
+          .approve(await campaign.getAddress(), contributionAmount1)
+
+        await campaign
+          .connect(contributor1)
+          .contribute(await usdc.getAddress(), contributionAmount1)
+
+        await ethers.provider.send('evm_increaseTime', [
+          (CAMPAIGN_DURATION - 5) * 24 * 60 * 60
+        ])
+
+        await ethers.provider.send('evm_mine')
+
+        await usdc
+          .connect(contributor2)
+          .approve(await campaign.getAddress(), contributionAmount2)
+
+        await campaign
+          .connect(contributor2)
+          .contribute(await usdc.getAddress(), contributionAmount2)
+
+        await campaign.connect(deployer).setAdminOverride(true)
+
+        expect(await campaign.isCampaignActive()).to.be.false //Override sets this to false
+        expect(await campaign.isCampaignSuccessful()).to.be.true
+
+        expect(await campaign.hasClaimedFunds()).to.be.false
+
+        await expect(campaign.connect(creator1).claimFunds())
+          .to.be.revertedWithCustomError(campaign, 'CampaignError')
+          .withArgs(ERR_ADMIN_OVERRIDE_ACTIVE, ethers.ZeroAddress, 0)
+
+        expect(await campaign.hasClaimedFunds()).to.be.false
+      })
+
+      it('Should prevent owner from claiming funds when if campaign is still active but has not reached goal', async function () {
+        const {
+          defiIntegrationManager,
+          campaign,
+          contributor1,
+          contributor2,
+          usdc,
+          creator1,
+          IERC20ABI,
+          yieldDistributor,
+          platformTreasury
+        } = await loadFixture(deployPlatformFixture)
+
+        const usdcAddress = await usdc.getAddress()
+        const usdcDecimals = await usdc.decimals()
+
+        const aTokenAddress = await defiIntegrationManager.getATokenAddress(
+          usdcAddress
+        )
+
+        const aToken = await ethers.getContractAt(IERC20ABI, aTokenAddress)
+
+        const contributionAmount1 = ethers.parseUnits('400', usdcDecimals)
+        const contributionAmount2 = ethers.parseUnits('450', usdcDecimals)
+
+        await usdc
+          .connect(contributor1)
+          .approve(await campaign.getAddress(), contributionAmount1)
+
+        await campaign
+          .connect(contributor1)
+          .contribute(await usdc.getAddress(), contributionAmount1)
+
+        await ethers.provider.send('evm_increaseTime', [
+          (CAMPAIGN_DURATION - 5) * 24 * 60 * 60
+        ])
+
+        await ethers.provider.send('evm_mine')
+
+        await usdc
+          .connect(contributor2)
+          .approve(await campaign.getAddress(), contributionAmount2)
+
+        await campaign
+          .connect(contributor2)
+          .contribute(await usdc.getAddress(), contributionAmount2)
+
+        expect(await campaign.isCampaignActive()).to.be.true //Not past campaign end date
+        expect(await campaign.isCampaignSuccessful()).to.be.false
+
+        const aTokenBalanceBeforeClaim = await aToken.balanceOf(
+          await campaign.getAddress()
+        )
+
+        const platformTreasuryBalanceBeforeClaim = await usdc.balanceOf(
+          platformTreasury.address
+        )
+
+        const creatorBalanceBeforeClaim = await usdc.balanceOf(
+          await campaign.owner()
+        )
+
+        expect(aTokenBalanceBeforeClaim).to.be.greaterThan(0)
+
+        expect(await campaign.hasClaimedFunds()).to.be.false
+
+        await expect(campaign.connect(creator1).claimFunds())
+          .to.be.revertedWithCustomError(campaign, 'CampaignError')
+          .withArgs(ERR_CAMPAIGN_STILL_ACTIVE, ethers.ZeroAddress, 0)
+
+        expect(await campaign.hasClaimedFunds()).to.be.false
+
+        const aTokenBalanceAftereClaim = await aToken.balanceOf(
+          await campaign.getAddress()
+        )
+
+        expect(aTokenBalanceAftereClaim).to.be.closeTo(
+          aTokenBalanceBeforeClaim,
+          10
+        )
+
+        const platformTreasuryBalanceAfterClaim = await usdc.balanceOf(
+          await platformTreasury.address
+        )
+
+        const creatorBalanceAfterClaim = await usdc.balanceOf(
+          await campaign.owner()
+        )
+
+        expect(platformTreasuryBalanceAfterClaim).to.equal(
+          platformTreasuryBalanceBeforeClaim
+        )
+
+        expect(creatorBalanceAfterClaim).to.equal(creatorBalanceBeforeClaim)
+      })
+
+      it('Should allow owner to claim funds when campaign is successful before campaign end date', async function () {
+        const {
+          defiIntegrationManager,
+          campaign,
+          contributor1,
+          contributor2,
+          usdc,
+          creator1,
+          IERC20ABI,
+          yieldDistributor,
+          platformTreasury
+        } = await loadFixture(deployPlatformFixture)
+
+        const usdcAddress = await usdc.getAddress()
+        const usdcDecimals = await usdc.decimals()
+
+        const aTokenAddress = await defiIntegrationManager.getATokenAddress(
+          usdcAddress
+        )
+
+        const aToken = await ethers.getContractAt(IERC20ABI, aTokenAddress)
+
+        const contributionAmount1 = ethers.parseUnits('400', usdcDecimals)
+        const contributionAmount2 = ethers.parseUnits('650', usdcDecimals)
+
+        await usdc
+          .connect(contributor1)
+          .approve(await campaign.getAddress(), contributionAmount1)
+
+        await campaign
+          .connect(contributor1)
+          .contribute(await usdc.getAddress(), contributionAmount1)
+
+        await ethers.provider.send('evm_increaseTime', [
+          (CAMPAIGN_DURATION - 5) * 24 * 60 * 60
+        ])
+
+        await ethers.provider.send('evm_mine')
+
+        await usdc
+          .connect(contributor2)
+          .approve(await campaign.getAddress(), contributionAmount2)
+
+        await campaign
+          .connect(contributor2)
+          .contribute(await usdc.getAddress(), contributionAmount2)
+
+        expect(await campaign.isCampaignActive()).to.be.true //Not past campaign end date
+        expect(await campaign.isCampaignSuccessful()).to.be.true
+
+        const aTokenBalanceBeforeClaim = await aToken.balanceOf(
+          await campaign.getAddress()
+        )
+
+        const platformTreasuryBalanceBeforeClaim = await usdc.balanceOf(
+          platformTreasury.address
+        )
+
+        const creatorBalanceBeforeClaim = await usdc.balanceOf(
+          await campaign.owner()
+        )
+
+        expect(aTokenBalanceBeforeClaim).to.be.greaterThan(0)
+
+        expect(await campaign.hasClaimedFunds()).to.be.false
+
+        await expect(campaign.connect(creator1).claimFunds())
+          .to.emit(campaign, 'FundsClaimed')
+          .withArgs(await campaign.getAddress(), anyUint)
+
+        expect(await campaign.hasClaimedFunds()).to.be.true
+
+        const { creatorShare, platformShare } =
+          await yieldDistributor.calculateYieldShares(aTokenBalanceBeforeClaim)
+
+        const aTokenBalanceAftereClaim = await aToken.balanceOf(
+          await campaign.getAddress()
+        )
+
+        expect(aTokenBalanceAftereClaim).to.be.closeTo(0, 1)
+
+        const platformTreasuryBalanceAfterClaim = await usdc.balanceOf(
+          await platformTreasury.address
+        )
+
+        const creatorBalanceAfterClaim = await usdc.balanceOf(
+          await campaign.owner()
+        )
+
+        expect(platformTreasuryBalanceAfterClaim).to.be.closeTo(
+          platformTreasuryBalanceBeforeClaim + platformShare,
+          1
+        )
+
+        expect(creatorBalanceAfterClaim).to.be.closeTo(
+          creatorBalanceBeforeClaim + creatorShare,
+          1
+        )
+
+        await expect(campaign.connect(creator1).claimFunds())
+          .to.be.revertedWithCustomError(campaign, 'CampaignError')
+          .withArgs(ERR_FUNDS_CLAIMED, ethers.ZeroAddress, 0)
+      })
+
+      it('Should allow owner to claim funds when campaign is unsuccessful and distribute funds correctly', async function () {
+        const {
+          defiIntegrationManager,
+          campaign,
+          contributor1,
+          contributor2,
+          usdc,
+          creator1,
+          IERC20ABI,
+          platformTreasury
+        } = await loadFixture(deployPlatformFixture)
+
+        const usdcAddress = await usdc.getAddress()
+        const usdcDecimals = await usdc.decimals()
+
+        const aTokenAddress = await defiIntegrationManager.getATokenAddress(
+          usdcAddress
+        )
+
+        const aToken = await ethers.getContractAt(IERC20ABI, aTokenAddress)
+
+        const contributionAmount1 = ethers.parseUnits('400', usdcDecimals)
+        const contributionAmount2 = ethers.parseUnits('400', usdcDecimals)
+
+        await usdc
+          .connect(contributor1)
+          .approve(await campaign.getAddress(), contributionAmount1)
+
+        await campaign
+          .connect(contributor1)
+          .contribute(await usdc.getAddress(), contributionAmount1)
+
+        await usdc
+          .connect(contributor2)
+          .approve(await campaign.getAddress(), contributionAmount2)
+
+        await campaign
+          .connect(contributor2)
+          .contribute(await usdc.getAddress(), contributionAmount2)
+
+        await ethers.provider.send('evm_increaseTime', [
+          CAMPAIGN_DURATION * 24 * 60 * 60
+        ])
+
+        await ethers.provider.send('evm_mine')
+
+        expect(await campaign.isCampaignActive()).to.be.false //Not past campaign end date
+        expect(await campaign.isCampaignSuccessful()).to.be.false
+
+        const aTokenBalanceBeforeClaim = await aToken.balanceOf(
+          await campaign.getAddress()
+        )
+
+        const platformTreasuryBalanceBeforeClaim = await usdc.balanceOf(
+          platformTreasury.address
+        )
+
+        const campaignBalanceBeforeClaim = await usdc.balanceOf(
+          await campaign.getAddress()
+        )
+
+        const ownerBalanceBeforeClaim = await usdc.balanceOf(
+          await campaign.owner()
+        )
+
+        expect(aTokenBalanceBeforeClaim).to.be.greaterThan(0)
+
+        expect(await campaign.hasClaimedFunds()).to.be.false
+
+        await expect(campaign.connect(creator1).claimFunds())
+          .to.emit(campaign, 'FundsClaimed')
+          .withArgs(await campaign.getAddress(), anyUint)
+
+        expect(await campaign.hasClaimedFunds()).to.be.true
+
+        const coverRefunds = await campaign.totalAmountRaised()
+        const platformShare = aTokenBalanceBeforeClaim - coverRefunds
+
+        const aTokenBalanceAftereClaim = await aToken.balanceOf(
+          await campaign.getAddress()
+        )
+
+        expect(aTokenBalanceAftereClaim).to.be.closeTo(0, 1)
+
+        const platformTreasuryBalanceAfterClaim = await usdc.balanceOf(
+          await platformTreasury.address
+        )
+
+        const campaignBalanceAfterClaim = await usdc.balanceOf(
+          await campaign.getAddress()
+        )
+
+        const ownerBalanceAfterClaim = await usdc.balanceOf(
+          await campaign.owner()
+        )
+
+        expect(platformTreasuryBalanceAfterClaim).to.be.closeTo(
+          platformTreasuryBalanceBeforeClaim + platformShare,
+          1
+        )
+
+        expect(campaignBalanceAfterClaim).to.be.closeTo(
+          campaignBalanceBeforeClaim + coverRefunds,
+          1
+        )
+
+        expect(ownerBalanceAfterClaim).to.be.equal(ownerBalanceBeforeClaim)
+
+        await expect(campaign.connect(creator1).claimFunds())
+          .to.be.revertedWithCustomError(campaign, 'CampaignError')
+          .withArgs(ERR_FUNDS_CLAIMED, ethers.ZeroAddress, 0)
+      })
+
+      it('Should allow platformAdmin to claim funds after grace period when campaign is successful before campaign end date', async function () {
+        const {
+          defiIntegrationManager,
+          campaign,
+          contributor1,
+          contributor2,
+          usdc,
+          IERC20ABI,
+          yieldDistributor,
+          platformTreasury,
+          deployer
+        } = await loadFixture(deployPlatformFixture)
+
+        const usdcAddress = await usdc.getAddress()
+        const usdcDecimals = await usdc.decimals()
+
+        const aTokenAddress = await defiIntegrationManager.getATokenAddress(
+          usdcAddress
+        )
+
+        const aToken = await ethers.getContractAt(IERC20ABI, aTokenAddress)
+
+        const contributionAmount1 = ethers.parseUnits('400', usdcDecimals)
+        const contributionAmount2 = ethers.parseUnits('650', usdcDecimals)
+
+        await usdc
+          .connect(contributor1)
+          .approve(await campaign.getAddress(), contributionAmount1)
+
+        await campaign
+          .connect(contributor1)
+          .contribute(await usdc.getAddress(), contributionAmount1)
+
+        await ethers.provider.send('evm_increaseTime', [
+          (CAMPAIGN_DURATION - 5) * 24 * 60 * 60
+        ])
+
+        await ethers.provider.send('evm_mine')
+
+        await usdc
+          .connect(contributor2)
+          .approve(await campaign.getAddress(), contributionAmount2)
+
+        await campaign
+          .connect(contributor2)
+          .contribute(await usdc.getAddress(), contributionAmount2)
+
+        expect(await campaign.isCampaignActive()).to.be.true //Not past campaign end date
+        expect(await campaign.isCampaignSuccessful()).to.be.true
+
+        const aTokenBalanceBeforeClaim = await aToken.balanceOf(
+          await campaign.getAddress()
+        )
+
+        const platformTreasuryBalanceBeforeClaim = await usdc.balanceOf(
+          platformTreasury.address
+        )
+
+        const creatorBalanceBeforeClaim = await usdc.balanceOf(
+          await campaign.owner()
+        )
+
+        expect(aTokenBalanceBeforeClaim).to.be.greaterThan(0)
+
+        expect(await campaign.hasClaimedFunds()).to.be.false
+
+        await expect(campaign.connect(deployer).claimFundsAdmin())
+          .to.emit(campaign, 'FundsClaimed')
+          .withArgs(await campaign.getAddress(), anyUint)
+
+        expect(await campaign.hasClaimedFunds()).to.be.true
+
+        const { creatorShare, platformShare } =
+          await yieldDistributor.calculateYieldShares(aTokenBalanceBeforeClaim)
+
+        const aTokenBalanceAftereClaim = await aToken.balanceOf(
+          await campaign.getAddress()
+        )
+
+        expect(aTokenBalanceAftereClaim).to.be.closeTo(0, 1)
+
+        const platformTreasuryBalanceAfterClaim = await usdc.balanceOf(
+          await platformTreasury.address
+        )
+
+        const creatorBalanceAfterClaim = await usdc.balanceOf(
+          await campaign.owner()
+        )
+
+        expect(platformTreasuryBalanceAfterClaim).to.be.closeTo(
+          platformTreasuryBalanceBeforeClaim + platformShare,
+          1
+        )
+
+        expect(creatorBalanceAfterClaim).to.be.closeTo(
+          creatorBalanceBeforeClaim + creatorShare,
+          1
+        )
+
+        await expect(campaign.connect(deployer).claimFundsAdmin())
+          .to.be.revertedWithCustomError(campaign, 'CampaignError')
+          .withArgs(ERR_FUNDS_CLAIMED, ethers.ZeroAddress, 0)
+      })
+
+      it('Should allow platformAdmin to claim funds when campaign is unsuccessful and distribute funds correctly', async function () {
+        const {
+          defiIntegrationManager,
+          campaign,
+          contributor1,
+          contributor2,
+          usdc,
+          IERC20ABI,
+          platformTreasury,
+          deployer //admin
+        } = await loadFixture(deployPlatformFixture)
+
+        const usdcAddress = await usdc.getAddress()
+        const usdcDecimals = await usdc.decimals()
+
+        const aTokenAddress = await defiIntegrationManager.getATokenAddress(
+          usdcAddress
+        )
+
+        const aToken = await ethers.getContractAt(IERC20ABI, aTokenAddress)
+
+        const contributionAmount1 = ethers.parseUnits('400', usdcDecimals)
+        const contributionAmount2 = ethers.parseUnits('400', usdcDecimals)
+
+        await usdc
+          .connect(contributor1)
+          .approve(await campaign.getAddress(), contributionAmount1)
+
+        await campaign
+          .connect(contributor1)
+          .contribute(await usdc.getAddress(), contributionAmount1)
+
+        await usdc
+          .connect(contributor2)
+          .approve(await campaign.getAddress(), contributionAmount2)
+
+        await campaign
+          .connect(contributor2)
+          .contribute(await usdc.getAddress(), contributionAmount2)
+
+        await ethers.provider.send('evm_increaseTime', [
+          CAMPAIGN_DURATION * 24 * 60 * 60
+        ])
+
+        await ethers.provider.send('evm_mine')
+
+        expect(await campaign.isCampaignActive()).to.be.false //Not past campaign end date
+        expect(await campaign.isCampaignSuccessful()).to.be.false
+
+        const aTokenBalanceBeforeClaim = await aToken.balanceOf(
+          await campaign.getAddress()
+        )
+
+        const platformTreasuryBalanceBeforeClaim = await usdc.balanceOf(
+          platformTreasury.address
+        )
+
+        const campaignBalanceBeforeClaim = await usdc.balanceOf(
+          await campaign.getAddress()
+        )
+
+        const ownerBalanceBeforeClaim = await usdc.balanceOf(
+          await campaign.owner()
+        )
+
+        expect(aTokenBalanceBeforeClaim).to.be.greaterThan(0)
+
+        expect(await campaign.hasClaimedFunds()).to.be.false
+
+        await expect(campaign.connect(deployer).claimFundsAdmin())
+          .to.emit(campaign, 'FundsClaimed')
+          .withArgs(await campaign.getAddress(), anyUint)
+
+        expect(await campaign.hasClaimedFunds()).to.be.true
+
+        const coverRefunds = await campaign.totalAmountRaised()
+        const platformShare = aTokenBalanceBeforeClaim - coverRefunds
+
+        const aTokenBalanceAftereClaim = await aToken.balanceOf(
+          await campaign.getAddress()
+        )
+
+        expect(aTokenBalanceAftereClaim).to.be.closeTo(0, 1)
+
+        const platformTreasuryBalanceAfterClaim = await usdc.balanceOf(
+          await platformTreasury.address
+        )
+
+        const campaignBalanceAfterClaim = await usdc.balanceOf(
+          await campaign.getAddress()
+        )
+
+        const ownerBalanceAfterClaim = await usdc.balanceOf(
+          await campaign.owner()
+        )
+
+        expect(platformTreasuryBalanceAfterClaim).to.be.closeTo(
+          platformTreasuryBalanceBeforeClaim + platformShare,
+          1
+        )
+
+        expect(campaignBalanceAfterClaim).to.be.closeTo(
+          campaignBalanceBeforeClaim + coverRefunds,
+          1
+        )
+
+        expect(ownerBalanceAfterClaim).to.be.equal(ownerBalanceBeforeClaim)
+
+        await expect(campaign.connect(deployer).claimFundsAdmin())
+          .to.be.revertedWithCustomError(campaign, 'CampaignError')
+          .withArgs(ERR_FUNDS_CLAIMED, ethers.ZeroAddress, 0)
+      })
+
+      it('Should allow platformAdmin to claim funds when admin override is active', async function () {
+        const {
+          defiIntegrationManager,
+          campaign,
+          contributor1,
+          contributor2,
+          usdc,
+          IERC20ABI,
+          platformTreasury,
+          deployer //admin
+        } = await loadFixture(deployPlatformFixture)
+
+        const usdcAddress = await usdc.getAddress()
+        const usdcDecimals = await usdc.decimals()
+
+        const aTokenAddress = await defiIntegrationManager.getATokenAddress(
+          usdcAddress
+        )
+
+        const aToken = await ethers.getContractAt(IERC20ABI, aTokenAddress)
+
+        const contributionAmount1 = ethers.parseUnits('400', usdcDecimals)
+        const contributionAmount2 = ethers.parseUnits('400', usdcDecimals)
+
+        await usdc
+          .connect(contributor1)
+          .approve(await campaign.getAddress(), contributionAmount1)
+
+        await campaign
+          .connect(contributor1)
+          .contribute(await usdc.getAddress(), contributionAmount1)
+
+        await usdc
+          .connect(contributor2)
+          .approve(await campaign.getAddress(), contributionAmount2)
+
+        await campaign
+          .connect(contributor2)
+          .contribute(await usdc.getAddress(), contributionAmount2)
+
+        await ethers.provider.send('evm_mine')
+
+        expect(await campaign.isCampaignActive()).to.be.true //Not past campaign end date
+        expect(await campaign.isCampaignSuccessful()).to.be.false
+
+        const aTokenBalanceBeforeClaim = await aToken.balanceOf(
+          await campaign.getAddress()
+        )
+
+        const platformTreasuryBalanceBeforeClaim = await usdc.balanceOf(
+          platformTreasury.address
+        )
+
+        const campaignBalanceBeforeClaim = await usdc.balanceOf(
+          await campaign.getAddress()
+        )
+
+        const ownerBalanceBeforeClaim = await usdc.balanceOf(
+          await campaign.owner()
+        )
+
+        expect(aTokenBalanceBeforeClaim).to.be.greaterThan(0)
+
+        expect(await campaign.hasClaimedFunds()).to.be.false
+
+        await campaign.connect(deployer).setAdminOverride(true)
+
+        await expect(campaign.connect(deployer).claimFundsAdmin())
+          .to.emit(campaign, 'FundsClaimed')
+          .withArgs(await campaign.getAddress(), anyUint)
+
+        expect(await campaign.hasClaimedFunds()).to.be.true
+
+        const coverRefunds = await campaign.totalAmountRaised()
+        const platformShare = aTokenBalanceBeforeClaim - coverRefunds
+
+        const aTokenBalanceAftereClaim = await aToken.balanceOf(
+          await campaign.getAddress()
+        )
+
+        expect(aTokenBalanceAftereClaim).to.be.closeTo(0, 5)
+
+        const platformTreasuryBalanceAfterClaim = await usdc.balanceOf(
+          await platformTreasury.address
+        )
+
+        const campaignBalanceAfterClaim = await usdc.balanceOf(
+          await campaign.getAddress()
+        )
+
+        const ownerBalanceAfterClaim = await usdc.balanceOf(
+          await campaign.owner()
+        )
+
+        expect(platformTreasuryBalanceAfterClaim).to.be.closeTo(
+          platformTreasuryBalanceBeforeClaim + platformShare,
+          5
+        )
+
+        expect(campaignBalanceAfterClaim).to.be.closeTo(
+          campaignBalanceBeforeClaim + coverRefunds,
+          5
+        )
+
+        expect(ownerBalanceAfterClaim).to.be.equal(ownerBalanceBeforeClaim)
+
+        await expect(campaign.connect(deployer).claimFundsAdmin())
+          .to.be.revertedWithCustomError(campaign, 'CampaignError')
+          .withArgs(ERR_FUNDS_CLAIMED, ethers.ZeroAddress, 0)
+      })
+
+      it('Should prevent creator from claiming funds when admin override is active', async function () {
+        const {
+          defiIntegrationManager,
+          campaign,
+          contributor1,
+          contributor2,
+          usdc,
+          creator1,
+          deployer
+        } = await loadFixture(deployPlatformFixture)
+
+        const usdcAddress = await usdc.getAddress()
+        const usdcDecimals = await usdc.decimals()
+
+        const aTokenAddress = await defiIntegrationManager.getATokenAddress(
+          usdcAddress
+        )
+
+        const contributionAmount1 = ethers.parseUnits('400', usdcDecimals)
+        const contributionAmount2 = ethers.parseUnits('650', usdcDecimals)
+
+        await usdc
+          .connect(contributor1)
+          .approve(await campaign.getAddress(), contributionAmount1)
+
+        await campaign
+          .connect(contributor1)
+          .contribute(await usdc.getAddress(), contributionAmount1)
+
+        await ethers.provider.send('evm_increaseTime', [
+          (CAMPAIGN_DURATION - 5) * 24 * 60 * 60
+        ])
+
+        await ethers.provider.send('evm_mine')
+
+        await usdc
+          .connect(contributor2)
+          .approve(await campaign.getAddress(), contributionAmount2)
+
+        await campaign
+          .connect(contributor2)
+          .contribute(await usdc.getAddress(), contributionAmount2)
+
+        await campaign.connect(deployer).setAdminOverride(true)
+
+        expect(await campaign.isCampaignActive()).to.be.false //Override sets this to false
+        expect(await campaign.isCampaignSuccessful()).to.be.true
+
+        expect(await campaign.hasClaimedFunds()).to.be.false
+
+        await expect(campaign.connect(creator1).claimFunds())
+          .to.be.revertedWithCustomError(campaign, 'CampaignError')
+          .withArgs(ERR_ADMIN_OVERRIDE_ACTIVE, ethers.ZeroAddress, 0)
+
+        expect(await campaign.hasClaimedFunds()).to.be.false
+      })
+
+      it.only('Should revert if a random user tries to claim funds', async function () {
+        const {
+          defiIntegrationManager,
+          campaign,
+          contributor1,
+          contributor2,
+          usdc,
+          creator1,
+          deployer,
+          creator2
+        } = await loadFixture(deployPlatformFixture)
+
+        const usdcAddress = await usdc.getAddress()
+        const usdcDecimals = await usdc.decimals()
+
+        const aTokenAddress = await defiIntegrationManager.getATokenAddress(
+          usdcAddress
+        )
+
+        const contributionAmount1 = ethers.parseUnits('400', usdcDecimals)
+        const contributionAmount2 = ethers.parseUnits('650', usdcDecimals)
+
+        await usdc
+          .connect(contributor1)
+          .approve(await campaign.getAddress(), contributionAmount1)
+
+        await campaign
+          .connect(contributor1)
+          .contribute(await usdc.getAddress(), contributionAmount1)
+
+        await ethers.provider.send('evm_increaseTime', [
+          (CAMPAIGN_DURATION - 5) * 24 * 60 * 60
+        ])
+
+        await ethers.provider.send('evm_mine')
+
+        await usdc
+          .connect(contributor2)
+          .approve(await campaign.getAddress(), contributionAmount2)
+
+        await campaign
+          .connect(contributor2)
+          .contribute(await usdc.getAddress(), contributionAmount2)
+
+        expect(await campaign.isCampaignActive()).to.be.true //Override sets this to false
+        expect(await campaign.isCampaignSuccessful()).to.be.true
+
+        expect(await campaign.hasClaimedFunds()).to.be.false
+
+        await expect(campaign.connect(creator2).claimFunds())
+          .to.be.revertedWithCustomError(campaign, 'OwnableUnauthorizedAccount')
+          .withArgs(creator2.address)
+
+        expect(await campaign.hasClaimedFunds()).to.be.false
+
+        await expect(campaign.connect(creator2).claimFunds())
+          .to.be.revertedWithCustomError(campaign, 'OwnableUnauthorizedAccount')
+          .withArgs(creator2.address)
+
+        await campaign.connect(deployer).setAdminOverride(true)
+
+        await expect(campaign.connect(creator2).claimFunds())
+          .to.be.revertedWithCustomError(campaign, 'OwnableUnauthorizedAccount')
+          .withArgs(creator2.address)
+
+        expect(await campaign.hasClaimedFunds()).to.be.false
+
+        await expect(campaign.connect(creator2).claimFunds())
+          .to.be.revertedWithCustomError(campaign, 'OwnableUnauthorizedAccount')
+          .withArgs(creator2.address)
+      })
     })
 
     // describe('Refunds', function () {
