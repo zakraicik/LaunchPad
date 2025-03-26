@@ -6,7 +6,7 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {DataTypes} from "@aave/core-v3/contracts/protocol/libraries/types/DataTypes.sol";
 import "./interfaces/ITokenRegistry.sol";
-import "./interfaces/IYieldDistributor.sol";
+import "./interfaces/IFeeManager.sol";
 import "./interfaces/IAavePool.sol";
 import "./abstracts/PlatformAdminAccessControl.sol";
 
@@ -34,7 +34,7 @@ contract DefiIntegrationManager is
     // External contracts
     IAavePool public aavePool;
     ITokenRegistry public tokenRegistry;
-    IYieldDistributor public yieldDistributor;
+    IFeeManager public feeManager;
 
     mapping(address => mapping(address => uint256)) public aaveBalances;
 
@@ -61,7 +61,7 @@ contract DefiIntegrationManager is
     constructor(
         address _aavePool,
         address _tokenRegistry,
-        address _yieldDistributor,
+        address _feeManager,
         address _platformAdmin,
         address _owner
     ) Ownable(_owner) PlatformAdminAccessControl(_platformAdmin) {
@@ -73,8 +73,8 @@ contract DefiIntegrationManager is
             revert DefiError(ERR_INVALID_CONSTRUCTOR, _tokenRegistry);
         }
 
-        if (_yieldDistributor == address(0)) {
-            revert DefiError(ERR_INVALID_CONSTRUCTOR, _yieldDistributor);
+        if (_feeManager == address(0)) {
+            revert DefiError(ERR_INVALID_CONSTRUCTOR, _feeManager);
         }
 
         if (_platformAdmin == address(0)) {
@@ -83,7 +83,7 @@ contract DefiIntegrationManager is
 
         aavePool = IAavePool(_aavePool);
         tokenRegistry = ITokenRegistry(_tokenRegistry);
-        yieldDistributor = IYieldDistributor(_yieldDistributor);
+        feeManager = IFeeManager(_feeManager);
     }
 
     function setTokenRegistry(
@@ -99,21 +99,15 @@ contract DefiIntegrationManager is
         emit ConfigUpdated(OP_CONFIG_UPDATED, oldRegistry, _tokenRegistry);
     }
 
-    function setYieldDistributor(
-        address _yieldDistributor
-    ) external onlyPlatformAdmin {
-        if (_yieldDistributor == address(0)) {
-            revert DefiError(ERR_INVALID_ADDRESS, _yieldDistributor);
+    function setFeeManager(address _feeManager) external onlyPlatformAdmin {
+        if (_feeManager == address(0)) {
+            revert DefiError(ERR_INVALID_ADDRESS, _feeManager);
         }
 
-        address oldDistributor = address(yieldDistributor);
-        yieldDistributor = IYieldDistributor(_yieldDistributor);
+        address oldFeeManager = address(feeManager);
+        feeManager = IFeeManager(_feeManager);
 
-        emit ConfigUpdated(
-            OP_CONFIG_UPDATED,
-            oldDistributor,
-            _yieldDistributor
-        );
+        emit ConfigUpdated(OP_CONFIG_UPDATED, oldFeeManager, _feeManager);
     }
 
     function setAavePool(address _aavePool) external onlyPlatformAdmin {
@@ -193,12 +187,12 @@ contract DefiIntegrationManager is
             }
 
             if (campaignSuccessful) {
-                (uint256 creatorShare, uint256 platformShare) = yieldDistributor
-                    .calculateYieldShares(withdrawn);
+                (uint256 creatorShare, uint256 platformShare) = feeManager
+                    .calculateFeeShares(withdrawn);
 
                 IERC20(_token).safeTransfer(msg.sender, creatorShare);
                 IERC20(_token).safeTransfer(
-                    yieldDistributor.platformTreasury(),
+                    feeManager.platformTreasury(),
                     platformShare
                 );
             } else {
@@ -206,7 +200,7 @@ contract DefiIntegrationManager is
 
                 IERC20(_token).safeTransfer(msg.sender, coverRefunds);
                 IERC20(_token).safeTransfer(
-                    yieldDistributor.platformTreasury(),
+                    feeManager.platformTreasury(),
                     remaining
                 );
             }
@@ -241,7 +235,7 @@ contract DefiIntegrationManager is
     }
 
     function getPlatformTreasury() external view returns (address) {
-        return yieldDistributor.platformTreasury();
+        return feeManager.platformTreasury();
     }
 
     function getATokenAddress(address _token) public view returns (address) {

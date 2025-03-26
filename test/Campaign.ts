@@ -685,7 +685,7 @@ describe('Campaign', function () {
           usdc,
           creator1,
           IERC20ABI,
-          yieldDistributor,
+          feeManager,
           platformTreasury
         } = await loadFixture(deployPlatformFixture)
 
@@ -752,7 +752,7 @@ describe('Campaign', function () {
         expect(await campaign.hasClaimedFunds()).to.be.true
 
         const { creatorShare, platformShare } =
-          await yieldDistributor.calculateYieldShares(aTokenBalanceBeforeClaim)
+          await feeManager.calculateFeeShares(aTokenBalanceBeforeClaim)
 
         const aTokenBalanceAftereClaim = await aToken.balanceOf(
           await campaign.getAddress()
@@ -900,7 +900,7 @@ describe('Campaign', function () {
           contributor2,
           usdc,
           IERC20ABI,
-          yieldDistributor,
+          feeManager,
           platformTreasury,
           deployer
         } = await loadFixture(deployPlatformFixture)
@@ -961,7 +961,7 @@ describe('Campaign', function () {
         expect(await campaign.hasClaimedFunds()).to.be.true
 
         const { creatorShare, platformShare } =
-          await yieldDistributor.calculateYieldShares(aTokenBalanceBeforeClaim)
+          await feeManager.calculateFeeShares(aTokenBalanceBeforeClaim)
 
         const aTokenBalanceAftereClaim = await aToken.balanceOf(
           await campaign.getAddress()
@@ -1270,7 +1270,7 @@ describe('Campaign', function () {
           usdc,
           creator1,
           IERC20ABI,
-          yieldDistributor,
+          feeManager,
           platformTreasury
         } = await loadFixture(deployPlatformFixture)
 
@@ -1362,7 +1362,7 @@ describe('Campaign', function () {
           usdc,
           creator1,
           IERC20ABI,
-          yieldDistributor,
+          feeManager,
           platformTreasury
         } = await loadFixture(deployPlatformFixture)
 
@@ -1422,7 +1422,7 @@ describe('Campaign', function () {
         expect(await campaign.hasClaimedFunds()).to.be.true
 
         const { creatorShare, platformShare } =
-          await yieldDistributor.calculateYieldShares(aTokenBalanceBeforeClaim)
+          await feeManager.calculateFeeShares(aTokenBalanceBeforeClaim)
 
         const aTokenBalanceAftereClaim = await aToken.balanceOf(
           await campaign.getAddress()
@@ -1570,7 +1570,7 @@ describe('Campaign', function () {
           contributor2,
           usdc,
           IERC20ABI,
-          yieldDistributor,
+          feeManager,
           platformTreasury,
           deployer
         } = await loadFixture(deployPlatformFixture)
@@ -1631,7 +1631,7 @@ describe('Campaign', function () {
         expect(await campaign.hasClaimedFunds()).to.be.true
 
         const { creatorShare, platformShare } =
-          await yieldDistributor.calculateYieldShares(aTokenBalanceBeforeClaim)
+          await feeManager.calculateFeeShares(aTokenBalanceBeforeClaim)
 
         const aTokenBalanceAftereClaim = await aToken.balanceOf(
           await campaign.getAddress()

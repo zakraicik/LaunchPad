@@ -24,7 +24,7 @@ describe('DefiIntegrationManager', function () {
       const {
         aavePool,
         tokenRegistry,
-        yieldDistributor,
+        feeManager,
         platformAdmin,
         deployer,
         defiIntegrationManager
@@ -43,8 +43,8 @@ describe('DefiIntegrationManager', function () {
       expect(await defiIntegrationManager.platformAdmin()).to.equal(
         await platformAdmin.getAddress()
       )
-      expect(await defiIntegrationManager.yieldDistributor()).to.equal(
-        await yieldDistributor.getAddress()
+      expect(await defiIntegrationManager.feeManager()).to.equal(
+        await feeManager.getAddress()
       )
 
       expect(await defiIntegrationManager.owner()).to.equal(deployer.address)
@@ -55,13 +55,13 @@ describe('DefiIntegrationManager', function () {
         aavePool, //Base mainnet address
         deployer,
         tokenRegistry,
-        yieldDistributor,
+        feeManager,
         platformAdmin
       } = await loadFixture(deployPlatformFixture)
 
       const aavePoolAddress = await aavePool.getAddress()
       const tokenRegistryAddress = await tokenRegistry.getAddress()
-      const yieldDistributorAddress = await yieldDistributor.getAddress()
+      const feeManagerAddress = await feeManager.getAddress()
       const platformAdminAddress = await platformAdmin.getAddress()
 
       const DefiManager = await ethers.getContractFactory(
@@ -72,7 +72,7 @@ describe('DefiIntegrationManager', function () {
         DefiManager.deploy(
           ethers.ZeroAddress,
           tokenRegistryAddress,
-          yieldDistributorAddress,
+          feeManagerAddress,
           platformAdminAddress,
           deployer.address
         )
@@ -84,7 +84,7 @@ describe('DefiIntegrationManager', function () {
         DefiManager.deploy(
           aavePoolAddress,
           ethers.ZeroAddress,
-          yieldDistributorAddress,
+          feeManagerAddress,
           platformAdminAddress,
           deployer.address
         )
@@ -109,7 +109,7 @@ describe('DefiIntegrationManager', function () {
         DefiManager.deploy(
           aavePoolAddress,
           tokenRegistryAddress,
-          yieldDistributorAddress,
+          feeManagerAddress,
           ethers.ZeroAddress,
           deployer.address
         )
@@ -500,7 +500,7 @@ describe('DefiIntegrationManager', function () {
           defiIntegrationManager,
           usdc,
           contributor1,
-          yieldDistributor,
+          feeManager,
           IERC20ABI
         } = await loadFixture(deployPlatformFixture)
 
@@ -510,7 +510,7 @@ describe('DefiIntegrationManager', function () {
         const usdcAddress = await usdc.getAddress()
 
         // Get platform treasury address
-        const platformTreasury = await yieldDistributor.platformTreasury()
+        const platformTreasury = await feeManager.platformTreasury()
 
         // Get aToken details
         const aTokenAddress = await defiIntegrationManager.getATokenAddress(
@@ -552,7 +552,7 @@ describe('DefiIntegrationManager', function () {
 
         // Calculate expected shares
         const { creatorShare, platformShare } =
-          await yieldDistributor.calculateYieldShares(contributorATokenBalance)
+          await feeManager.calculateFeeShares(contributorATokenBalance)
 
         // Now withdraw (using true for successful campaign)
         await expect(
@@ -611,7 +611,7 @@ describe('DefiIntegrationManager', function () {
           defiIntegrationManager,
           usdc,
           contributor1,
-          yieldDistributor,
+          feeManager,
           IERC20ABI
         } = await loadFixture(deployPlatformFixture)
 
@@ -621,7 +621,7 @@ describe('DefiIntegrationManager', function () {
         const usdcAddress = await usdc.getAddress()
 
         // Get platform treasury address
-        const platformTreasury = await yieldDistributor.platformTreasury()
+        const platformTreasury = await feeManager.platformTreasury()
 
         // Get aToken details
         const aTokenAddress = await defiIntegrationManager.getATokenAddress(
@@ -721,13 +721,8 @@ describe('DefiIntegrationManager', function () {
       })
 
       it('Should revert when trying to withdraw with insufficient aToken balance', async function () {
-        const {
-          defiIntegrationManager,
-          usdc,
-          IERC20ABI,
-          contributor1,
-          mockCampaign
-        } = await loadFixture(deployPlatformFixture)
+        const { defiIntegrationManager, usdc, IERC20ABI, contributor1 } =
+          await loadFixture(deployPlatformFixture)
 
         const usdcAddress = await usdc.getAddress()
         const usdcDecimals = await usdc.decimals()
@@ -1137,7 +1132,7 @@ describe('DefiIntegrationManager', function () {
     })
 
     it('Should return the correct platform treasury address', async function () {
-      const { defiIntegrationManager, yieldDistributor } = await loadFixture(
+      const { defiIntegrationManager, feeManager } = await loadFixture(
         deployPlatformFixture
       )
 
@@ -1145,12 +1140,12 @@ describe('DefiIntegrationManager', function () {
       const treasuryAddress = await defiIntegrationManager.getPlatformTreasury()
 
       // Verify it matches the address from yield distributor
-      const expectedTreasury = await yieldDistributor.platformTreasury()
+      const expectedTreasury = await feeManager.platformTreasury()
       expect(treasuryAddress).to.equal(expectedTreasury)
     })
 
     it('Should return correct platform treasury after treasury change', async function () {
-      const { defiIntegrationManager, yieldDistributor } = await loadFixture(
+      const { defiIntegrationManager, feeManager } = await loadFixture(
         deployPlatformFixture
       )
 
@@ -1159,7 +1154,7 @@ describe('DefiIntegrationManager', function () {
 
       // Change the treasury address in the yield distributor (assuming it has a setter)
       // Note: You'll need to adjust this to match how your contract allows changing the treasury
-      await yieldDistributor.updatePlatformTreasury(newTreasury)
+      await feeManager.updatePlatformTreasury(newTreasury)
 
       // Get treasury address from the defi manager
       const treasuryAddress = await defiIntegrationManager.getPlatformTreasury()
@@ -1291,8 +1286,8 @@ describe('DefiIntegrationManager', function () {
       })
     })
 
-    describe('setYieldDistributor()', function () {
-      it('Should allow owner to set the yield distributor', async function () {
+    describe('setFeeManager()', function () {
+      it('Should allow owner to set the feeManager', async function () {
         const {
           defiIntegrationManager,
           platformTreasury,
@@ -1300,34 +1295,27 @@ describe('DefiIntegrationManager', function () {
           deployer
         } = await loadFixture(deployPlatformFixture)
 
-        const yieldDistributorBefore =
-          await defiIntegrationManager.yieldDistributor()
+        const feeManagerBefore = await defiIntegrationManager.feeManager()
         const platformAdminAddress = await platformAdmin.getAddress()
 
-        const yieldDistributorNew = await ethers.deployContract(
-          'YieldDistributor',
-          [platformTreasury.address, platformAdminAddress, deployer.address]
-        )
-        await yieldDistributorNew.waitForDeployment()
-        const yieldDistributorNewAddress =
-          await yieldDistributorNew.getAddress()
+        const feeManagerNew = await ethers.deployContract('FeeManager', [
+          platformTreasury.address,
+          platformAdminAddress,
+          deployer.address
+        ])
+        await feeManagerNew.waitForDeployment()
+        const feeManagerNewAddress = await feeManagerNew.getAddress()
 
-        await expect(
-          defiIntegrationManager.setYieldDistributor(yieldDistributorNewAddress)
-        )
+        await expect(defiIntegrationManager.setFeeManager(feeManagerNewAddress))
           .to.emit(defiIntegrationManager, 'ConfigUpdated')
-          .withArgs(
-            OP_CONFIG_UPDATED,
-            yieldDistributorBefore,
-            yieldDistributorNewAddress
-          )
+          .withArgs(OP_CONFIG_UPDATED, feeManagerBefore, feeManagerNewAddress)
 
-        expect(await defiIntegrationManager.yieldDistributor()).to.equal(
-          yieldDistributorNewAddress
+        expect(await defiIntegrationManager.feeManager()).to.equal(
+          feeManagerNewAddress
         )
       })
 
-      it('Should allow otheradmin to set the yield distributor', async function () {
+      it('Should allow otheradmin to set the feeManager', async function () {
         const {
           defiIntegrationManager,
           platformTreasury,
@@ -1336,38 +1324,33 @@ describe('DefiIntegrationManager', function () {
           otherAdmin
         } = await loadFixture(deployPlatformFixture)
 
-        const yieldDistributorBefore =
-          await defiIntegrationManager.yieldDistributor()
+        const feeManagerBefore = await defiIntegrationManager.feeManager()
         const platformAdminAddress = await platformAdmin.getAddress()
 
         await platformAdmin.addPlatformAdmin(otherAdmin.address)
 
-        const yieldDistributorNew = await ethers.deployContract(
-          'YieldDistributor',
-          [platformTreasury.address, platformAdminAddress, deployer.address]
-        )
-        await yieldDistributorNew.waitForDeployment()
-        const yieldDistributorNewAddress =
-          await yieldDistributorNew.getAddress()
+        const feeManagerNew = await ethers.deployContract('FeeManager', [
+          platformTreasury.address,
+          platformAdminAddress,
+          deployer.address
+        ])
+        await feeManagerNew.waitForDeployment()
+        const feeManagerNewAddress = await feeManagerNew.getAddress()
 
         await expect(
           defiIntegrationManager
             .connect(otherAdmin)
-            .setYieldDistributor(yieldDistributorNewAddress)
+            .setFeeManager(feeManagerNewAddress)
         )
           .to.emit(defiIntegrationManager, 'ConfigUpdated')
-          .withArgs(
-            OP_CONFIG_UPDATED,
-            yieldDistributorBefore,
-            yieldDistributorNewAddress
-          )
+          .withArgs(OP_CONFIG_UPDATED, feeManagerBefore, feeManagerNewAddress)
 
-        expect(await defiIntegrationManager.yieldDistributor()).to.equal(
-          yieldDistributorNewAddress
+        expect(await defiIntegrationManager.feeManager()).to.equal(
+          feeManagerNewAddress
         )
       })
 
-      it('Should revert if non-owner tries to set yieldDistributor', async function () {
+      it('Should revert if non-owner tries to set feeManager', async function () {
         const {
           defiIntegrationManager,
           platformTreasury,
@@ -1376,22 +1359,21 @@ describe('DefiIntegrationManager', function () {
           creator1
         } = await loadFixture(deployPlatformFixture)
 
-        const yieldDistributorBefore =
-          await defiIntegrationManager.yieldDistributor()
+        const feeManagerBefore = await defiIntegrationManager.feeManager()
         const platformAdminAddress = await platformAdmin.getAddress()
 
-        const yieldDistributorNew = await ethers.deployContract(
-          'YieldDistributor',
-          [platformTreasury.address, platformAdminAddress, deployer.address]
-        )
-        await yieldDistributorNew.waitForDeployment()
-        const yieldDistributorNewAddress =
-          await yieldDistributorNew.getAddress()
+        const feeManagerNew = await ethers.deployContract('FeeManager', [
+          platformTreasury.address,
+          platformAdminAddress,
+          deployer.address
+        ])
+        await feeManagerNew.waitForDeployment()
+        const feeManagerNewAddress = await feeManagerNew.getAddress()
 
         await expect(
           defiIntegrationManager
             .connect(creator1)
-            .setYieldDistributor(yieldDistributorNewAddress)
+            .setFeeManager(feeManagerNewAddress)
         )
           .to.be.revertedWithCustomError(
             defiIntegrationManager,
@@ -1399,27 +1381,24 @@ describe('DefiIntegrationManager', function () {
           )
           .withArgs(creator1.address)
 
-        expect(await defiIntegrationManager.yieldDistributor()).to.equal(
-          yieldDistributorBefore
+        expect(await defiIntegrationManager.feeManager()).to.equal(
+          feeManagerBefore
         )
       })
 
-      it('Should revert if invalid address passed to setYieldDistributor()', async function () {
+      it('Should revert if invalid address passed to setFeeManager()', async function () {
         const { defiIntegrationManager } = await loadFixture(
           deployPlatformFixture
         )
 
-        const yieldDistributorBefore =
-          await defiIntegrationManager.yieldDistributor()
+        const feeManagerBefore = await defiIntegrationManager.feeManager()
 
-        await expect(
-          defiIntegrationManager.setYieldDistributor(ethers.ZeroAddress)
-        )
+        await expect(defiIntegrationManager.setFeeManager(ethers.ZeroAddress))
           .to.be.revertedWithCustomError(defiIntegrationManager, 'DefiError')
           .withArgs(ERR_INVALID_ADDRESS, ethers.ZeroAddress)
 
-        expect(await defiIntegrationManager.yieldDistributor()).to.equal(
-          yieldDistributorBefore
+        expect(await defiIntegrationManager.feeManager()).to.equal(
+          feeManagerBefore
         )
       })
     })

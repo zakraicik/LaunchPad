@@ -4,12 +4,8 @@ pragma solidity ^0.8.28;
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "./interfaces/ICampaign.sol";
-import "./libraries/PlatformAdminLibrary.sol";
 
 contract PlatformAdmin is Ownable, ReentrancyGuard {
-    // Use the PlatformAdminLibrary
-    using PlatformAdminLibrary for *;
-
     // Operation types for consolidated events
     uint8 private constant OP_ADMIN_ADDED = 1;
     uint8 private constant OP_ADMIN_REMOVED = 2;

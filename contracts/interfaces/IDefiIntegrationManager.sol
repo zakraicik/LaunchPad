@@ -2,7 +2,7 @@
 pragma solidity ^0.8.28;
 
 import "./ITokenRegistry.sol";
-import "./IYieldDistributor.sol";
+import "./IFeeManager.sol";
 import "./IAavePool.sol";
 
 interface IDefiIntegrationManager {
@@ -14,42 +14,28 @@ interface IDefiIntegrationManager {
         uint256 _coverRefunds
     ) external returns (uint256);
 
-    function harvestYield(
-        address _token
-    ) external returns (uint256 creatorYield, uint256 platformYield);
-
-    function getDepositedPrincipalAmount(
-        address campaign,
-        address token
-    ) external view returns (uint256 amount);
-
     function setTokenRegistry(address _tokenRegistry) external;
 
-    function setYieldDistributor(address _yieldDistributor) external;
+    function setFeeManager(address _feeManager) external;
 
     function setAavePool(address _aavePool) external;
 
-    function setUniswapRouter(address _uniswapRouter) external;
-
-    function setUniswapQuoter(address _uniswapQuoter) external;
-
     function tokenRegistry() external view returns (ITokenRegistry);
 
-    function yieldDistributor() external view returns (IYieldDistributor);
+    function feeManager() external view returns (IFeeManager);
 
     function aavePool() external view returns (IAavePool);
+
+    function getCurrentYieldRate(
+        address token
+    ) external view returns (uint256 yieldRate);
 
     function getPlatformTreasury() external view returns (address);
 
     function getATokenAddress(address _token) external view returns (address);
 
-    function aavePrincipalBalance(
-        address _campaign,
-        address _token
-    ) external view returns (uint256);
-
-    function yieldBaseline(
-        address _campaign,
-        address _token
+    function aaveBalances(
+        address _token,
+        address _user
     ) external view returns (uint256);
 }

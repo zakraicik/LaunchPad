@@ -4,7 +4,7 @@ import { Contract } from 'ethers'
 import {
   PlatformAdmin,
   TokenRegistry,
-  YieldDistributor,
+  FeeManager,
   DefiIntegrationManager,
   CampaignContractFactory,
   Campaign,
@@ -29,7 +29,7 @@ let wbtc: IERC20Metadata
 let aavePool: Contract
 let platformAdmin: PlatformAdmin
 let tokenRegistry: TokenRegistry
-let yieldDistributor: YieldDistributor
+let feeManager: FeeManager
 let defiIntegrationManager: DefiIntegrationManager
 let campaignContractFactory: CampaignContractFactory
 
@@ -141,8 +141,8 @@ export async function deployPlatformFixture () {
   //Add tokens to TokenRegistry
   await tokenRegistry.addToken(USDC_ADDRESS, 1)
 
-  yieldDistributor = await ethers.deployContract(
-    'YieldDistributor',
+  feeManager = await ethers.deployContract(
+    'FeeManager',
     [
       platformTreasury.address,
       await platformAdmin.getAddress(),
@@ -155,14 +155,14 @@ export async function deployPlatformFixture () {
     }
   )
 
-  await yieldDistributor.waitForDeployment()
+  await feeManager.waitForDeployment()
 
   defiIntegrationManager = await ethers.deployContract(
     'DefiIntegrationManager',
     [
       AAVE_POOL_ADDRESS,
       await tokenRegistry.getAddress(),
-      await yieldDistributor.getAddress(),
+      await feeManager.getAddress(),
       await platformAdmin.getAddress(),
       deployer.address
     ],
@@ -278,7 +278,7 @@ export async function deployPlatformFixture () {
     platformTreasury2,
     platformAdmin,
     tokenRegistry,
-    yieldDistributor,
+    feeManager,
     defiIntegrationManager,
     campaignContractFactory,
     IERC20ABI,
