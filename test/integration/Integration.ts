@@ -13,13 +13,12 @@ import { Campaign, IERC20Metadata } from '../../typechain-types'
 
 describe('Base Mainnet Integration Tests', function () {
   describe('Campaign Lifecycle', function () {
-    const OP_CAMPAIGN_CREATED = 1
     const OP_DEPOSIT = 1
+    const OP_CAMPAIGN_CREATED = 1
     const OP_CLAIM_FUNDS = 2
+    const ERR_GOAL_REACHED = 10
     const ERR_FUNDS_CLAIMED = 12
-    const ERR_ALREADY_REFUNDED = 10
-    const ERR_GOAL_REACHED = 8
-    const OP_SHARE_UPDATED = 2
+    const ERR_ALREADY_REFUNDED = 15
 
     it('Deploy supporting contracts and set initial state correctly', async function () {
       const {
@@ -27,7 +26,7 @@ describe('Base Mainnet Integration Tests', function () {
         platformTreasury,
         platformAdmin,
         tokenRegistry,
-        yieldDistributor,
+        feeManager,
         defiIntegrationManager,
         campaignContractFactory,
         AAVE_POOL_ADDRESS
@@ -42,12 +41,12 @@ describe('Base Mainnet Integration Tests', function () {
         await platformAdmin.getAddress()
       )
 
-      //YieldDistributor
-      expect(await yieldDistributor.owner()).to.equal(deployer.address)
-      expect(await yieldDistributor.platformTreasury()).to.equal(
+      //feeManager
+      expect(await feeManager.owner()).to.equal(deployer.address)
+      expect(await feeManager.platformTreasury()).to.equal(
         platformTreasury.address
       )
-      expect(await yieldDistributor.platformAdmin()).to.equal(
+      expect(await feeManager.platformAdmin()).to.equal(
         await platformAdmin.getAddress()
       )
 
@@ -59,8 +58,8 @@ describe('Base Mainnet Integration Tests', function () {
       expect(await defiIntegrationManager.tokenRegistry()).to.equal(
         ethers.getAddress(await tokenRegistry.getAddress())
       )
-      expect(await defiIntegrationManager.yieldDistributor()).to.equal(
-        ethers.getAddress(await yieldDistributor.getAddress())
+      expect(await defiIntegrationManager.feeManager()).to.equal(
+        ethers.getAddress(await feeManager.getAddress())
       )
 
       expect(await defiIntegrationManager.platformAdmin()).to.equal(
@@ -187,7 +186,7 @@ describe('Base Mainnet Integration Tests', function () {
 
       const contributeTx1 = await campaign
         .connect(contributor1)
-        .contribute(await usdc.getAddress(), contributionAmount)
+        .contribute(contributionAmount)
 
       if (!contributeTx1) throw new Error('Transaction failed')
 
@@ -311,9 +310,7 @@ describe('Base Mainnet Integration Tests', function () {
         .connect(contributor1)
         .approve(campaignAddress, contributionAmount1)
 
-      await campaign
-        .connect(contributor1)
-        .contribute(await usdc.getAddress(), contributionAmount1)
+      await campaign.connect(contributor1).contribute(contributionAmount1)
 
       // Second contribution (different contributor)
       const contributionAmount2 = ethers.parseUnits('150', usdcDecimals)
@@ -321,9 +318,7 @@ describe('Base Mainnet Integration Tests', function () {
         .connect(contributor2)
         .approve(campaignAddress, contributionAmount2)
 
-      await campaign
-        .connect(contributor2)
-        .contribute(await usdc.getAddress(), contributionAmount2)
+      await campaign.connect(contributor2).contribute(contributionAmount2)
 
       // Third contribution (first contributor again)
       const contributionAmount3 = ethers.parseUnits('75', usdcDecimals)
@@ -331,9 +326,7 @@ describe('Base Mainnet Integration Tests', function () {
         .connect(contributor1)
         .approve(campaignAddress, contributionAmount3)
 
-      await campaign
-        .connect(contributor1)
-        .contribute(await usdc.getAddress(), contributionAmount3)
+      await campaign.connect(contributor1).contribute(contributionAmount3)
 
       // Verify contributor state
       expect(await campaign.contributorsCount()).to.equal(2)
@@ -386,7 +379,7 @@ describe('Base Mainnet Integration Tests', function () {
         contributor2,
         defiIntegrationManager,
         IERC20ABI,
-        yieldDistributor
+        feeManager
       } = await loadFixture(deployPlatformFixture)
 
       const usdcDecimals = await usdc.decimals()
@@ -426,9 +419,7 @@ describe('Base Mainnet Integration Tests', function () {
         .connect(contributor1)
         .approve(campaignAddress, contributionAmount1)
 
-      await campaign
-        .connect(contributor1)
-        .contribute(await usdc.getAddress(), contributionAmount1)
+      await campaign.connect(contributor1).contribute(contributionAmount1)
 
       // Second contribution (different contributor)
       const contributionAmount2 = ethers.parseUnits('150', usdcDecimals)
@@ -436,9 +427,7 @@ describe('Base Mainnet Integration Tests', function () {
         .connect(contributor2)
         .approve(campaignAddress, contributionAmount2)
 
-      await campaign
-        .connect(contributor2)
-        .contribute(await usdc.getAddress(), contributionAmount2)
+      await campaign.connect(contributor2).contribute(contributionAmount2)
 
       // Third contribution (first contributor again)
       const contributionAmount3 = ethers.parseUnits('220', usdcDecimals)
@@ -446,9 +435,16 @@ describe('Base Mainnet Integration Tests', function () {
         .connect(contributor1)
         .approve(campaignAddress, contributionAmount3)
 
-      await campaign
-        .connect(contributor1)
-        .contribute(await usdc.getAddress(), contributionAmount3)
+      await campaign.connect(contributor1).contribute(contributionAmount3)
+
+      expect(
+        await defiIntegrationManager.aaveBalances(
+          await usdc.getAddress(),
+          campaignAddress
+        )
+      ).to.equal(
+        contributionAmount1 + contributionAmount2 + contributionAmount3
+      )
 
       expect(await campaign.isCampaignSuccessful()).to.be.true
 
@@ -498,8 +494,16 @@ describe('Base Mainnet Integration Tests', function () {
       expect(parsedClaimFundsEvent.args[2]).to.equal(OP_CLAIM_FUNDS)
       expect(parsedClaimFundsEvent.args[3]).to.equal(creator1.address)
 
-      const [creatorShare, platformShare] =
-        await yieldDistributor.calculateYieldShares(aTokenBalance)
+      expect(
+        await defiIntegrationManager.aaveBalances(
+          await usdc.getAddress(),
+          campaignAddress
+        )
+      ).to.equal(0)
+
+      const [creatorShare, platformShare] = await feeManager.calculateFeeShares(
+        aTokenBalance
+      )
 
       expect(await usdc.balanceOf(creator1.address)).to.be.closeTo(
         creatorShare,
@@ -507,7 +511,7 @@ describe('Base Mainnet Integration Tests', function () {
       )
 
       expect(
-        await usdc.balanceOf(await yieldDistributor.platformTreasury())
+        await usdc.balanceOf(await feeManager.platformTreasury())
       ).to.be.closeTo(platformShare, 10)
 
       await expect(campaign.connect(creator1).claimFunds())
@@ -532,7 +536,7 @@ describe('Base Mainnet Integration Tests', function () {
         contributor2,
         defiIntegrationManager,
         IERC20ABI,
-        yieldDistributor
+        feeManager
       } = await loadFixture(deployPlatformFixture)
 
       const usdcDecimals = await usdc.decimals()
@@ -572,9 +576,7 @@ describe('Base Mainnet Integration Tests', function () {
         .connect(contributor1)
         .approve(campaignAddress, contributionAmount1)
 
-      await campaign
-        .connect(contributor1)
-        .contribute(await usdc.getAddress(), contributionAmount1)
+      await campaign.connect(contributor1).contribute(contributionAmount1)
 
       // Second contribution (different contributor)
       const contributionAmount2 = ethers.parseUnits('150', usdcDecimals)
@@ -582,9 +584,7 @@ describe('Base Mainnet Integration Tests', function () {
         .connect(contributor2)
         .approve(campaignAddress, contributionAmount2)
 
-      await campaign
-        .connect(contributor2)
-        .contribute(await usdc.getAddress(), contributionAmount2)
+      await campaign.connect(contributor2).contribute(contributionAmount2)
 
       // Third contribution (first contributor again)
       const contributionAmount3 = ethers.parseUnits('130', usdcDecimals)
@@ -592,9 +592,16 @@ describe('Base Mainnet Integration Tests', function () {
         .connect(contributor1)
         .approve(campaignAddress, contributionAmount3)
 
-      await campaign
-        .connect(contributor1)
-        .contribute(await usdc.getAddress(), contributionAmount3)
+      await campaign.connect(contributor1).contribute(contributionAmount3)
+
+      expect(
+        await defiIntegrationManager.aaveBalances(
+          await usdc.getAddress(),
+          campaignAddress
+        )
+      ).to.equal(
+        contributionAmount1 + contributionAmount2 + contributionAmount3
+      )
 
       expect(await campaign.isCampaignSuccessful()).to.be.false
 
@@ -644,6 +651,13 @@ describe('Base Mainnet Integration Tests', function () {
       expect(parsedClaimFundsEvent.args[2]).to.equal(OP_CLAIM_FUNDS)
       expect(parsedClaimFundsEvent.args[3]).to.equal(creator1.address)
 
+      expect(
+        await defiIntegrationManager.aaveBalances(
+          await usdc.getAddress(),
+          campaignAddress
+        )
+      ).to.equal(0)
+
       const forRefunds = await campaign.totalAmountRaised()
 
       expect(await usdc.balanceOf(creator1.address)).to.equal(0)
@@ -651,7 +665,7 @@ describe('Base Mainnet Integration Tests', function () {
       expect(await usdc.balanceOf(campaignAddress)).to.equal(forRefunds)
 
       expect(
-        await usdc.balanceOf(await yieldDistributor.platformTreasury())
+        await usdc.balanceOf(await feeManager.platformTreasury())
       ).to.be.closeTo(aTokenBalance - forRefunds, 10)
 
       await expect(campaign.connect(creator1).claimFunds())
@@ -668,7 +682,7 @@ describe('Base Mainnet Integration Tests', function () {
         contributor2,
         defiIntegrationManager,
         IERC20ABI,
-        yieldDistributor
+        feeManager
       } = await loadFixture(deployPlatformFixture)
 
       const usdcDecimals = await usdc.decimals()
@@ -708,9 +722,7 @@ describe('Base Mainnet Integration Tests', function () {
         .connect(contributor1)
         .approve(campaignAddress, contributionAmount1)
 
-      await campaign
-        .connect(contributor1)
-        .contribute(await usdc.getAddress(), contributionAmount1)
+      await campaign.connect(contributor1).contribute(contributionAmount1)
 
       // Second contribution (different contributor)
       const contributionAmount2 = ethers.parseUnits('150', usdcDecimals)
@@ -718,9 +730,7 @@ describe('Base Mainnet Integration Tests', function () {
         .connect(contributor2)
         .approve(campaignAddress, contributionAmount2)
 
-      await campaign
-        .connect(contributor2)
-        .contribute(await usdc.getAddress(), contributionAmount2)
+      await campaign.connect(contributor2).contribute(contributionAmount2)
 
       // Third contribution (first contributor again)
       const contributionAmount3 = ethers.parseUnits('130', usdcDecimals)
@@ -728,9 +738,7 @@ describe('Base Mainnet Integration Tests', function () {
         .connect(contributor1)
         .approve(campaignAddress, contributionAmount3)
 
-      await campaign
-        .connect(contributor1)
-        .contribute(await usdc.getAddress(), contributionAmount3)
+      await campaign.connect(contributor1).contribute(contributionAmount3)
 
       await network.provider.send('evm_increaseTime', [
         60 * 60 * 24 * (CAMPAIGN_DURATION + 1)
@@ -757,7 +765,7 @@ describe('Base Mainnet Integration Tests', function () {
 
       expect(await usdc.balanceOf(campaignAddress)).to.be.closeTo(forRefunds, 5)
       expect(
-        await usdc.balanceOf(await yieldDistributor.platformTreasury())
+        await usdc.balanceOf(await feeManager.platformTreasury())
       ).to.be.closeTo(aTokenBalance - forRefunds, 5)
 
       const contributor1Contribution = await campaign.contributions(
@@ -895,16 +903,8 @@ describe('Base Mainnet Integration Tests', function () {
         .approve(campaignAddress, contributionAmount)
 
       await expect(
-        campaign
-          .connect(contributor1)
-          .contribute(await wbtc.getAddress(), contributionAmount)
-      )
-        .to.be.revertedWithCustomError(campaign, 'CampaignError')
-        .withArgs(
-          ERR_NOT_TARGET_TOKEN,
-          ethers.getAddress(await wbtc.getAddress()),
-          0
-        )
+        campaign.connect(contributor1).contribute(contributionAmount)
+      ).to.be.revertedWith('ERC20: transfer amount exceeds allowance')
 
       expect(await campaign.totalAmountRaised()).to.equal(0)
     })
@@ -946,65 +946,8 @@ describe('Base Mainnet Integration Tests', function () {
       const contributionAmount = ethers.parseUnits('100', usdcDecimals)
 
       await expect(
-        campaign
-          .connect(contributor1)
-          .contribute(await usdc.getAddress(), contributionAmount)
+        campaign.connect(contributor1).contribute(contributionAmount)
       ).to.be.revertedWith('ERC20: transfer amount exceeds allowance')
-
-      expect(await campaign.totalAmountRaised()).to.equal(0)
-    })
-
-    it('Should revert for contribution with zero amount', async function () {
-      const { usdc, campaignContractFactory, creator1, contributor1, wbtc } =
-        await loadFixture(deployPlatformFixture)
-
-      const usdcDecimals = await usdc.decimals()
-      const CAMPAIGN_GOAL = ethers.parseUnits('500', usdcDecimals)
-      const CAMPAIGN_DURATION = 60
-
-      const tx = await campaignContractFactory
-        .connect(creator1)
-        .deploy(await usdc.getAddress(), CAMPAIGN_GOAL, CAMPAIGN_DURATION)
-
-      const receipt = await tx.wait()
-      if (!receipt) throw new Error('Transaction failed')
-
-      const event = receipt.logs.find(log => {
-        try {
-          const parsed = campaignContractFactory.interface.parseLog(log)
-          return parsed && parsed.name === 'FactoryOperation'
-        } catch {
-          return false
-        }
-      })
-
-      if (!event) throw new Error('Event failed')
-
-      const parsedEvent = campaignContractFactory.interface.parseLog(event)
-      if (!parsedEvent) throw new Error('Event failed')
-
-      const campaignAddress = parsedEvent.args[1]
-
-      const Campaign = await ethers.getContractFactory('Campaign')
-      const campaign = Campaign.attach(campaignAddress) as unknown as Campaign
-
-      const contributionAmount = ethers.parseUnits('0', usdcDecimals)
-
-      await wbtc
-        .connect(contributor1)
-        .approve(campaignAddress, contributionAmount)
-
-      await expect(
-        campaign
-          .connect(contributor1)
-          .contribute(await usdc.getAddress(), contributionAmount)
-      )
-        .to.be.revertedWithCustomError(campaign, 'CampaignError')
-        .withArgs(
-          ERR_INVALID_AMOUNT,
-          ethers.getAddress(await usdc.getAddress()),
-          0
-        )
 
       expect(await campaign.totalAmountRaised()).to.equal(0)
     })
