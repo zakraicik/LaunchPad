@@ -17,21 +17,21 @@ describe('Campaign', function () {
 
   // Error codes - more specific but still compact
   const ERR_INVALID_ADDRESS = 1
-  const ERR_TOKEN_NOT_SUPPORTED = 2
+  const ERR_INVALID_AMOUNT = 2
   const ERR_INVALID_GOAL = 3
   const ERR_INVALID_DURATION = 4
-  const ERR_INVALID_AMOUNT = 5
-  const ERR_CAMPAIGN_NOT_ACTIVE = 6
-  const ERR_CAMPAIGN_STILL_ACTIVE = 7
-  const ERR_GOAL_REACHED = 8
-  const ERR_ETH_NOT_ACCEPTED = 9
-  const ERR_ALREADY_REFUNDED = 10
-  const ERR_NOTHING_TO_REFUND = 11
+  const ERR_ETH_NOT_ACCEPTED = 5
+  const ERR_TOKEN_NOT_SUPPORTED = 6
+  const ERR_NOT_TARGET_TOKEN = 7
+  const ERR_CAMPAIGN_STILL_ACTIVE = 8
+  const ERR_CAMPAIGN_PAST_END_DATE = 9
+  const ERR_GOAL_REACHED = 10
+  const ERR_ADMIN_OVERRIDE_ACTIVE = 11
   const ERR_FUNDS_CLAIMED = 12
-  const ERR_NOT_TARGET_TOKEN = 13
+  const ERR_FUNDS_NOT_CLAIMED = 13
   const ERR_NOTHING_TO_WITHDRAW = 14
-  const ERR_FUNDS_NOT_CLAIMED = 15
-  const ERR_ADMIN_OVERRIDE_ACTIVE = 16
+  const ERR_ALREADY_REFUNDED = 15
+  const ERR_NOTHING_TO_REFUND = 16
 
   const CAMPAIGN_GOAL_AMOUNT = ethers.parseUnits('1000', 6) //Hardcoded USDC decimals
   const CAMPAIGN_DURATION = 30
@@ -237,6 +237,13 @@ describe('Campaign', function () {
       )
         .to.emit(campaign, 'Contribution')
         .withArgs(contributor1.address, contributionAmount)
+        .and.to.emit(campaign, 'FundsOperation')
+        .withArgs(
+          ethers.getAddress(await usdc.getAddress()), // token
+          contributionAmount, // amount
+          OP_DEPOSIT, // opType
+          contributor1.address // initiator
+        )
 
       const aTokenBalanceAfter = await aToken.balanceOf(
         await campaign.getAddress()
@@ -582,7 +589,7 @@ describe('Campaign', function () {
       )
         .to.be.revertedWithCustomError(campaign, 'CampaignError')
         .withArgs(
-          ERR_CAMPAIGN_NOT_ACTIVE,
+          ERR_CAMPAIGN_PAST_END_DATE,
           ethers.getAddress(await usdc.getAddress()),
           0
         )
@@ -760,6 +767,13 @@ describe('Campaign', function () {
         await expect(campaign.connect(creator1).claimFunds())
           .to.emit(campaign, 'FundsClaimed')
           .withArgs(await campaign.getAddress(), anyUint)
+          .and.to.emit(campaign, 'FundsOperation')
+          .withArgs(
+            ethers.getAddress(await usdc.getAddress()), // token
+            anyUint, // amount
+            OP_CLAIM_FUNDS, // opType
+            creator1.address // initiator
+          )
 
         expect(await campaign.hasClaimedFunds()).to.be.true
 
@@ -1991,7 +2005,7 @@ describe('Campaign', function () {
         expect(await campaign.hasClaimedFunds()).to.be.false
       })
 
-      it.only('Should revert if a random user tries to claim funds', async function () {
+      it('Should revert if a random user tries to claim funds', async function () {
         const {
           defiIntegrationManager,
           campaign,
@@ -2064,1237 +2078,595 @@ describe('Campaign', function () {
       })
     })
 
-    // describe('Refunds', function () {
-    //   it('Should allow successful refund when campaign is over and goal not reached', async function () {
-    //     const {
-    //       campaign,
-    //       mockToken1,
-    //       user1,
-    //       CAMPAIGN_GOAL_AMOUNT,
-    //       CAMPAIGN_DURATION
-    //     } = await loadFixture(deployPlatformFixture)
-
-    //     const contributionAmount = CAMPAIGN_GOAL_AMOUNT - 1
-
-    //     await mockToken1
-    //       .connect(user1)
-    //       .approve(await campaign.getAddress(), contributionAmount)
-
-    //     await campaign
-    //       .connect(user1)
-    //       .contribute(await mockToken1.getAddress(), contributionAmount)
-
-    //     const userBalanceAfterContribution = await mockToken1.balanceOf(
-    //       user1.address
-    //     )
-
-    //     await ethers.provider.send('evm_increaseTime', [
-    //       (CAMPAIGN_DURATION + 1) * 24 * 60 * 60
-    //     ])
-    //     await ethers.provider.send('evm_mine')
-
-    //     await expect(campaign.connect(user1).requestRefund())
-    //       .to.emit(campaign, 'RefundIssued')
-    //       .withArgs(user1.address, contributionAmount)
-
-    //     expect(
-    //       await mockToken1.balanceOf(await campaign.getAddress())
-    //     ).to.equal(0)
-
-    //     expect(await mockToken1.balanceOf(user1.address)).to.equal(
-    //       userBalanceAfterContribution + BigInt(contributionAmount)
-    //     )
-
-    //     expect(await campaign.contributions(user1.address)).to.equal(0)
-
-    //     await expect(campaign.connect(user1).requestRefund())
-    //       .to.be.revertedWithCustomError(campaign, 'CampaignError')
-    //       .withArgs(ERR_ALREADY_REFUNDED, user1.address, 0)
-    //   })
-
-    //   it('Should revert when trying to request refund before campaign ends', async function () {
-    //     const {
-    //       campaign,
-    //       mockToken1,
-    //       user1,
-    //       CAMPAIGN_GOAL_AMOUNT,
-    //       CAMPAIGN_DURATION
-    //     } = await loadFixture(deployPlatformFixture)
-
-    //     const contributionAmount = CAMPAIGN_GOAL_AMOUNT - 1
-
-    //     await mockToken1
-    //       .connect(user1)
-    //       .approve(await campaign.getAddress(), contributionAmount)
-
-    //     await campaign
-    //       .connect(user1)
-    //       .contribute(await mockToken1.getAddress(), contributionAmount)
-
-    //     const userBalanceAfterContribution = await mockToken1.balanceOf(
-    //       user1.address
-    //     )
-
-    //     const campaignBalanceAfterContribution = await mockToken1.balanceOf(
-    //       campaign.getAddress()
-    //     )
-
-    //     await ethers.provider.send('evm_increaseTime', [
-    //       (CAMPAIGN_DURATION - 1) * 24 * 60 * 60
-    //     ])
-    //     await ethers.provider.send('evm_mine')
-
-    //     await expect(campaign.connect(user1).requestRefund())
-    //       .to.be.revertedWithCustomError(campaign, 'CampaignError')
-    //       .withArgs(ERR_CAMPAIGN_STILL_ACTIVE, ethers.ZeroAddress, 0)
-
-    //     const userBalanceAfterFailedRefund = await mockToken1.balanceOf(
-    //       user1.address
-    //     )
-
-    //     const campaignBalanceAfterFailedRefund = await mockToken1.balanceOf(
-    //       campaign.getAddress()
-    //     )
-
-    //     expect(userBalanceAfterContribution).to.equal(
-    //       userBalanceAfterFailedRefund
-    //     )
-    //     expect(campaignBalanceAfterContribution).to.equal(
-    //       campaignBalanceAfterFailedRefund
-    //     )
-    //   })
-
-    //   it('Should revert when trying to request refund if goal is reached', async function () {
-    //     const {
-    //       campaign,
-    //       mockToken1,
-    //       user1,
-    //       CAMPAIGN_GOAL_AMOUNT,
-    //       CAMPAIGN_DURATION
-    //     } = await loadFixture(deployPlatformFixture)
-
-    //     const contributionAmount = CAMPAIGN_GOAL_AMOUNT + 1
-
-    //     await mockToken1
-    //       .connect(user1)
-    //       .approve(await campaign.getAddress(), contributionAmount)
-
-    //     await campaign
-    //       .connect(user1)
-    //       .contribute(await mockToken1.getAddress(), contributionAmount)
-
-    //     const userBalanceAfterContribution = await mockToken1.balanceOf(
-    //       user1.address
-    //     )
-
-    //     const campaignBalanceAfterContribution = await mockToken1.balanceOf(
-    //       campaign.getAddress()
-    //     )
-
-    //     await ethers.provider.send('evm_increaseTime', [
-    //       (CAMPAIGN_DURATION + 1) * 24 * 60 * 60
-    //     ])
-    //     await ethers.provider.send('evm_mine')
-
-    //     await expect(campaign.connect(user1).requestRefund())
-    //       .to.be.revertedWithCustomError(campaign, 'CampaignError')
-    //       .withArgs(
-    //         ERR_GOAL_REACHED,
-    //         ethers.ZeroAddress,
-    //         campaignBalanceAfterContribution
-    //       )
-
-    //     const userBalanceAfterFailedRefund = await mockToken1.balanceOf(
-    //       user1.address
-    //     )
-
-    //     const campaignBalanceAfterFailedRefund = await mockToken1.balanceOf(
-    //       campaign.getAddress()
-    //     )
-
-    //     expect(userBalanceAfterContribution).to.equal(
-    //       userBalanceAfterFailedRefund
-    //     )
-    //     expect(campaignBalanceAfterContribution).to.equal(
-    //       campaignBalanceAfterFailedRefund
-    //     )
-    //   })
-
-    //   it('Should revert when trying to request refund with zero contribution', async function () {
-    //     const {
-    //       campaign,
-    //       mockToken1,
-    //       user1,
-    //       user2,
-    //       CAMPAIGN_GOAL_AMOUNT,
-    //       CAMPAIGN_DURATION
-    //     } = await loadFixture(deployPlatformFixture)
-
-    //     const contributionAmount = CAMPAIGN_GOAL_AMOUNT - 1
-
-    //     await mockToken1
-    //       .connect(user1)
-    //       .approve(await campaign.getAddress(), contributionAmount)
-
-    //     await campaign
-    //       .connect(user1)
-    //       .contribute(await mockToken1.getAddress(), contributionAmount)
-
-    //     const userBalanceAfterContribution = await mockToken1.balanceOf(
-    //       user1.address
-    //     )
-
-    //     const user2BalanceAfterContribution = await mockToken1.balanceOf(
-    //       user2.address
-    //     )
-
-    //     const campaignBalanceAfterContribution = await mockToken1.balanceOf(
-    //       campaign.getAddress()
-    //     )
-
-    //     await ethers.provider.send('evm_increaseTime', [
-    //       (CAMPAIGN_DURATION + 1) * 24 * 60 * 60
-    //     ])
-    //     await ethers.provider.send('evm_mine')
-
-    //     await expect(campaign.connect(user2).requestRefund())
-    //       .to.be.revertedWithCustomError(campaign, 'CampaignError')
-    //       .withArgs(ERR_NOTHING_TO_REFUND, user2.address, 0)
-
-    //     const userBalanceAfterFailedRefund = await mockToken1.balanceOf(
-    //       user1.address
-    //     )
-
-    //     const user2BalanceAfterFailedRefund = await mockToken1.balanceOf(
-    //       user2.address
-    //     )
-
-    //     const campaignBalanceAfterFailedRefund = await mockToken1.balanceOf(
-    //       campaign.getAddress()
-    //     )
-
-    //     expect(userBalanceAfterContribution).to.equal(
-    //       userBalanceAfterFailedRefund
-    //     )
-
-    //     expect(user2BalanceAfterContribution).to.equal(
-    //       user2BalanceAfterFailedRefund
-    //     )
-
-    //     expect(campaignBalanceAfterContribution).to.equal(
-    //       campaignBalanceAfterFailedRefund
-    //     )
-    //   })
-
-    //   it('Should revert when token transfer fails during refund', async function () {
-    //     const {
-    //       owner,
-    //       user1,
-    //       platformAdmin,
-    //       tokenRegistry,
-    //       mockDefiManager,
-    //       CAMPAIGN_DURATION
-    //     } = await loadFixture(deployPlatformFixture)
-
-    //     // Deploy a special failing token for this test
-    //     const mockFailingToken = await ethers.deployContract(
-    //       'MockFailingERC20',
-    //       ['Failing Token', 'FAIL', ethers.parseUnits('100')]
-    //     )
-    //     await mockFailingToken.waitForDeployment()
-    //     const mockFailingTokenAddress = await mockFailingToken.getAddress()
-
-    //     // Add the failing token to the registry
-    //     await tokenRegistry.addToken(mockFailingTokenAddress, 1)
-
-    //     // Create a campaign that uses the failing token
-    //     const CAMPAIGN_GOAL_AMOUNT = 5
-    //     const campaign = await ethers.deployContract('Campaign', [
-    //       owner.address,
-    //       mockFailingTokenAddress,
-    //       CAMPAIGN_GOAL_AMOUNT,
-    //       CAMPAIGN_DURATION,
-    //       await mockDefiManager.getAddress(),
-    //       await platformAdmin.getAddress()
-    //     ])
-    //     await campaign.waitForDeployment()
-
-    //     // Set up contribution that's below the goal
-    //     const contributionAmount = CAMPAIGN_GOAL_AMOUNT - 1
-    //     await mockFailingToken.transfer(user1.address, contributionAmount)
-
-    //     // User approves and contributes to the campaign
-    //     await mockFailingToken
-    //       .connect(user1)
-    //       .approve(await campaign.getAddress(), contributionAmount)
-
-    //     await campaign
-    //       .connect(user1)
-    //       .contribute(mockFailingTokenAddress, contributionAmount)
-
-    //     // Move time past campaign end date
-    //     await ethers.provider.send('evm_increaseTime', [
-    //       (CAMPAIGN_DURATION + 1) * 24 * 60 * 60
-    //     ])
-    //     await ethers.provider.send('evm_mine')
-
-    //     // Configure the token to fail on transfers
-    //     await mockFailingToken.setTransferShouldFail(true)
-
-    //     // The refund call should fail with SafeERC20 error
-    //     await expect(
-    //       campaign.connect(user1).requestRefund()
-    //     ).to.be.revertedWithCustomError(campaign, 'SafeERC20FailedOperation')
-
-    //     // Contribution record should still be intact
-    //     expect(await campaign.contributions(user1.address)).to.equal(
-    //       contributionAmount
-    //     )
-    //   })
-    // })
-    // })
-
-    // describe('Admin Functions', function () {
-    //   describe('withdrawAllFromYieldProtocolAdmin()', function () {
-    //     it('Should allow admin to withdraw all yield after grace period has passed', async function () {
-    //       const {
-    //         campaign,
-    //         mockDefiManager,
-    //         mockToken1,
-    //         user1,
-    //         otherAdmin,
-    //         GRACE_PERIOD
-    //       } = await loadFixture(deployPlatformFixture)
-
-    //       const depositAmount = 100
-    //       await mockToken1
-    //         .connect(user1)
-    //         .approve(await campaign.getAddress(), depositAmount)
-    //       await campaign
-    //         .connect(user1)
-    //         .contribute(await mockToken1.getAddress(), depositAmount)
-
-    //       await campaign.depositToYieldProtocol(
-    //         await mockToken1.getAddress(),
-    //         depositAmount
-    //       )
-
-    //       const depositedAmount = await mockDefiManager.getDepositedAmount(
-    //         await campaign.getAddress(),
-    //         await mockToken1.getAddress()
-    //       )
-    //       expect(depositedAmount).to.equal(BigInt(depositAmount))
-
-    //       const campaignEndTime = await campaign.campaignEndTime()
-
-    //       const latestBlock = await ethers.provider.getBlock('latest')
-
-    //       if (!latestBlock) {
-    //         throw new Error('Latest block does not exist')
-    //       }
-
-    //       const currentTimestamp = latestBlock.timestamp
-
-    //       // Convert campaignEndTime to a number before subtraction
-    //       const timeToAdvance =
-    //         Number(campaignEndTime) -
-    //         currentTimestamp +
-    //         (GRACE_PERIOD + 1) * 24 * 60 * 60
-
-    //       await ethers.provider.send('evm_increaseTime', [timeToAdvance])
-    //       await ethers.provider.send('evm_mine')
-
-    //       expect(await campaign.isCampaignActive()).to.be.false
-
-    //       const campaignBalanceBefore = await mockToken1.balanceOf(
-    //         await campaign.getAddress()
-    //       )
-
-    //       await expect(
-    //         campaign
-    //           .connect(otherAdmin)
-    //           .withdrawAllFromYieldProtocolAdmin(await mockToken1.getAddress())
-    //       )
-    //         .to.emit(campaign, 'FundsOperation')
-    //         .withArgs(
-    //           await mockToken1,
-    //           depositedAmount,
-    //           OP_WITHDRAW_ALL,
-    //           0,
-    //           otherAdmin.address
-    //         )
-
-    //       const campaignBalanceAfter = await mockToken1.balanceOf(
-    //         await campaign.getAddress()
-    //       )
-    //       expect(campaignBalanceAfter - campaignBalanceBefore).to.equal(
-    //         BigInt(depositAmount)
-    //       )
-
-    //       const remainingDepositedAmount =
-    //         await mockDefiManager.getDepositedAmount(
-    //           await campaign.getAddress(),
-    //           await mockToken1.getAddress()
-    //         )
-    //       expect(remainingDepositedAmount).to.equal(0)
-    //     })
-
-    //     it('Should should revert if admin tries to harvest yield before grace period', async function () {
-    //       const {
-    //         campaign,
-    //         mockDefiManager,
-    //         mockToken1,
-    //         yieldDistributor,
-    //         user1,
-    //         platformTreasury,
-    //         otherAdmin
-    //       } = await loadFixture(deployPlatformFixture)
-
-    //       const depositAmount = 100
-    //       await mockToken1
-    //         .connect(user1)
-    //         .approve(await campaign.getAddress(), depositAmount)
-    //       await campaign
-    //         .connect(user1)
-    //         .contribute(await mockToken1.getAddress(), depositAmount)
-
-    //       await campaign.depositToYieldProtocol(
-    //         await mockToken1.getAddress(),
-    //         depositAmount
-    //       )
-
-    //       const yieldRate = await mockDefiManager.yieldRate()
-
-    //       const totalYield =
-    //         (BigInt(depositAmount) * BigInt(yieldRate)) / BigInt(10000)
-
-    //       const [expectedCreatorYield, expectedPlatformYield] =
-    //         await yieldDistributor.calculateYieldShares(totalYield)
-
-    //       await mockToken1.mint(await mockDefiManager.getAddress(), totalYield)
-
-    //       const campaignAddress = campaign.getAddress()
-    //       const platformTreasuryAddress = platformTreasury.address
-
-    //       const campaignBalanceBefore = await mockToken1.balanceOf(
-    //         campaignAddress
-    //       )
-
-    //       const platformTreasuryBalanceBefore = await mockToken1.balanceOf(
-    //         platformTreasuryAddress
-    //       )
-
-    //       await expect(
-    //         campaign
-    //           .connect(otherAdmin)
-    //           .withdrawAllFromYieldProtocolAdmin(await mockToken1.getAddress())
-    //       ).to.be.revertedWithCustomError(campaign, 'GracePeriodNotOver')
-
-    //       const campaignBalanceAfter = await mockToken1.balanceOf(campaignAddress)
-    //       const platformTreasuryBalanceAfter = await mockToken1.balanceOf(
-    //         platformTreasuryAddress
-    //       )
-
-    //       expect(campaignBalanceAfter).to.equal(campaignBalanceBefore)
-
-    //       expect(platformTreasuryBalanceAfter).to.equal(
-    //         platformTreasuryBalanceBefore
-    //       )
-    //     })
-    //     it('Should revert if non-admin tries to harvest yield using admin function', async function () {
-    //       const {
-    //         campaign,
-    //         mockDefiManager,
-    //         mockToken1,
-    //         yieldDistributor,
-    //         user1,
-    //         platformTreasury,
-    //         GRACE_PERIOD,
-    //         otherAdmin
-    //       } = await loadFixture(deployPlatformFixture)
-
-    //       const depositAmount = 100
-    //       await mockToken1
-    //         .connect(user1)
-    //         .approve(await campaign.getAddress(), depositAmount)
-    //       await campaign
-    //         .connect(user1)
-    //         .contribute(await mockToken1.getAddress(), depositAmount)
-
-    //       await campaign.depositToYieldProtocol(
-    //         await mockToken1.getAddress(),
-    //         depositAmount
-    //       )
-
-    //       const yieldRate = await mockDefiManager.yieldRate()
-
-    //       const totalYield =
-    //         (BigInt(depositAmount) * BigInt(yieldRate)) / BigInt(10000)
-
-    //       const [expectedCreatorYield, expectedPlatformYield] =
-    //         await yieldDistributor.calculateYieldShares(totalYield)
-
-    //       await mockToken1.mint(await mockDefiManager.getAddress(), totalYield)
-
-    //       const campaignAddress = campaign.getAddress()
-    //       const platformTreasuryAddress = platformTreasury.address
-
-    //       const campaignBalanceBefore = await mockToken1.balanceOf(
-    //         campaignAddress
-    //       )
-
-    //       const platformTreasuryBalanceBefore = await mockToken1.balanceOf(
-    //         platformTreasuryAddress
-    //       )
-
-    //       const campaignEndTime = await campaign.campaignEndTime()
-
-    //       const latestBlock = await ethers.provider.getBlock('latest')
-
-    //       if (!latestBlock) {
-    //         throw new Error('Latest block does not exist')
-    //       }
-
-    //       const currentTimestamp = latestBlock.timestamp
-
-    //       const timeToAdvance =
-    //         Number(campaignEndTime) -
-    //         currentTimestamp +
-    //         (GRACE_PERIOD + 1) * 24 * 60 * 60
-
-    //       await ethers.provider.send('evm_increaseTime', [timeToAdvance])
-    //       await ethers.provider.send('evm_mine')
-
-    //       await expect(
-    //         campaign
-    //           .connect(user1)
-    //           .withdrawAllFromYieldProtocolAdmin(await mockToken1.getAddress())
-    //       ).to.be.revertedWithCustomError(campaign, 'NotAuthorizedAdmin')
-
-    //       const campaignBalanceAfter = await mockToken1.balanceOf(campaignAddress)
-    //       const platformTreasuryBalanceAfter = await mockToken1.balanceOf(
-    //         platformTreasuryAddress
-    //       )
-
-    //       expect(campaignBalanceAfter).to.equal(campaignBalanceBefore)
-
-    //       expect(platformTreasuryBalanceAfter).to.equal(
-    //         platformTreasuryBalanceBefore
-    //       )
-    //     })
-    //   })
-
-    //   describe('withdrawFromYieldProtocolAdmin()', function () {
-    //     it('Should allow admin to withdraw a specific amount of yield after grace period', async function () {
-    //       const {
-    //         campaign,
-    //         mockDefiManager,
-    //         mockToken1,
-    //         user1,
-    //         otherAdmin,
-    //         GRACE_PERIOD
-    //       } = await loadFixture(deployPlatformFixture)
-
-    //       const depositAmount = 100
-    //       await mockToken1
-    //         .connect(user1)
-    //         .approve(await campaign.getAddress(), depositAmount)
-    //       await campaign
-    //         .connect(user1)
-    //         .contribute(await mockToken1.getAddress(), depositAmount)
-
-    //       await campaign.depositToYieldProtocol(
-    //         await mockToken1.getAddress(),
-    //         depositAmount
-    //       )
-
-    //       const depositedAmount = await mockDefiManager.getDepositedAmount(
-    //         await campaign.getAddress(),
-    //         await mockToken1.getAddress()
-    //       )
-    //       expect(depositedAmount).to.equal(BigInt(depositAmount))
-
-    //       const withdrawAmount = depositAmount / 2
-    //       const campaignBalanceBefore = await mockToken1.balanceOf(
-    //         await campaign.getAddress()
-    //       )
-
-    //       const campaignEndTime = await campaign.campaignEndTime()
-
-    //       const latestBlock = await ethers.provider.getBlock('latest')
-
-    //       if (!latestBlock) {
-    //         throw new Error('Latest block does not exist')
-    //       }
-
-    //       const currentTimestamp = latestBlock.timestamp
-
-    //       // Convert campaignEndTime to a number before subtraction
-    //       const timeToAdvance =
-    //         Number(campaignEndTime) -
-    //         currentTimestamp +
-    //         (GRACE_PERIOD + 1) * 24 * 60 * 60
-
-    //       await ethers.provider.send('evm_increaseTime', [timeToAdvance])
-    //       await ethers.provider.send('evm_mine')
-
-    //       expect(await campaign.isCampaignActive()).to.be.false
-
-    //       await expect(
-    //         campaign
-    //           .connect(otherAdmin)
-    //           .withdrawFromYieldProtocolAdmin(
-    //             await mockToken1.getAddress(),
-    //             withdrawAmount
-    //           )
-    //       )
-    //         .to.emit(campaign, 'FundsOperation')
-    //         .withArgs(
-    //           await mockToken1.getAddress(),
-    //           withdrawAmount,
-    //           OP_WITHDRAW,
-    //           0,
-    //           otherAdmin.address
-    //         )
-
-    //       const campaignBalanceAfter = await mockToken1.balanceOf(
-    //         await campaign.getAddress()
-    //       )
-    //       expect(campaignBalanceAfter - campaignBalanceBefore).to.equal(
-    //         BigInt(withdrawAmount)
-    //       )
-
-    //       const remainingDepositedAmount =
-    //         await mockDefiManager.getDepositedAmount(
-    //           await campaign.getAddress(),
-    //           await mockToken1.getAddress()
-    //         )
-    //       expect(remainingDepositedAmount).to.equal(
-    //         BigInt(depositAmount - withdrawAmount)
-    //       )
-    //     })
-
-    //     it('Should should revert if admin tries to harvest yield before grace period', async function () {
-    //       const {
-    //         campaign,
-    //         mockDefiManager,
-    //         mockToken1,
-    //         yieldDistributor,
-    //         user1,
-    //         platformTreasury,
-    //         otherAdmin
-    //       } = await loadFixture(deployPlatformFixture)
-
-    //       const depositAmount = 100
-    //       await mockToken1
-    //         .connect(user1)
-    //         .approve(await campaign.getAddress(), depositAmount)
-    //       await campaign
-    //         .connect(user1)
-    //         .contribute(await mockToken1.getAddress(), depositAmount)
-
-    //       await campaign.depositToYieldProtocol(
-    //         await mockToken1.getAddress(),
-    //         depositAmount
-    //       )
-
-    //       const yieldRate = await mockDefiManager.yieldRate()
-
-    //       const totalYield =
-    //         (BigInt(depositAmount) * BigInt(yieldRate)) / BigInt(10000)
-
-    //       const [expectedCreatorYield, expectedPlatformYield] =
-    //         await yieldDistributor.calculateYieldShares(totalYield)
-
-    //       await mockToken1.mint(await mockDefiManager.getAddress(), totalYield)
-
-    //       const campaignAddress = campaign.getAddress()
-    //       const platformTreasuryAddress = platformTreasury.address
-
-    //       const withdrawAmount = depositAmount / 2
-
-    //       const campaignBalanceBefore = await mockToken1.balanceOf(
-    //         campaignAddress
-    //       )
-
-    //       const platformTreasuryBalanceBefore = await mockToken1.balanceOf(
-    //         platformTreasuryAddress
-    //       )
-
-    //       await expect(
-    //         campaign
-    //           .connect(otherAdmin)
-    //           .withdrawFromYieldProtocolAdmin(
-    //             await mockToken1.getAddress(),
-    //             withdrawAmount
-    //           )
-    //       ).to.be.revertedWithCustomError(campaign, 'GracePeriodNotOver')
-
-    //       const campaignBalanceAfter = await mockToken1.balanceOf(campaignAddress)
-    //       const platformTreasuryBalanceAfter = await mockToken1.balanceOf(
-    //         platformTreasuryAddress
-    //       )
-
-    //       expect(campaignBalanceAfter).to.equal(campaignBalanceBefore)
-
-    //       expect(platformTreasuryBalanceAfter).to.equal(
-    //         platformTreasuryBalanceBefore
-    //       )
-    //     })
-    //     it('Should revert if non-admin tries to harvest yield using admin function', async function () {
-    //       const {
-    //         campaign,
-    //         mockDefiManager,
-    //         mockToken1,
-    //         yieldDistributor,
-    //         user1,
-    //         platformTreasury,
-    //         GRACE_PERIOD,
-    //         otherAdmin
-    //       } = await loadFixture(deployPlatformFixture)
-
-    //       const depositAmount = 100
-    //       await mockToken1
-    //         .connect(user1)
-    //         .approve(await campaign.getAddress(), depositAmount)
-    //       await campaign
-    //         .connect(user1)
-    //         .contribute(await mockToken1.getAddress(), depositAmount)
-
-    //       await campaign.depositToYieldProtocol(
-    //         await mockToken1.getAddress(),
-    //         depositAmount
-    //       )
-
-    //       const yieldRate = await mockDefiManager.yieldRate()
-
-    //       const totalYield =
-    //         (BigInt(depositAmount) * BigInt(yieldRate)) / BigInt(10000)
-
-    //       const [expectedCreatorYield, expectedPlatformYield] =
-    //         await yieldDistributor.calculateYieldShares(totalYield)
-
-    //       await mockToken1.mint(await mockDefiManager.getAddress(), totalYield)
-
-    //       const campaignAddress = campaign.getAddress()
-    //       const platformTreasuryAddress = platformTreasury.address
-    //       const withdrawAmount = depositAmount / 2
-
-    //       const campaignBalanceBefore = await mockToken1.balanceOf(
-    //         campaignAddress
-    //       )
-
-    //       const platformTreasuryBalanceBefore = await mockToken1.balanceOf(
-    //         platformTreasuryAddress
-    //       )
-
-    //       const campaignEndTime = await campaign.campaignEndTime()
-
-    //       const latestBlock = await ethers.provider.getBlock('latest')
-
-    //       if (!latestBlock) {
-    //         throw new Error('Latest block does not exist')
-    //       }
-
-    //       const currentTimestamp = latestBlock.timestamp
-
-    //       const timeToAdvance =
-    //         Number(campaignEndTime) -
-    //         currentTimestamp +
-    //         (GRACE_PERIOD + 1) * 24 * 60 * 60
-
-    //       await ethers.provider.send('evm_increaseTime', [timeToAdvance])
-    //       await ethers.provider.send('evm_mine')
-
-    //       await expect(
-    //         campaign
-    //           .connect(user1)
-    //           .withdrawFromYieldProtocolAdmin(
-    //             await mockToken1.getAddress(),
-    //             withdrawAmount
-    //           )
-    //       ).to.be.revertedWithCustomError(campaign, 'NotAuthorizedAdmin')
-
-    //       const campaignBalanceAfter = await mockToken1.balanceOf(campaignAddress)
-    //       const platformTreasuryBalanceAfter = await mockToken1.balanceOf(
-    //         platformTreasuryAddress
-    //       )
-
-    //       expect(campaignBalanceAfter).to.equal(campaignBalanceBefore)
-
-    //       expect(platformTreasuryBalanceAfter).to.equal(
-    //         platformTreasuryBalanceBefore
-    //       )
-    //     })
-    //   })
-
-    //   describe('harvestYieldAdmin()', function () {
-    //     it('Should allow admin to harvest yield after grace period', async function () {
-    //       const {
-    //         campaign,
-    //         mockDefiManager,
-    //         mockToken1,
-    //         yieldDistributor,
-    //         user1,
-    //         platformTreasury,
-    //         GRACE_PERIOD,
-    //         otherAdmin
-    //       } = await loadFixture(deployPlatformFixture)
-
-    //       const depositAmount = 100
-    //       await mockToken1
-    //         .connect(user1)
-    //         .approve(await campaign.getAddress(), depositAmount)
-    //       await campaign
-    //         .connect(user1)
-    //         .contribute(await mockToken1.getAddress(), depositAmount)
-
-    //       await campaign.depositToYieldProtocol(
-    //         await mockToken1.getAddress(),
-    //         depositAmount
-    //       )
-
-    //       const yieldRate = await mockDefiManager.yieldRate()
-
-    //       const totalYield =
-    //         (BigInt(depositAmount) * BigInt(yieldRate)) / BigInt(10000)
-
-    //       const [expectedCreatorYield, expectedPlatformYield] =
-    //         await yieldDistributor.calculateYieldShares(totalYield)
-
-    //       await mockToken1.mint(await mockDefiManager.getAddress(), totalYield)
-
-    //       const campaignAddress = campaign.getAddress()
-    //       const platformTreasuryAddress = platformTreasury.address
-
-    //       const campaignBalanceBefore = await mockToken1.balanceOf(
-    //         campaignAddress
-    //       )
-
-    //       const platformTreasuryBalanceBefore = await mockToken1.balanceOf(
-    //         platformTreasuryAddress
-    //       )
-
-    //       const campaignEndTime = await campaign.campaignEndTime()
-
-    //       const latestBlock = await ethers.provider.getBlock('latest')
-
-    //       if (!latestBlock) {
-    //         throw new Error('Latest block does not exist')
-    //       }
-
-    //       const currentTimestamp = latestBlock.timestamp
-
-    //       const timeToAdvance =
-    //         Number(campaignEndTime) -
-    //         currentTimestamp +
-    //         (GRACE_PERIOD + 1) * 24 * 60 * 60
-
-    //       await ethers.provider.send('evm_increaseTime', [timeToAdvance])
-    //       await ethers.provider.send('evm_mine')
-
-    //       await expect(
-    //         campaign
-    //           .connect(otherAdmin)
-    //           .harvestYieldAdmin(await mockToken1.getAddress())
-    //       )
-    //         .to.emit(campaign, 'FundsOperation')
-    //         .withArgs(
-    //           await mockToken1.getAddress(),
-    //           0,
-    //           OP_HARVEST,
-    //           expectedCreatorYield,
-    //           otherAdmin.address
-    //         )
-
-    //       const campaignBalanceAfter = await mockToken1.balanceOf(campaignAddress)
-    //       const platformTreasuryBalanceAfter = await mockToken1.balanceOf(
-    //         platformTreasuryAddress
-    //       )
-
-    //       expect(campaignBalanceAfter - campaignBalanceBefore).to.equal(
-    //         expectedCreatorYield
-    //       )
-
-    //       expect(
-    //         platformTreasuryBalanceAfter - platformTreasuryBalanceBefore
-    //       ).to.equal(expectedPlatformYield)
-
-    //       const depositedAmount = await mockDefiManager.getDepositedAmount(
-    //         await campaign.getAddress(),
-    //         await mockToken1.getAddress()
-    //       )
-    //       expect(depositedAmount).to.equal(BigInt(depositAmount))
-    //     })
-    //     it('Should should revert if admin tries to harvest yield before grace period', async function () {
-    //       const {
-    //         campaign,
-    //         mockDefiManager,
-    //         mockToken1,
-    //         yieldDistributor,
-    //         user1,
-    //         platformTreasury,
-    //         otherAdmin
-    //       } = await loadFixture(deployPlatformFixture)
-
-    //       const depositAmount = 100
-    //       await mockToken1
-    //         .connect(user1)
-    //         .approve(await campaign.getAddress(), depositAmount)
-    //       await campaign
-    //         .connect(user1)
-    //         .contribute(await mockToken1.getAddress(), depositAmount)
-
-    //       await campaign.depositToYieldProtocol(
-    //         await mockToken1.getAddress(),
-    //         depositAmount
-    //       )
-
-    //       const yieldRate = await mockDefiManager.yieldRate()
-
-    //       const totalYield =
-    //         (BigInt(depositAmount) * BigInt(yieldRate)) / BigInt(10000)
-
-    //       const [expectedCreatorYield, expectedPlatformYield] =
-    //         await yieldDistributor.calculateYieldShares(totalYield)
-
-    //       await mockToken1.mint(await mockDefiManager.getAddress(), totalYield)
-
-    //       const campaignAddress = campaign.getAddress()
-    //       const platformTreasuryAddress = platformTreasury.address
-
-    //       const campaignBalanceBefore = await mockToken1.balanceOf(
-    //         campaignAddress
-    //       )
-
-    //       const platformTreasuryBalanceBefore = await mockToken1.balanceOf(
-    //         platformTreasuryAddress
-    //       )
-
-    //       await expect(
-    //         campaign
-    //           .connect(otherAdmin)
-    //           .harvestYieldAdmin(await mockToken1.getAddress())
-    //       ).to.be.revertedWithCustomError(campaign, 'GracePeriodNotOver')
-
-    //       const campaignBalanceAfter = await mockToken1.balanceOf(campaignAddress)
-    //       const platformTreasuryBalanceAfter = await mockToken1.balanceOf(
-    //         platformTreasuryAddress
-    //       )
-
-    //       expect(campaignBalanceAfter).to.equal(campaignBalanceBefore)
-
-    //       expect(platformTreasuryBalanceAfter).to.equal(
-    //         platformTreasuryBalanceBefore
-    //       )
-    //     })
-    //     it('Should revert if non-admin tries to harvest yield using admin function', async function () {
-    //       const {
-    //         campaign,
-    //         mockDefiManager,
-    //         mockToken1,
-    //         yieldDistributor,
-    //         user1,
-    //         platformTreasury,
-    //         GRACE_PERIOD,
-    //         otherAdmin
-    //       } = await loadFixture(deployPlatformFixture)
-
-    //       const depositAmount = 100
-    //       await mockToken1
-    //         .connect(user1)
-    //         .approve(await campaign.getAddress(), depositAmount)
-    //       await campaign
-    //         .connect(user1)
-    //         .contribute(await mockToken1.getAddress(), depositAmount)
-
-    //       await campaign.depositToYieldProtocol(
-    //         await mockToken1.getAddress(),
-    //         depositAmount
-    //       )
-
-    //       const yieldRate = await mockDefiManager.yieldRate()
-
-    //       const totalYield =
-    //         (BigInt(depositAmount) * BigInt(yieldRate)) / BigInt(10000)
-
-    //       const [expectedCreatorYield, expectedPlatformYield] =
-    //         await yieldDistributor.calculateYieldShares(totalYield)
-
-    //       await mockToken1.mint(await mockDefiManager.getAddress(), totalYield)
-
-    //       const campaignAddress = campaign.getAddress()
-    //       const platformTreasuryAddress = platformTreasury.address
-
-    //       const campaignBalanceBefore = await mockToken1.balanceOf(
-    //         campaignAddress
-    //       )
-
-    //       const platformTreasuryBalanceBefore = await mockToken1.balanceOf(
-    //         platformTreasuryAddress
-    //       )
-
-    //       const campaignEndTime = await campaign.campaignEndTime()
-
-    //       const latestBlock = await ethers.provider.getBlock('latest')
-
-    //       if (!latestBlock) {
-    //         throw new Error('Latest block does not exist')
-    //       }
-
-    //       const currentTimestamp = latestBlock.timestamp
-
-    //       const timeToAdvance =
-    //         Number(campaignEndTime) -
-    //         currentTimestamp +
-    //         (GRACE_PERIOD + 1) * 24 * 60 * 60
-
-    //       await ethers.provider.send('evm_increaseTime', [timeToAdvance])
-    //       await ethers.provider.send('evm_mine')
-
-    //       await expect(
-    //         campaign
-    //           .connect(user1)
-    //           .harvestYieldAdmin(await mockToken1.getAddress())
-    //       ).to.be.revertedWithCustomError(campaign, 'NotAuthorizedAdmin')
-
-    //       const campaignBalanceAfter = await mockToken1.balanceOf(campaignAddress)
-    //       const platformTreasuryBalanceAfter = await mockToken1.balanceOf(
-    //         platformTreasuryAddress
-    //       )
-
-    //       expect(campaignBalanceAfter).to.equal(campaignBalanceBefore)
-
-    //       expect(platformTreasuryBalanceAfter).to.equal(
-    //         platformTreasuryBalanceBefore
-    //       )
-    //     })
-    //   })
-
-    //   describe('Admin Override Functions', function () {
-    //     it('Should allow other platform admin to set admin override', async function () {
-    //       const { campaign, platformAdmin, otherAdmin } = await loadFixture(
-    //         deployPlatformFixture
-    //       )
-
-    //       // Initially campaign should be active
-    //       expect(await campaign.isCampaignActive()).to.be.true
-    //       expect(await campaign.adminOverride()).to.be.false
-
-    //       // Set admin override to true
-
-    //       await expect(campaign.connect(otherAdmin).setAdminOverride(true))
-    //         .to.emit(campaign, 'AdminOverrideSet')
-    //         .withArgs(true, otherAdmin.address)
-
-    //       // Campaign should now be inactive due to override
-    //       expect(await campaign.isCampaignActive()).to.be.false
-    //       expect(await campaign.adminOverride()).to.be.true
-    //     })
-
-    //     it('Should revert when non-admin tries to set admin override', async function () {
-    //       const { campaign, user1 } = await loadFixture(deployPlatformFixture)
-
-    //       await expect(
-    //         campaign.connect(user1).setAdminOverride(true)
-    //       ).to.be.revertedWithCustomError(campaign, 'NotAuthorizedAdmin')
-    //     })
-
-    //     it('Should prevent contributions when admin override is active', async function () {
-    //       const { campaign, mockToken1, user1, platformAdmin, otherAdmin } =
-    //         await loadFixture(deployPlatformFixture)
-
-    //       await campaign.connect(otherAdmin).setAdminOverride(true)
-
-    //       // Try to contribute
-    //       await mockToken1
-    //         .connect(user1)
-    //         .approve(await campaign.getAddress(), 100)
-    //       await expect(
-    //         campaign.connect(user1).contribute(await mockToken1.getAddress(), 100)
-    //       )
-    //         .to.be.revertedWithCustomError(campaign, 'CampaignError')
-    //         .withArgs(ERR_CAMPAIGN_NOT_ACTIVE, ethers.ZeroAddress, 0)
-    //     })
-
-    //     it('Should allow admin to reactivate campaign by removing override', async function () {
-    //       const { campaign, mockToken1, user1, platformAdmin, otherAdmin } =
-    //         await loadFixture(deployPlatformFixture)
-
-    //       // Set admin override to true
-
-    //       await campaign.connect(otherAdmin).setAdminOverride(true)
-    //       expect(await campaign.isCampaignActive()).to.be.false
-
-    //       // Remove override
-    //       await expect(campaign.connect(otherAdmin).setAdminOverride(false))
-    //         .to.emit(campaign, 'AdminOverrideSet')
-    //         .withArgs(false, otherAdmin.address)
-
-    //       // Campaign should be active again
-    //       expect(await campaign.isCampaignActive()).to.be.true
-
-    //       // Should allow contributions
-    //       await mockToken1
-    //         .connect(user1)
-    //         .approve(await campaign.getAddress(), 100)
-    //       await expect(
-    //         campaign.connect(user1).contribute(await mockToken1.getAddress(), 100)
-    //       )
-    //         .to.emit(campaign, 'Contribution')
-    //         .withArgs(user1.address, 100)
-    //     })
-    //   })
-    // })
-
-    // describe('Getter Functions', function () {
-    //   describe('isCampaignActive', function () {
-    //     it('Should return true when campaign is within its timeframe', async function () {
-    //       const { campaign } = await loadFixture(deployPlatformFixture)
-
-    //       // Campaign should be active by default right after deployment
-    //       expect(await campaign.isCampaignActive()).to.be.true
-    //     })
-
-    //     it('Should return false when campaign timeframe has passed', async function () {
-    //       const { campaign, CAMPAIGN_DURATION } = await loadFixture(
-    //         deployPlatformFixture
-    //       )
-
-    //       // Increase time to after campaign end
-    //       await ethers.provider.send('evm_increaseTime', [
-    //         (CAMPAIGN_DURATION + 1) * 24 * 60 * 60
-    //       ])
-    //       await ethers.provider.send('evm_mine')
-
-    //       // Campaign should now be inactive
-    //       expect(await campaign.isCampaignActive()).to.be.false
-    //     })
-    //   })
-
-    //   describe('isCampaignSuccessful', function () {
-    //     it('Should return true when goal is reached', async function () {
-    //       const { campaign, mockToken1, user1, CAMPAIGN_GOAL_AMOUNT } =
-    //         await loadFixture(deployPlatformFixture)
-
-    //       // Campaign should not be successful initially
-    //       expect(await campaign.isCampaignSuccessful()).to.be.false
-
-    //       // Contribute enough to reach the goal
-    //       await mockToken1
-    //         .connect(user1)
-    //         .approve(await campaign.getAddress(), CAMPAIGN_GOAL_AMOUNT)
-    //       await campaign
-    //         .connect(user1)
-    //         .contribute(await mockToken1.getAddress(), CAMPAIGN_GOAL_AMOUNT)
-
-    //       // Campaign should now be successful
-    //       expect(await campaign.isCampaignSuccessful()).to.be.true
-    //     })
-
-    //     it('Should return false when goal is not reached', async function () {
-    //       const { campaign, mockToken1, user1, CAMPAIGN_GOAL_AMOUNT } =
-    //         await loadFixture(deployPlatformFixture)
-
-    //       // Contribute less than the goal
-    //       const partialAmount = CAMPAIGN_GOAL_AMOUNT - 1
-    //       await mockToken1
-    //         .connect(user1)
-    //         .approve(await campaign.getAddress(), partialAmount)
-    //       await campaign
-    //         .connect(user1)
-    //         .contribute(await mockToken1.getAddress(), partialAmount)
-
-    //       // Campaign should not be successful
-    //       expect(await campaign.isCampaignSuccessful()).to.be.false
-    //     })
-    //   })
-
-    //   describe('getDepositedAmount', function () {
-    //     it('Should return correct deposited amount after deposits and withdrawals', async function () {
-    //       const { campaign, mockDefiManager, mockToken1, user1 } =
-    //         await loadFixture(deployPlatformFixture)
-
-    //       // Initially no deposits
-    //       expect(
-    //         await campaign.getDepositedAmount(await mockToken1.getAddress())
-    //       ).to.equal(0)
-
-    //       // Contribute and deposit to yield protocol
-    //       const depositAmount = 100
-    //       await mockToken1
-    //         .connect(user1)
-    //         .approve(await campaign.getAddress(), depositAmount)
-    //       await campaign
-    //         .connect(user1)
-    //         .contribute(await mockToken1.getAddress(), depositAmount)
-
-    //       await campaign.depositToYieldProtocol(
-    //         await mockToken1.getAddress(),
-    //         depositAmount
-    //       )
-
-    //       // Check deposited amount
-    //       expect(
-    //         await campaign.getDepositedAmount(await mockToken1.getAddress())
-    //       ).to.equal(BigInt(depositAmount))
-
-    //       // Withdraw half the amount
-    //       const withdrawAmount = depositAmount / 2
-    //       await campaign.withdrawFromYieldProtocol(
-    //         await mockToken1.getAddress(),
-    //         withdrawAmount
-    //       )
-
-    //       // Check updated deposited amount
-    //       expect(
-    //         await campaign.getDepositedAmount(await mockToken1.getAddress())
-    //       ).to.equal(BigInt(depositAmount - withdrawAmount))
-
-    //       await campaign.withdrawFromYieldProtocol(
-    //         await mockToken1.getAddress(),
-    //         withdrawAmount
-    //       )
-
-    //       expect(
-    //         await campaign.getDepositedAmount(await mockToken1.getAddress())
-    //       ).to.equal(0)
-    //     })
-
-    //     it('Should return zero for any address with no deposits', async function () {
-    //       const { campaign, mockToken1 } = await loadFixture(
-    //         deployPlatformFixture
-    //       )
-    //       const initialDeposit = await campaign.getDepositedAmount(
-    //         await mockToken1.getAddress()
-    //       )
-    //       expect(initialDeposit).to.equal(0)
-
-    //       const randomAddress = await campaign.getAddress()
-    //       const randomDeposit = await campaign.getDepositedAmount(randomAddress)
-    //       expect(randomDeposit).to.equal(0)
-    //     })
-    //   })
-
-    //   describe('getCurrentYieldRate', function () {
-    //     it('Should return the yield rate from DefiManager', async function () {
-    //       const { campaign, mockDefiManager, mockToken1 } = await loadFixture(
-    //         deployPlatformFixture
-    //       )
-
-    //       // Get the yield rate directly from mockDefiManager for comparison
-    //       const expectedRate = await mockDefiManager.getCurrentYieldRate(
-    //         await mockToken1.getAddress()
-    //       )
-
-    //       // Get the yield rate through the campaign contract
-    //       const actualRate = await campaign.getCurrentYieldRate(
-    //         await mockToken1.getAddress()
-    //       )
-
-    //       // Verify the rates match
-    //       expect(actualRate).to.equal(expectedRate)
-    //     })
-    //   })
+    describe('Refunds', function () {
+      it('Should allow successful refund when campaign is over and goal not reached', async function () {
+        const { campaign, contributor1, contributor2, usdc, creator1 } =
+          await loadFixture(deployPlatformFixture)
+
+        const usdcAddress = await usdc.getAddress()
+        const usdcDecimals = await usdc.decimals()
+
+        const contributionAmount1 = ethers.parseUnits('400', usdcDecimals)
+        const contributionAmount2 = ethers.parseUnits('400', usdcDecimals)
+
+        await usdc
+          .connect(contributor1)
+          .approve(await campaign.getAddress(), contributionAmount1)
+
+        await campaign
+          .connect(contributor1)
+          .contribute(await usdc.getAddress(), contributionAmount1)
+
+        await usdc
+          .connect(contributor2)
+          .approve(await campaign.getAddress(), contributionAmount2)
+
+        await campaign
+          .connect(contributor2)
+          .contribute(await usdc.getAddress(), contributionAmount2)
+
+        await ethers.provider.send('evm_increaseTime', [
+          CAMPAIGN_DURATION * 24 * 60 * 60
+        ])
+
+        await ethers.provider.send('evm_mine')
+
+        expect(await campaign.isCampaignActive()).to.be.false
+        expect(await campaign.isCampaignSuccessful()).to.be.false
+
+        const campaignBalanceBeforeClaim = await usdc.balanceOf(
+          await campaign.getAddress()
+        )
+
+        await campaign.connect(creator1).claimFunds()
+
+        const totalAmountRaised = await campaign.totalAmountRaised()
+
+        expect(await usdc.balanceOf(await campaign.getAddress())).to.equal(
+          totalAmountRaised
+        )
+
+        const campaignBalanceAfterClaim = await usdc.balanceOf(
+          await campaign.getAddress()
+        )
+
+        expect(campaignBalanceAfterClaim).to.equal(
+          campaignBalanceBeforeClaim + totalAmountRaised
+        )
+
+        const contributor1BalanceBeforeRefund = await usdc.balanceOf(
+          contributor1.address
+        )
+
+        await expect(campaign.connect(contributor1).requestRefund())
+          .to.emit(campaign, 'RefundIssued')
+          .withArgs(contributor1.address, contributionAmount1)
+
+        expect(await campaign.hasBeenRefunded(contributor1.address)).to.be.true
+        expect(await campaign.contributions(contributor1.address)).to.equal(0)
+
+        const contributor1BalanceAfterRefund = await usdc.balanceOf(
+          contributor1.address
+        )
+
+        expect(contributor1BalanceAfterRefund).to.equal(
+          contributor1BalanceBeforeRefund + contributionAmount1
+        )
+
+        const campaignBalanceAfterRefund1 = await usdc.balanceOf(
+          await campaign.getAddress()
+        )
+
+        expect(campaignBalanceAfterRefund1).to.equal(
+          campaignBalanceAfterClaim - contributionAmount1
+        )
+
+        const contributor2BalanceBeforeRefund = await usdc.balanceOf(
+          contributor2.address
+        )
+
+        await expect(campaign.connect(contributor2).requestRefund())
+          .to.emit(campaign, 'RefundIssued')
+          .withArgs(contributor2.address, contributionAmount2)
+
+        expect(await campaign.hasBeenRefunded(contributor2.address)).to.be.true
+        expect(await campaign.contributions(contributor2.address)).to.equal(0)
+
+        const contributor2BalanceAfterRefund = await usdc.balanceOf(
+          contributor2.address
+        )
+
+        expect(contributor2BalanceAfterRefund).to.equal(
+          contributor2BalanceBeforeRefund + contributionAmount2
+        )
+
+        const campaignBalanceAfterRefund2 = await usdc.balanceOf(
+          await campaign.getAddress()
+        )
+
+        expect(campaignBalanceAfterRefund2).to.equal(
+          campaignBalanceAfterClaim - contributionAmount1 - contributionAmount2
+        )
+
+        await expect(campaign.connect(contributor1).requestRefund())
+          .to.be.revertedWithCustomError(campaign, 'CampaignError')
+          .withArgs(ERR_ALREADY_REFUNDED, contributor1.address, 0)
+
+        await expect(campaign.connect(contributor2).requestRefund())
+          .to.be.revertedWithCustomError(campaign, 'CampaignError')
+          .withArgs(ERR_ALREADY_REFUNDED, contributor2.address, 0)
+      })
+
+      it('Should revert when trying to request refund before funds have been claimed', async function () {
+        const { campaign, contributor1, contributor2, usdc } =
+          await loadFixture(deployPlatformFixture)
+
+        const usdcAddress = await usdc.getAddress()
+        const usdcDecimals = await usdc.decimals()
+
+        const contributionAmount1 = ethers.parseUnits('400', usdcDecimals)
+        const contributionAmount2 = ethers.parseUnits('400', usdcDecimals)
+
+        await usdc
+          .connect(contributor1)
+          .approve(await campaign.getAddress(), contributionAmount1)
+
+        await campaign
+          .connect(contributor1)
+          .contribute(await usdc.getAddress(), contributionAmount1)
+
+        await usdc
+          .connect(contributor2)
+          .approve(await campaign.getAddress(), contributionAmount2)
+
+        await campaign
+          .connect(contributor2)
+          .contribute(await usdc.getAddress(), contributionAmount2)
+
+        await ethers.provider.send('evm_increaseTime', [
+          CAMPAIGN_DURATION * 24 * 60 * 60
+        ])
+
+        await ethers.provider.send('evm_mine')
+
+        expect(await campaign.isCampaignActive()).to.be.false
+        expect(await campaign.isCampaignSuccessful()).to.be.false
+
+        await expect(campaign.connect(contributor1).requestRefund())
+          .to.be.revertedWithCustomError(campaign, 'CampaignError')
+          .withArgs(ERR_FUNDS_NOT_CLAIMED, ethers.ZeroAddress, 0)
+
+        expect(await campaign.hasBeenRefunded(contributor1.address)).to.be.false
+        expect(await campaign.contributions(contributor1.address)).to.equal(
+          contributionAmount1
+        )
+
+        await expect(campaign.connect(contributor2).requestRefund())
+          .to.be.revertedWithCustomError(campaign, 'CampaignError')
+          .withArgs(ERR_FUNDS_NOT_CLAIMED, ethers.ZeroAddress, 0)
+
+        expect(await campaign.hasBeenRefunded(contributor2.address)).to.be.false
+        expect(await campaign.contributions(contributor2.address)).to.equal(
+          contributionAmount2
+        )
+      })
+
+      it('Should revert if contributor has made no contributions', async function () {
+        const { campaign, contributor1, contributor2, usdc, creator1 } =
+          await loadFixture(deployPlatformFixture)
+
+        const usdcAddress = await usdc.getAddress()
+        const usdcDecimals = await usdc.decimals()
+
+        const contributionAmount1 = ethers.parseUnits('400', usdcDecimals)
+        const contributionAmount2 = ethers.parseUnits('400', usdcDecimals)
+
+        await usdc
+          .connect(contributor1)
+          .approve(await campaign.getAddress(), contributionAmount1)
+
+        await campaign
+          .connect(contributor1)
+          .contribute(await usdc.getAddress(), contributionAmount1)
+
+        await ethers.provider.send('evm_increaseTime', [
+          CAMPAIGN_DURATION * 24 * 60 * 60
+        ])
+
+        await ethers.provider.send('evm_mine')
+
+        expect(await campaign.isCampaignActive()).to.be.false
+        expect(await campaign.isCampaignSuccessful()).to.be.false
+
+        const campaignBalanceBeforeClaim = await usdc.balanceOf(
+          await campaign.getAddress()
+        )
+
+        await campaign.connect(creator1).claimFunds()
+
+        const totalAmountRaised = await campaign.totalAmountRaised()
+
+        expect(await usdc.balanceOf(await campaign.getAddress())).to.equal(
+          totalAmountRaised
+        )
+
+        const campaignBalanceAfterClaim = await usdc.balanceOf(
+          await campaign.getAddress()
+        )
+
+        expect(campaignBalanceAfterClaim).to.equal(
+          campaignBalanceBeforeClaim + totalAmountRaised
+        )
+
+        const contributor1BalanceBeforeRefund = await usdc.balanceOf(
+          contributor1.address
+        )
+
+        await expect(campaign.connect(contributor1).requestRefund())
+          .to.emit(campaign, 'RefundIssued')
+          .withArgs(contributor1.address, contributionAmount1)
+
+        expect(await campaign.hasBeenRefunded(contributor1.address)).to.be.true
+        expect(await campaign.contributions(contributor1.address)).to.equal(0)
+
+        const contributor1BalanceAfterRefund = await usdc.balanceOf(
+          contributor1.address
+        )
+
+        expect(contributor1BalanceAfterRefund).to.equal(
+          contributor1BalanceBeforeRefund + contributionAmount1
+        )
+
+        const campaignBalanceAfterRefund1 = await usdc.balanceOf(
+          await campaign.getAddress()
+        )
+
+        expect(campaignBalanceAfterRefund1).to.equal(
+          campaignBalanceAfterClaim - contributionAmount1
+        )
+
+        const contributor2BalanceBeforeRefund = await usdc.balanceOf(
+          contributor2.address
+        )
+
+        await expect(campaign.connect(contributor2).requestRefund())
+          .to.be.revertedWithCustomError(campaign, 'CampaignError')
+          .withArgs(ERR_NOTHING_TO_REFUND, contributor2.address, 0)
+
+        expect(await campaign.hasBeenRefunded(contributor2.address)).to.be.false
+        expect(await campaign.contributions(contributor2.address)).to.equal(0)
+
+        const contributor2BalanceAfterRefund = await usdc.balanceOf(
+          contributor2.address
+        )
+
+        expect(contributor2BalanceAfterRefund).to.equal(
+          contributor2BalanceBeforeRefund
+        )
+
+        const campaignBalanceAfterRefund2 = await usdc.balanceOf(
+          await campaign.getAddress()
+        )
+
+        expect(campaignBalanceAfterRefund2).to.equal(
+          campaignBalanceAfterClaim - contributionAmount1
+        )
+      })
+
+      it('Should revert if goal was exceeded ', async function () {
+        const { campaign, contributor1, contributor2, usdc, creator1 } =
+          await loadFixture(deployPlatformFixture)
+
+        const usdcAddress = await usdc.getAddress()
+        const usdcDecimals = await usdc.decimals()
+
+        const contributionAmount1 = ethers.parseUnits('1001', usdcDecimals)
+
+        await usdc
+          .connect(contributor1)
+          .approve(await campaign.getAddress(), contributionAmount1)
+
+        await campaign
+          .connect(contributor1)
+          .contribute(await usdc.getAddress(), contributionAmount1)
+
+        await ethers.provider.send('evm_increaseTime', [
+          (CAMPAIGN_DURATION - 5) * 24 * 60 * 60
+        ])
+
+        await ethers.provider.send('evm_mine')
+
+        expect(await campaign.isCampaignActive()).to.be.true
+        expect(await campaign.isCampaignSuccessful()).to.be.true
+
+        await campaign.connect(creator1).claimFunds()
+
+        const totalAmountRaised = await campaign.totalAmountRaised()
+
+        const contributor1BalanceBeforeRefund = await usdc.balanceOf(
+          contributor1.address
+        )
+
+        await expect(campaign.connect(contributor1).requestRefund())
+          .to.be.revertedWithCustomError(campaign, 'CampaignError')
+          .withArgs(ERR_GOAL_REACHED, ethers.ZeroAddress, totalAmountRaised)
+
+        expect(await campaign.hasBeenRefunded(contributor1.address)).to.be.false
+        expect(await campaign.contributions(contributor1.address)).to.equal(
+          contributionAmount1
+        )
+
+        const contributor1BalanceAfterRefund = await usdc.balanceOf(
+          contributor1.address
+        )
+
+        expect(contributor1BalanceAfterRefund).to.equal(
+          contributor1BalanceBeforeRefund
+        )
+      })
+
+      it('Should revert campaign is still active but goal has not been reached', async function () {
+        const { campaign, contributor1, contributor2, usdc, creator1 } =
+          await loadFixture(deployPlatformFixture)
+
+        const usdcAddress = await usdc.getAddress()
+        const usdcDecimals = await usdc.decimals()
+
+        const contributionAmount1 = ethers.parseUnits('500', usdcDecimals)
+
+        await usdc
+          .connect(contributor1)
+          .approve(await campaign.getAddress(), contributionAmount1)
+
+        await campaign
+          .connect(contributor1)
+          .contribute(await usdc.getAddress(), contributionAmount1)
+
+        await ethers.provider.send('evm_increaseTime', [
+          (CAMPAIGN_DURATION - 5) * 24 * 60 * 60
+        ])
+
+        await ethers.provider.send('evm_mine')
+
+        expect(await campaign.isCampaignActive()).to.be.true
+        expect(await campaign.isCampaignSuccessful()).to.be.false
+
+        const contributor1BalanceBeforeRefund = await usdc.balanceOf(
+          contributor1.address
+        )
+
+        await expect(campaign.connect(contributor1).requestRefund())
+          .to.be.revertedWithCustomError(campaign, 'CampaignError')
+          .withArgs(ERR_CAMPAIGN_STILL_ACTIVE, ethers.ZeroAddress, 0)
+
+        expect(await campaign.hasBeenRefunded(contributor1.address)).to.be.false
+        expect(await campaign.contributions(contributor1.address)).to.equal(
+          contributionAmount1
+        )
+
+        const contributor1BalanceAfterRefund = await usdc.balanceOf(
+          contributor1.address
+        )
+
+        expect(contributor1BalanceAfterRefund).to.equal(
+          contributor1BalanceBeforeRefund
+        )
+      })
+    })
+  })
+
+  describe('Admin Functions', function () {
+    it('Should allow other platform admin to set admin override', async function () {
+      const { campaign, platformAdmin, deployer, otherAdmin } =
+        await loadFixture(deployPlatformFixture)
+
+      // Initially campaign should be active
+      expect(await campaign.isCampaignActive()).to.be.true
+      expect(await campaign.adminOverride()).to.be.false
+
+      // Set admin override to true
+
+      await expect(campaign.connect(deployer).setAdminOverride(true))
+        .to.emit(campaign, 'AdminOverrideSet')
+        .withArgs(true, deployer.address)
+
+      // Campaign should now be inactive due to override
+      expect(await campaign.isCampaignActive()).to.be.false
+      expect(await campaign.adminOverride()).to.be.true
+
+      await expect(campaign.connect(deployer).setAdminOverride(false))
+        .to.emit(campaign, 'AdminOverrideSet')
+        .withArgs(false, deployer.address)
+
+      expect(await campaign.isCampaignActive()).to.be.true
+      expect(await campaign.adminOverride()).to.be.false
+
+      await platformAdmin.connect(deployer).addPlatformAdmin(otherAdmin.address)
+
+      expect(await platformAdmin.isPlatformAdmin(otherAdmin.address)).to.be.true
+
+      await expect(campaign.connect(otherAdmin).setAdminOverride(true))
+        .to.emit(campaign, 'AdminOverrideSet')
+        .withArgs(true, otherAdmin.address)
+
+      expect(await campaign.isCampaignActive()).to.be.false
+      expect(await campaign.adminOverride()).to.be.true
+    })
+
+    it('Should revert when non-admin tries to set admin override', async function () {
+      const { campaign, creator1 } = await loadFixture(deployPlatformFixture)
+
+      await expect(
+        campaign.connect(creator1).setAdminOverride(true)
+      ).to.be.revertedWithCustomError(campaign, 'NotAuthorizedAdmin')
+    })
+
+    it('Should allow admin to reactivate campaign by removing override', async function () {
+      const { campaign, platformAdmin, deployer, contributor1, usdc } =
+        await loadFixture(deployPlatformFixture)
+
+      const usdcDecimals = await usdc.decimals()
+
+      // Initially campaign should be active
+      expect(await campaign.isCampaignActive()).to.be.true
+      expect(await campaign.adminOverride()).to.be.false
+
+      // Set admin override to true
+
+      await campaign.connect(deployer).setAdminOverride(true)
+
+      // Campaign should now be inactive due to override
+      expect(await campaign.isCampaignActive()).to.be.false
+      expect(await campaign.adminOverride()).to.be.true
+
+      const contributionAmount1 = ethers.parseUnits('400', usdcDecimals)
+
+      await usdc
+        .connect(contributor1)
+        .approve(await campaign.getAddress(), contributionAmount1)
+
+      await expect(
+        campaign
+          .connect(contributor1)
+          .contribute(await usdc.getAddress(), contributionAmount1)
+      )
+        .to.be.revertedWithCustomError(campaign, 'CampaignError')
+        .withArgs(
+          ERR_ADMIN_OVERRIDE_ACTIVE,
+          ethers.getAddress(await usdc.getAddress()),
+          0
+        )
+
+      await campaign.connect(deployer).setAdminOverride(false)
+
+      await expect(
+        campaign
+          .connect(contributor1)
+          .contribute(await usdc.getAddress(), contributionAmount1)
+      )
+        .to.emit(campaign, 'Contribution')
+        .withArgs(contributor1.address, contributionAmount1)
+    })
+  })
+
+  describe('Getter Functions', function () {
+    it('Should correctly report campaign active status', async function () {
+      const { campaign, deployer } = await loadFixture(deployPlatformFixture)
+
+      // Campaign should be active at the start
+      expect(await campaign.isCampaignActive()).to.be.true
+
+      // Fast forward to near end but still active
+      await ethers.provider.send('evm_increaseTime', [
+        (CAMPAIGN_DURATION - 1) * 24 * 60 * 60
+      ])
+      await ethers.provider.send('evm_mine')
+      expect(await campaign.isCampaignActive()).to.be.true
+
+      // Fast forward past end date
+      await ethers.provider.send('evm_increaseTime', [2 * 24 * 60 * 60]) // 2 more days
+      await ethers.provider.send('evm_mine')
+      expect(await campaign.isCampaignActive()).to.be.false
+    })
+
+    it('Should report campaign as inactive when admin override is active', async function () {
+      const { campaign, deployer } = await loadFixture(deployPlatformFixture)
+
+      // Initially active
+      expect(await campaign.isCampaignActive()).to.be.true
+
+      // Set admin override
+      await campaign.connect(deployer).setAdminOverride(true)
+
+      // Should now be inactive due to admin override
+      expect(await campaign.isCampaignActive()).to.be.false
+    })
+
+    it('Should correctly report campaign success status', async function () {
+      const { campaign, usdc, contributor1, contributor2 } = await loadFixture(
+        deployPlatformFixture
+      )
+
+      const usdcDecimals = await usdc.decimals()
+
+      // Initially not successful
+      expect(await campaign.isCampaignSuccessful()).to.be.false
+
+      // Contribute half of goal
+      const halfGoalAmount = (await campaign.campaignGoalAmount()) / 2n
+      await usdc
+        .connect(contributor1)
+        .approve(await campaign.getAddress(), halfGoalAmount)
+      await campaign
+        .connect(contributor1)
+        .contribute(await usdc.getAddress(), halfGoalAmount)
+
+      // Still not successful
+      expect(await campaign.isCampaignSuccessful()).to.be.false
+
+      // Contribute remaining amount to reach goal
+      const remainingAmount =
+        (await campaign.campaignGoalAmount()) - halfGoalAmount
+      await usdc
+        .connect(contributor2)
+        .approve(await campaign.getAddress(), remainingAmount)
+      await campaign
+        .connect(contributor2)
+        .contribute(await usdc.getAddress(), remainingAmount)
+
+      // Now should be successful
+      expect(await campaign.isCampaignSuccessful()).to.be.true
+    })
+
+    it('Should correctly report admin override status', async function () {
+      const { campaign, deployer } = await loadFixture(deployPlatformFixture)
+
+      // Initially false
+      expect(await campaign.isAdminOverrideActive()).to.be.false
+
+      // Set to true
+      await campaign.connect(deployer).setAdminOverride(true)
+      expect(await campaign.isAdminOverrideActive()).to.be.true
+
+      // Set back to false
+      await campaign.connect(deployer).setAdminOverride(false)
+      expect(await campaign.isAdminOverrideActive()).to.be.false
+    })
+
+    it('Should correctly report campaign token balance', async function () {
+      const { campaign, usdc, contributor1, creator1 } = await loadFixture(
+        deployPlatformFixture
+      )
+
+      const usdcDecimals = await usdc.decimals()
+      const contributionAmount = ethers.parseUnits('100', usdcDecimals)
+
+      // Initial balance should be 0
+      expect(await campaign.getCampaignTokenBalance()).to.equal(0)
+
+      // Make campaign successful and claim funds
+      const goalAmount = await campaign.campaignGoalAmount()
+      await usdc
+        .connect(contributor1)
+        .approve(await campaign.getAddress(), goalAmount)
+      await campaign
+        .connect(contributor1)
+        .contribute(await usdc.getAddress(), goalAmount)
+
+      // Fast forward to end
+      await ethers.provider.send('evm_increaseTime', [
+        CAMPAIGN_DURATION * 24 * 60 * 60
+      ])
+      await ethers.provider.send('evm_mine')
+
+      // Claim funds - this should transfer tokens to the campaign contract
+      await campaign.connect(creator1).claimFunds()
+
+      // If campaign is successful, funds get transferred to owner so balance should be near 0
+      const finalBalance = await campaign.getCampaignTokenBalance()
+      expect(finalBalance).to.be.closeTo(0n, 5n)
+
+      // For unsuccessful campaign we could test differently, but that would require a different fixture setup
+    })
   })
 })
