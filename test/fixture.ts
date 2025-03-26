@@ -1,12 +1,5 @@
-import { expect } from 'chai'
 import { ethers, network } from 'hardhat'
 import { Contract } from 'ethers'
-
-import { loadFixture } from '@nomicfoundation/hardhat-network-helpers'
-import {
-  anyUint,
-  anyValue
-} from '@nomicfoundation/hardhat-chai-matchers/withArgs'
 
 import {
   PlatformAdmin,
@@ -40,7 +33,6 @@ let tokenRegistry: TokenRegistry
 let yieldDistributor: YieldDistributor
 let defiIntegrationManager: DefiIntegrationManager
 let campaignContractFactory: CampaignContractFactory
-let campaign: Campaign
 
 export async function deployPlatformFixture () {
   // Impersonate the ETH whale
@@ -237,6 +229,43 @@ export async function deployPlatformFixture () {
       maxPriorityFeePerGas: maxPriorityFeePerGas
     })
 
+  const tx = await campaignContractFactory
+    .connect(creator1)
+    .deploy(
+      await usdc.getAddress(),
+      ethers.parseUnits('1000', usdcDecimals),
+      30
+    )
+
+  const receipt = await tx.wait()
+
+  if (!receipt) {
+    throw new Error('Transaction failed')
+  }
+
+  const event = receipt.logs.find(log => {
+    try {
+      const parsed = campaignContractFactory.interface.parseLog(log)
+      return parsed && parsed.name === 'FactoryOperation'
+    } catch {
+      return false
+    }
+  })
+
+  if (!event) {
+    throw new Error('Event failed')
+  }
+
+  const parsedEvent = campaignContractFactory.interface.parseLog(event)
+  if (!parsedEvent) {
+    throw new Error('Event failed')
+  }
+
+  const campaignAddress = parsedEvent.args[1]
+
+  const Campaign = await ethers.getContractFactory('Campaign')
+  const campaign = Campaign.attach(campaignAddress) as unknown as Campaign
+
   return {
     usdc,
     wbtc,
@@ -257,6 +286,7 @@ export async function deployPlatformFixture () {
     AAVE_POOL_ADDRESS,
     GRACE_PERIOD,
     otherAdmin,
-    aavePool
+    aavePool,
+    campaign
   }
 }

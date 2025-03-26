@@ -37,6 +37,7 @@ contract Campaign is Ownable, ReentrancyGuard, PlatformAdminAccessControl {
     uint8 private constant ERR_NOT_TARGET_TOKEN = 13;
     uint8 private constant ERR_NOTHING_TO_WITHDRAW = 14;
     uint8 private constant ERR_FUNDS_NOT_CLAIMED = 15;
+    uint8 private constant ERR_ADMIN_OVERRIDE_ACTIVE = 16;
     // External contract references
     IDefiIntegrationManager public immutable defiManager;
     ITokenRegistry public immutable tokenRegistry;
@@ -94,20 +95,24 @@ contract Campaign is Ownable, ReentrancyGuard, PlatformAdminAccessControl {
         if (_defiManager == address(0))
             revert CampaignError(ERR_INVALID_ADDRESS, _defiManager, 0);
 
+        if (_platformAdmin == address(0))
+            revert CampaignError(ERR_INVALID_ADDRESS, _platformAdmin, 0);
+
         defiManager = IDefiIntegrationManager(_defiManager);
         tokenRegistry = ITokenRegistry(defiManager.tokenRegistry());
 
-        bool isTokenValid;
+        bool isSupported;
         try tokenRegistry.isTokenSupported(_campaignToken) returns (
             bool supported
         ) {
-            isTokenValid = supported;
+            isSupported = supported;
         } catch {
-            isTokenValid = false;
+            isSupported = false;
         }
 
-        if (!isTokenValid)
+        if (!isSupported) {
             revert CampaignError(ERR_TOKEN_NOT_SUPPORTED, _campaignToken, 0);
+        }
 
         if (_campaignGoalAmount == 0)
             revert CampaignError(
@@ -154,13 +159,18 @@ contract Campaign is Ownable, ReentrancyGuard, PlatformAdminAccessControl {
     }
 
     function contribute(address token, uint256 amount) external nonReentrant {
+        if (adminOverride)
+            revert CampaignError(ERR_ADMIN_OVERRIDE_ACTIVE, token, 0);
         if (amount == 0)
             revert CampaignError(ERR_INVALID_AMOUNT, token, amount);
         if (token != campaignToken)
             revert CampaignError(ERR_NOT_TARGET_TOKEN, token, 0);
         if (!isCampaignActive())
+            //Campaign end date has passed
             revert CampaignError(ERR_CAMPAIGN_NOT_ACTIVE, token, 0);
+
         if (totalAmountRaised >= campaignGoalAmount)
+            //Campaign has already hit goal
             revert CampaignError(
                 ERR_GOAL_REACHED,
                 address(0),
@@ -206,8 +216,10 @@ contract Campaign is Ownable, ReentrancyGuard, PlatformAdminAccessControl {
 
     function requestRefund() external nonReentrant {
         if (isCampaignActive())
+            //Campaign still accepting contributions
             revert CampaignError(ERR_CAMPAIGN_STILL_ACTIVE, address(0), 0);
         if (totalAmountRaised >= campaignGoalAmount)
+            //No refunds if campaign hits goal
             revert CampaignError(
                 ERR_GOAL_REACHED,
                 address(0),
@@ -251,7 +263,7 @@ contract Campaign is Ownable, ReentrancyGuard, PlatformAdminAccessControl {
     }
 
     function _claimFunds() internal {
-        if (isCampaignActive())
+        if (isCampaignActive() && !isCampaignSuccessful())
             revert CampaignError(ERR_CAMPAIGN_STILL_ACTIVE, address(0), 0);
 
         if (hasClaimedFunds)

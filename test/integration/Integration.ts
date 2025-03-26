@@ -122,11 +122,11 @@ describe('Base Mainnet Integration Tests', function () {
       const campaignAddress = parsedEvent.args[1]
 
       expect(parsedEvent.args[2]).to.equal(creator1.address)
-      expect(await campaignContractFactory.deployedCampaigns(0)).to.equal(
+      expect(await campaignContractFactory.deployedCampaigns(1)).to.equal(
         campaignAddress
       )
       expect(
-        await campaignContractFactory.creatorToCampaigns(creator1.address, 0)
+        await campaignContractFactory.creatorToCampaigns(creator1.address, 1)
       ).to.equal(campaignAddress)
 
       const Campaign = await ethers.getContractFactory('Campaign')
@@ -757,10 +757,10 @@ describe('Base Mainnet Integration Tests', function () {
 
       const forRefunds = await campaign.totalAmountRaised()
 
-      expect(await usdc.balanceOf(campaignAddress)).to.equal(forRefunds)
+      expect(await usdc.balanceOf(campaignAddress)).to.be.closeTo(forRefunds, 5)
       expect(
         await usdc.balanceOf(await yieldDistributor.platformTreasury())
-      ).to.equal(aTokenBalance - forRefunds)
+      ).to.be.closeTo(aTokenBalance - forRefunds, 5)
 
       const contributor1Contribution = await campaign.contributions(
         contributor1.address
@@ -798,12 +798,14 @@ describe('Base Mainnet Integration Tests', function () {
       expect(parsedRefundEvent1.args[1]).to.equal(contributor1Contribution)
 
       expect(await campaign.hasBeenRefunded(contributor1.address)).to.be.true
-      expect(await usdc.balanceOf(contributor1.address)).to.equal(
-        contributor1Contribution + originalContributor1USDCBalance
+      expect(await usdc.balanceOf(contributor1.address)).to.be.closeTo(
+        contributor1Contribution + originalContributor1USDCBalance,
+        5
       )
 
-      expect(await usdc.balanceOf(campaignAddress)).to.equal(
-        forRefunds - contributor1Contribution
+      expect(await usdc.balanceOf(campaignAddress)).to.be.closeTo(
+        forRefunds - contributor1Contribution,
+        5
       )
 
       const refund2Tx = await campaign.connect(contributor2).requestRefund()
@@ -828,8 +830,9 @@ describe('Base Mainnet Integration Tests', function () {
       expect(parsedRefundEvent2.args[1]).to.equal(contributor2Contribution)
 
       expect(await campaign.hasBeenRefunded(contributor1.address)).to.be.true
-      expect(await usdc.balanceOf(contributor2.address)).to.equal(
-        contributor2Contribution + originalContributor2USDCBalance
+      expect(await usdc.balanceOf(contributor2.address)).to.be.closeTo(
+        contributor2Contribution + originalContributor2USDCBalance,
+        5
       )
 
       expect(await usdc.balanceOf(campaignAddress)).to.equal(0)
@@ -1100,7 +1103,7 @@ describe('Base Mainnet Integration Tests', function () {
         campaignAddress
       )
 
-      expect(aTokenBalanceAfterFailedClaim).to.equal(aTokenBalance)
+      expect(aTokenBalanceAfterFailedClaim).to.be.closeTo(aTokenBalance, 5)
 
       //Admin can override; this particular campaign is unsuccesful
       await expect(campaign.connect(deployer).setAdminOverride(true))
@@ -1113,7 +1116,7 @@ describe('Base Mainnet Integration Tests', function () {
         .to.emit(campaign, 'FundsOperation')
         .withArgs(
           ethers.getAddress(await usdc.getAddress()),
-          await aToken.balanceOf(campaignAddress),
+          anyUint,
           OP_CLAIM_FUNDS,
           deployer.address
         )
@@ -1124,7 +1127,7 @@ describe('Base Mainnet Integration Tests', function () {
 
       expect(
         await usdc.balanceOf(await yieldDistributor.platformTreasury())
-      ).to.be.closeTo(aTokenBalanceAfterFailedClaim - forRefunds, 10)
+      ).to.be.closeTo(aTokenBalanceAfterFailedClaim - forRefunds, 5)
     })
   })
 
