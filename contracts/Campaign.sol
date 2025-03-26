@@ -9,10 +9,16 @@ import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "./interfaces/IDefiIntegrationManager.sol";
 import "./interfaces/ITokenRegistry.sol";
 import "./abstracts/PlatformAdminAccessControl.sol";
+import "./abstracts/PausableControl.sol";
 import "./libraries/CampaignLibrary.sol";
 import "./libraries/TokenOperationsLibrary.sol";
 
-contract Campaign is Ownable, ReentrancyGuard, PlatformAdminAccessControl {
+contract Campaign is
+    Ownable,
+    ReentrancyGuard,
+    PlatformAdminAccessControl,
+    PausableControl
+{
     using SafeERC20 for IERC20;
     using CampaignLibrary for *;
     using TokenOperations for *;
@@ -159,7 +165,7 @@ contract Campaign is Ownable, ReentrancyGuard, PlatformAdminAccessControl {
         revert CampaignError(ERR_ETH_NOT_ACCEPTED, address(0), 0);
     }
 
-    function contribute(uint256 amount) external nonReentrant {
+    function contribute(uint256 amount) external nonReentrant whenNotPaused {
         if (adminOverride)
             revert CampaignError(ERR_ADMIN_OVERRIDE_ACTIVE, campaignToken, 0);
         if (amount == 0)
@@ -210,7 +216,7 @@ contract Campaign is Ownable, ReentrancyGuard, PlatformAdminAccessControl {
         emit FundsOperation(campaignToken, amount, OP_DEPOSIT, msg.sender);
     }
 
-    function requestRefund() external nonReentrant {
+    function requestRefund() external nonReentrant whenNotPaused {
         if (isCampaignSuccessful())
             revert CampaignError(
                 ERR_GOAL_REACHED,
@@ -238,13 +244,18 @@ contract Campaign is Ownable, ReentrancyGuard, PlatformAdminAccessControl {
         emit RefundIssued(msg.sender, refundAmount);
     }
 
-    function claimFunds() external onlyOwner nonReentrant {
+    function claimFunds() external onlyOwner nonReentrant whenNotPaused {
         if (adminOverride)
             revert CampaignError(ERR_ADMIN_OVERRIDE_ACTIVE, address(0), 0);
         _claimFunds();
     }
 
-    function claimFundsAdmin() external onlyPlatformAdmin nonReentrant {
+    function claimFundsAdmin()
+        external
+        onlyPlatformAdmin
+        nonReentrant
+        whenNotPaused
+    {
         _claimFunds();
     }
 

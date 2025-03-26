@@ -9,11 +9,13 @@ import "./interfaces/ITokenRegistry.sol";
 import "./interfaces/IFeeManager.sol";
 import "./interfaces/IAavePool.sol";
 import "./abstracts/PlatformAdminAccessControl.sol";
+import "./abstracts/PausableControl.sol";
 
 contract DefiIntegrationManager is
     Ownable,
     ReentrancyGuard,
-    PlatformAdminAccessControl
+    PlatformAdminAccessControl,
+    PausableControl
 {
     using SafeERC20 for IERC20;
 
@@ -124,7 +126,7 @@ contract DefiIntegrationManager is
     function depositToYieldProtocol(
         address _token,
         uint256 _amount
-    ) external nonReentrant {
+    ) external nonReentrant whenNotPaused {
         bool tokenExists;
         bool isSupported;
         try tokenRegistry.isTokenSupported(_token) returns (bool supported) {
@@ -174,7 +176,7 @@ contract DefiIntegrationManager is
         address _token,
         bool campaignSuccessful,
         uint256 coverRefunds
-    ) external nonReentrant returns (uint256) {
+    ) external nonReentrant whenNotPaused returns (uint256) {
         address aTokenAddress = getATokenAddress(_token);
 
         uint256 aTokenBalance = IERC20(aTokenAddress).balanceOf(address(this));

@@ -1130,4 +1130,257 @@ describe('Base Mainnet Integration Tests', function () {
         .withArgs(OP_CAMPAIGN_CREATED, anyValue, anyValue, anyValue)
     })
   })
+
+  describe.only('Pause Functionality Tests', function () {
+    // Define constants for error codes and operation types
+    const OP_PAUSED = 1
+    const OP_UNPAUSED = 2
+
+    it('Should allow platform admin to pause and unpause the platform', async function () {
+      const { platformAdmin, deployer, defiIntegrationManager } =
+        await loadFixture(deployPlatformFixture)
+
+      // Verify initial state is not paused
+      expect(await defiIntegrationManager.paused()).to.be.false
+
+      // Pause the platform and verify event emission
+      await expect(defiIntegrationManager.connect(deployer).pause())
+        .to.emit(defiIntegrationManager, 'PauseOperation')
+        .withArgs(OP_PAUSED, deployer.address, anyValue)
+
+      // Verify the platform is paused
+      expect(await defiIntegrationManager.paused()).to.be.true
+
+      // Unpause the platform and verify event emission
+      await expect(defiIntegrationManager.connect(deployer).unpause())
+        .to.emit(defiIntegrationManager, 'PauseOperation')
+        .withArgs(OP_UNPAUSED, deployer.address, anyValue)
+
+      // Verify the platform is not paused
+      expect(await defiIntegrationManager.paused()).to.be.false
+    })
+
+    it('Should prevent non-admin from pausing the platform', async function () {
+      const { creator1, defiIntegrationManager } = await loadFixture(
+        deployPlatformFixture
+      )
+
+      // Attempt to pause as non-admin should fail
+      await expect(defiIntegrationManager.connect(creator1).pause())
+        .to.be.revertedWithCustomError(
+          defiIntegrationManager,
+          'NotAuthorizedAdmin'
+        )
+        .withArgs(creator1.address)
+    })
+
+    it('Should prevent deposits to yield protocol when platform is paused', async function () {
+      const { usdc, deployer, defiIntegrationManager, contributor1 } =
+        await loadFixture(deployPlatformFixture)
+
+      // Pause the platform
+      await defiIntegrationManager.connect(deployer).pause()
+
+      const usdcDecimals = await usdc.decimals()
+      const depositAmount = ethers.parseUnits('100', usdcDecimals)
+
+      // Approve tokens for deposit
+      await usdc
+        .connect(contributor1)
+        .approve(defiIntegrationManager.getAddress(), depositAmount)
+
+      // Attempt to deposit while paused should fail
+
+      await expect(
+        defiIntegrationManager
+          .connect(contributor1)
+          .depositToYieldProtocol(await usdc.getAddress(), depositAmount)
+      ).to.be.revertedWithCustomError(defiIntegrationManager, 'EnforcedPause')
+
+      // Unpause and try again - should succeed
+      await defiIntegrationManager.connect(deployer).unpause()
+
+      await expect(
+        defiIntegrationManager
+          .connect(contributor1)
+          .depositToYieldProtocol(await usdc.getAddress(), depositAmount)
+      ).to.not.be.reverted
+    })
+
+    it('Should prevent withdrawals from yield protocol when platform is paused', async function () {
+      const {
+        usdc,
+        deployer,
+        defiIntegrationManager,
+        contributor1,
+        IERC20ABI
+      } = await loadFixture(deployPlatformFixture)
+
+      const usdcDecimals = await usdc.decimals()
+      const depositAmount = ethers.parseUnits('100', usdcDecimals)
+
+      // First deposit some tokens
+      await usdc
+        .connect(contributor1)
+        .approve(defiIntegrationManager.getAddress(), depositAmount)
+      await defiIntegrationManager
+        .connect(contributor1)
+        .depositToYieldProtocol(await usdc.getAddress(), depositAmount)
+
+      const aTokenAddress = await defiIntegrationManager.getATokenAddress(
+        await usdc.getAddress()
+      )
+
+      const aToken = (await ethers.getContractAt(
+        IERC20ABI,
+        aTokenAddress
+      )) as unknown as IERC20Metadata
+
+      // Pause the platform
+      await defiIntegrationManager.connect(deployer).pause()
+
+      // Attempt to withdraw while paused should fail
+      await expect(
+        defiIntegrationManager
+          .connect(contributor1)
+          .withdrawFromYieldProtocol(
+            await usdc.getAddress(),
+            true,
+            depositAmount
+          )
+      ).to.be.revertedWithCustomError(defiIntegrationManager, 'EnforcedPause')
+
+      // Unpause and try again - should succeed
+      await defiIntegrationManager.connect(deployer).unpause()
+
+      //Have to transfer atokens since this is not a platform workflow (never would call this function on it's own)
+      await aToken
+        .connect(contributor1)
+        .transfer(
+          await defiIntegrationManager.getAddress(),
+          await aToken.balanceOf(contributor1.address)
+        )
+
+      await expect(
+        defiIntegrationManager
+          .connect(contributor1)
+          .withdrawFromYieldProtocol(
+            await usdc.getAddress(),
+            true,
+            depositAmount
+          )
+      ).to.not.be.reverted
+    })
+
+    it('Should prevent campaign contributions when platform is paused', async function () {
+      const {
+        usdc,
+        deployer,
+        campaignContractFactory,
+        creator1,
+        contributor1,
+        defiIntegrationManager
+      } = await loadFixture(deployPlatformFixture)
+
+      // Deploy a campaign
+      const usdcDecimals = await usdc.decimals()
+      const CAMPAIGN_GOAL = ethers.parseUnits('500', usdcDecimals)
+      const CAMPAIGN_DURATION = 60
+
+      const tx = await campaignContractFactory
+        .connect(creator1)
+        .deploy(await usdc.getAddress(), CAMPAIGN_GOAL, CAMPAIGN_DURATION)
+
+      const receipt = await tx.wait()
+      if (!receipt) throw new Error('Transaction failed')
+      const event = receipt.logs.find(log => {
+        try {
+          const parsed = campaignContractFactory.interface.parseLog(log)
+          return parsed && parsed.name === 'FactoryOperation'
+        } catch {
+          return false
+        }
+      })
+      if (!event) throw new Error('Event failed')
+
+      const parsedEvent = campaignContractFactory.interface.parseLog(event)
+      if (!parsedEvent) throw new Error('Event failed')
+
+      const campaignAddress = parsedEvent.args[1]
+
+      const Campaign = await ethers.getContractFactory('Campaign')
+      const campaign = Campaign.attach(campaignAddress) as unknown as Campaign
+
+      // Pause the platform
+      await defiIntegrationManager.connect(deployer).pause()
+
+      // Try to contribute while platform is paused
+      const contributionAmount = ethers.parseUnits('100', usdcDecimals)
+      await usdc
+        .connect(contributor1)
+        .approve(campaignAddress, contributionAmount)
+
+      // Since the Campaign contract doesn't have the pause directly,
+      // the contribution will fail when it tries to call defiIntegrationManager
+      await expect(
+        campaign.connect(contributor1).contribute(contributionAmount)
+      ).to.be.revertedWithCustomError(campaign, 'EnforcedPause')
+
+      // Unpause and verify contributions work again
+      await defiIntegrationManager.connect(deployer).unpause()
+
+      await expect(
+        campaign.connect(contributor1).contribute(contributionAmount)
+      ).to.not.be.reverted
+    })
+
+    it('Should still allow admin functions while paused for emergency handling', async function () {
+      const {
+        deployer,
+        defiIntegrationManager,
+        tokenRegistry,
+        usdc,
+        feeManager
+      } = await loadFixture(deployPlatformFixture)
+
+      // Pause the platform
+      await defiIntegrationManager.connect(deployer).pause()
+
+      // Function that should still work - updating token registry
+      await expect(
+        defiIntegrationManager
+          .connect(deployer)
+          .setTokenRegistry(await tokenRegistry.getAddress())
+      ).to.not.be.reverted
+
+      // Function that should still work - updating fee manager
+      await expect(
+        defiIntegrationManager
+          .connect(deployer)
+          .setFeeManager(await feeManager.getAddress())
+      ).to.not.be.reverted
+    })
+
+    it('Should allow view functions while platform is paused', async function () {
+      const { deployer, defiIntegrationManager, usdc } = await loadFixture(
+        deployPlatformFixture
+      )
+
+      // Pause the platform
+      await defiIntegrationManager.connect(deployer).pause()
+
+      const yieldRate = await defiIntegrationManager.getCurrentYieldRate(
+        await usdc.getAddress()
+      )
+      expect(typeof yieldRate.toString()).to.equal('string')
+
+      const aTokenAddress = await defiIntegrationManager.getATokenAddress(
+        await usdc.getAddress()
+      )
+      expect(ethers.isAddress(aTokenAddress)).to.be.true
+
+      const treasuryAddress = await defiIntegrationManager.getPlatformTreasury()
+      expect(ethers.isAddress(treasuryAddress)).to.be.true
+    })
+  })
 })

@@ -5,8 +5,14 @@ import "./Campaign.sol";
 import "./interfaces/IDefiIntegrationManager.sol";
 import "./interfaces/IPlatformAdmin.sol";
 import "./libraries/FactoryLibrary.sol";
+import "./abstracts/PausableControl.sol";
+import "./abstracts/PlatformAdminAccessControl.sol";
 
-contract CampaignContractFactory is Ownable {
+contract CampaignContractFactory is
+    Ownable,
+    PlatformAdminAccessControl,
+    PausableControl
+{
     // Use the library
     using FactoryLibrary for *;
 
@@ -22,7 +28,6 @@ contract CampaignContractFactory is Ownable {
     address[] public deployedCampaigns;
     mapping(address => address[]) public creatorToCampaigns;
     IDefiIntegrationManager public immutable defiManager;
-    IPlatformAdmin public immutable platformAdmin;
 
     // Consolidated events with operation type parameter
     event FactoryOperation(
@@ -39,7 +44,7 @@ contract CampaignContractFactory is Ownable {
         address _defiManager,
         address _platformAdmin,
         address _owner
-    ) Ownable(_owner) {
+    ) Ownable(_owner) PlatformAdminAccessControl(_platformAdmin) {
         if (_defiManager == address(0) || _platformAdmin == address(0)) {
             revert FactoryError(ERR_INVALID_ADDRESS, address(0), 0);
         }
@@ -51,7 +56,7 @@ contract CampaignContractFactory is Ownable {
         address _campaignToken,
         uint256 _campaignGoalAmount,
         uint16 _campaignDuration
-    ) external returns (address) {
+    ) external whenNotPaused returns (address) {
         // Use the library to validate parameters
         ITokenRegistry tokenRegistry = defiManager.tokenRegistry();
 
