@@ -23,21 +23,22 @@ contract Campaign is Ownable, ReentrancyGuard, PlatformAdminAccessControl {
 
     // Error codes - more specific but still compact
     uint8 private constant ERR_INVALID_ADDRESS = 1;
-    uint8 private constant ERR_TOKEN_NOT_SUPPORTED = 2;
+    uint8 private constant ERR_INVALID_AMOUNT = 2;
     uint8 private constant ERR_INVALID_GOAL = 3;
     uint8 private constant ERR_INVALID_DURATION = 4;
-    uint8 private constant ERR_INVALID_AMOUNT = 5;
-    uint8 private constant ERR_CAMPAIGN_NOT_ACTIVE = 6;
-    uint8 private constant ERR_CAMPAIGN_STILL_ACTIVE = 7;
-    uint8 private constant ERR_GOAL_REACHED = 8;
-    uint8 private constant ERR_ETH_NOT_ACCEPTED = 9;
-    uint8 private constant ERR_ALREADY_REFUNDED = 10;
-    uint8 private constant ERR_NOTHING_TO_REFUND = 11;
+    uint8 private constant ERR_ETH_NOT_ACCEPTED = 5;
+    uint8 private constant ERR_TOKEN_NOT_SUPPORTED = 6;
+    uint8 private constant ERR_NOT_TARGET_TOKEN = 7;
+    uint8 private constant ERR_CAMPAIGN_STILL_ACTIVE = 8;
+    uint8 private constant ERR_CAMPAIGN_PAST_END_DATE = 9;
+    uint8 private constant ERR_GOAL_REACHED = 10;
+    uint8 private constant ERR_ADMIN_OVERRIDE_ACTIVE = 11;
     uint8 private constant ERR_FUNDS_CLAIMED = 12;
-    uint8 private constant ERR_NOT_TARGET_TOKEN = 13;
+    uint8 private constant ERR_FUNDS_NOT_CLAIMED = 13;
     uint8 private constant ERR_NOTHING_TO_WITHDRAW = 14;
-    uint8 private constant ERR_FUNDS_NOT_CLAIMED = 15;
-    uint8 private constant ERR_ADMIN_OVERRIDE_ACTIVE = 16;
+    uint8 private constant ERR_ALREADY_REFUNDED = 15;
+    uint8 private constant ERR_NOTHING_TO_REFUND = 16;
+
     // External contract references
     IDefiIntegrationManager public immutable defiManager;
     ITokenRegistry public immutable tokenRegistry;
@@ -158,33 +159,28 @@ contract Campaign is Ownable, ReentrancyGuard, PlatformAdminAccessControl {
         revert CampaignError(ERR_ETH_NOT_ACCEPTED, address(0), 0);
     }
 
-    function contribute(address token, uint256 amount) external nonReentrant {
+    function contribute(uint256 amount) external nonReentrant {
         if (adminOverride)
-            revert CampaignError(ERR_ADMIN_OVERRIDE_ACTIVE, token, 0);
+            revert CampaignError(ERR_ADMIN_OVERRIDE_ACTIVE, campaignToken, 0);
         if (amount == 0)
-            revert CampaignError(ERR_INVALID_AMOUNT, token, amount);
-        if (token != campaignToken)
-            revert CampaignError(ERR_NOT_TARGET_TOKEN, token, 0);
-        if (!isCampaignActive())
-            //Campaign end date has passed
-            revert CampaignError(ERR_CAMPAIGN_NOT_ACTIVE, token, 0);
+            revert CampaignError(ERR_INVALID_AMOUNT, campaignToken, amount);
 
-        if (totalAmountRaised >= campaignGoalAmount)
-            //Campaign has already hit goal
+        if (!isCampaignActive())
+            revert CampaignError(ERR_CAMPAIGN_PAST_END_DATE, campaignToken, 0);
+
+        if (isCampaignSuccessful())
             revert CampaignError(
                 ERR_GOAL_REACHED,
                 address(0),
                 totalAmountRaised
             );
 
-        (uint256 minAmount, ) = tokenRegistry.getMinContributionAmount(token);
+        (uint256 minAmount, ) = tokenRegistry.getMinContributionAmount(
+            campaignToken
+        );
         if (amount < minAmount)
-            revert CampaignError(ERR_INVALID_AMOUNT, token, amount);
+            revert CampaignError(ERR_INVALID_AMOUNT, campaignToken, amount);
 
-        if (!tokenRegistry.isTokenSupported(token))
-            revert CampaignError(ERR_TOKEN_NOT_SUPPORTED, token, 0);
-
-        // First update state variables
         if (!isContributor[msg.sender]) {
             contributorsCount++;
             isContributor[msg.sender] = true;
@@ -202,29 +198,29 @@ contract Campaign is Ownable, ReentrancyGuard, PlatformAdminAccessControl {
         );
 
         TokenOperations.safeIncreaseAllowance(
-            token,
+            campaignToken,
             address(defiManager),
             amount
         );
 
-        defiManager.depositToYieldProtocol(token, amount);
+        defiManager.depositToYieldProtocol(campaignToken, amount);
 
         // Emit events last
         emit Contribution(msg.sender, amount);
-        emit FundsOperation(token, amount, OP_DEPOSIT, msg.sender);
+        emit FundsOperation(campaignToken, amount, OP_DEPOSIT, msg.sender);
     }
 
     function requestRefund() external nonReentrant {
-        if (isCampaignActive())
-            //Campaign still accepting contributions
-            revert CampaignError(ERR_CAMPAIGN_STILL_ACTIVE, address(0), 0);
-        if (totalAmountRaised >= campaignGoalAmount)
-            //No refunds if campaign hits goal
+        if (isCampaignSuccessful())
             revert CampaignError(
                 ERR_GOAL_REACHED,
                 address(0),
                 totalAmountRaised
             );
+
+        if (isCampaignActive())
+            revert CampaignError(ERR_CAMPAIGN_STILL_ACTIVE, address(0), 0);
+
         if (!hasClaimedFunds) {
             revert CampaignError(ERR_FUNDS_NOT_CLAIMED, address(0), 0);
         }
@@ -274,6 +270,8 @@ contract Campaign is Ownable, ReentrancyGuard, PlatformAdminAccessControl {
             revert CampaignError(ERR_NOTHING_TO_WITHDRAW, address(0), 0);
         }
 
+        hasClaimedFunds = true;
+
         aToken.safeTransfer(address(defiManager), aTokenBalance);
 
         uint256 withdrawn = defiManager.withdrawFromYieldProtocol(
@@ -290,8 +288,6 @@ contract Campaign is Ownable, ReentrancyGuard, PlatformAdminAccessControl {
             );
         }
 
-        hasClaimedFunds = true;
-
         emit FundsOperation(
             campaignToken,
             withdrawn,
@@ -300,6 +296,11 @@ contract Campaign is Ownable, ReentrancyGuard, PlatformAdminAccessControl {
         );
 
         emit FundsClaimed(address(this), withdrawn);
+    }
+
+    function setAdminOverride(bool _adminOverride) external onlyPlatformAdmin {
+        adminOverride = _adminOverride;
+        emit AdminOverrideSet(_adminOverride, msg.sender);
     }
 
     function isCampaignActive() public view returns (bool) {
@@ -318,19 +319,6 @@ contract Campaign is Ownable, ReentrancyGuard, PlatformAdminAccessControl {
 
     function isAdminOverrideActive() public view override returns (bool) {
         return adminOverride;
-    }
-
-    function setAdminOverride(bool _adminOverride) external onlyPlatformAdmin {
-        adminOverride = _adminOverride;
-        emit AdminOverrideSet(_adminOverride, msg.sender);
-    }
-
-    function getATokenBalance() public view returns (uint256) {
-        address aTokenAddress = defiManager.getATokenAddress(campaignToken);
-        if (aTokenAddress == address(0)) {
-            revert CampaignError(ERR_INVALID_ADDRESS, aTokenAddress, 0);
-        }
-        return IERC20(aTokenAddress).balanceOf(address(this));
     }
 
     function getCampaignTokenBalance() public view returns (uint256) {

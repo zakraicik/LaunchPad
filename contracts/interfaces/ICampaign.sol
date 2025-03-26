@@ -4,43 +4,43 @@ pragma solidity ^0.8.28;
 interface ICampaign {
     function campaignToken() external view returns (address);
 
-    function isClaimed() external view returns (bool);
+    function hasClaimedFunds() external view returns (bool);
 
     function campaignGoalAmount() external view returns (uint256);
 
-    function campaignDuration() external view returns (uint256);
+    function campaignDuration() external view returns (uint64);
 
-    function campaignStartTime() external view returns (uint256);
+    function campaignStartTime() external view returns (uint64);
 
-    function campaignEndTime() external view returns (uint256);
+    function campaignEndTime() external view returns (uint64);
 
     function totalAmountRaised() external view returns (uint256);
 
     function campaignId() external view returns (bytes32);
 
+    function contributorsCount() external view returns (uint32);
+
     function contributions(address contributor) external view returns (uint256);
 
     function hasBeenRefunded(address contributor) external view returns (bool);
 
-    function contribute(address fromToken, uint256 amount) external;
+    function isContributor(address contributor) external view returns (bool);
+
+    function contribute(uint256 amount) external;
 
     function requestRefund() external;
 
     function claimFunds() external;
 
+    function claimFundsAdmin() external;
+
     function isCampaignActive() external view returns (bool);
 
     function isCampaignSuccessful() external view returns (bool);
 
-    function depositToYieldProtocol(address token, uint256 amount) external;
+    function isAdminOverrideActive() external view returns (bool);
 
-    function harvestYield(address token) external;
-
-    function withdrawFromYieldProtocol(address token) external;
-
-    function getDepositedAmount(address token) external view returns (uint256);
-
-    function getCurrentYieldRate(address token) external view returns (uint256);
+    function getCampaignTokenBalance() external view returns (uint256);
 
     function setAdminOverride(bool _adminOverride) external;
 

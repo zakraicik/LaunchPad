@@ -231,9 +231,7 @@ describe('Campaign', function () {
       expect(await campaign.contributorsCount()).to.equal(0)
 
       await expect(
-        campaign
-          .connect(contributor1)
-          .contribute(await usdc.getAddress(), contributionAmount)
+        campaign.connect(contributor1).contribute(contributionAmount)
       )
         .to.emit(campaign, 'Contribution')
         .withArgs(contributor1.address, contributionAmount)
@@ -316,9 +314,7 @@ describe('Campaign', function () {
       expect(await campaign.contributorsCount()).to.equal(0)
 
       await expect(
-        campaign
-          .connect(contributor1)
-          .contribute(await usdc.getAddress(), contributionAmount)
+        campaign.connect(contributor1).contribute(contributionAmount)
       )
         .to.emit(campaign, 'Contribution')
         .withArgs(contributor1.address, contributionAmount)
@@ -394,9 +390,7 @@ describe('Campaign', function () {
       await usdc
         .connect(contributor1)
         .approve(await campaign.getAddress(), contribution1Amount)
-      await campaign
-        .connect(contributor1)
-        .contribute(usdcAddress, contribution1Amount)
+      await campaign.connect(contributor1).contribute(contribution1Amount)
 
       // Check state after first contribution
       expect(await campaign.isContributor(contributor1.address)).to.be.true
@@ -415,9 +409,7 @@ describe('Campaign', function () {
       await usdc
         .connect(contributor2)
         .approve(await campaign.getAddress(), contribution2Amount)
-      await campaign
-        .connect(contributor2)
-        .contribute(usdcAddress, contribution2Amount)
+      await campaign.connect(contributor2).contribute(contribution2Amount)
 
       // Check state after second contribution
       expect(await campaign.isContributor(contributor1.address)).to.be.true
@@ -440,9 +432,7 @@ describe('Campaign', function () {
       await usdc
         .connect(contributor1)
         .approve(await campaign.getAddress(), additionalContribution)
-      await campaign
-        .connect(contributor1)
-        .contribute(usdcAddress, additionalContribution)
+      await campaign.connect(contributor1).contribute(additionalContribution)
 
       // Check state after additional contribution
       expect(await campaign.isContributor(contributor1.address)).to.be.true
@@ -498,7 +488,7 @@ describe('Campaign', function () {
           ethers.parseUnits('100', usdcDecimals)
         )
 
-      await expect(campaign.connect(contributor1).contribute(usdcAddress, 0))
+      await expect(campaign.connect(contributor1).contribute(0))
         .to.be.revertedWithCustomError(campaign, 'CampaignError')
         .withArgs(ERR_INVALID_AMOUNT, ethers.getAddress(usdcAddress), 0)
     })
@@ -518,9 +508,11 @@ describe('Campaign', function () {
           ethers.parseUnits('100', wbtcDecimals)
         )
 
-      await expect(campaign.connect(contributor1).contribute(wbtcAddress, 10))
-        .to.be.revertedWithCustomError(campaign, 'CampaignError')
-        .withArgs(ERR_NOT_TARGET_TOKEN, ethers.getAddress(wbtcAddress), 0)
+      await expect(
+        campaign
+          .connect(contributor1)
+          .contribute(ethers.parseUnits('10', wbtcDecimals))
+      ).to.be.revertedWith('ERC20: transfer amount exceeds allowance')
     })
 
     it('Should revert when campaignGoalAmount is reached', async function () {
@@ -536,9 +528,7 @@ describe('Campaign', function () {
         .connect(contributor1)
         .approve(await campaign.getAddress(), contributionAmount)
 
-      await campaign
-        .connect(contributor1)
-        .contribute(await usdc.getAddress(), contributionAmount)
+      await campaign.connect(contributor1).contribute(contributionAmount)
 
       expect(await campaign.isCampaignActive()).to.be.true //Even though the end date hasn't passed, the campaign has already hit goal
       expect(await campaign.isCampaignSuccessful()).to.be.true
@@ -548,9 +538,7 @@ describe('Campaign', function () {
         .approve(await campaign.getAddress(), contributionAmount)
 
       await expect(
-        campaign
-          .connect(contributor1)
-          .contribute(await usdc.getAddress(), contributionAmount)
+        campaign.connect(contributor1).contribute(contributionAmount)
       )
         .to.be.revertedWithCustomError(campaign, 'CampaignError')
         .withArgs(
@@ -582,10 +570,7 @@ describe('Campaign', function () {
       await expect(
         campaign
           .connect(contributor1)
-          .contribute(
-            await usdc.getAddress(),
-            ethers.parseUnits('1000', usdcDecimals)
-          )
+          .contribute(ethers.parseUnits('1000', usdcDecimals))
       )
         .to.be.revertedWithCustomError(campaign, 'CampaignError')
         .withArgs(
@@ -621,9 +606,7 @@ describe('Campaign', function () {
       const contributionAmount = minimumAmount - 1n
 
       await expect(
-        campaign
-          .connect(contributor1)
-          .contribute(await usdc.getAddress(), contributionAmount)
+        campaign.connect(contributor1).contribute(contributionAmount)
       )
         .to.be.revertedWithCustomError(campaign, 'CampaignError')
         .withArgs(
@@ -648,9 +631,7 @@ describe('Campaign', function () {
         .approve(await campaign.getAddress(), contributionAmount)
 
       await expect(
-        campaign
-          .connect(contributor1)
-          .contribute(await usdc.getAddress(), contributionAmount)
+        campaign.connect(contributor1).contribute(contributionAmount)
       )
         .to.emit(campaign, 'Contribution')
         .withArgs(contributor1.address, contributionAmount)
@@ -682,10 +663,7 @@ describe('Campaign', function () {
       await expect(
         campaign
           .connect(contributor1)
-          .contribute(
-            await usdc.getAddress(),
-            ethers.parseUnits('100', usdcDecimals)
-          )
+          .contribute(ethers.parseUnits('100', usdcDecimals))
       )
         .to.be.revertedWithCustomError(campaign, 'CampaignError')
         .withArgs(
@@ -727,9 +705,7 @@ describe('Campaign', function () {
           .connect(contributor1)
           .approve(await campaign.getAddress(), contributionAmount1)
 
-        await campaign
-          .connect(contributor1)
-          .contribute(await usdc.getAddress(), contributionAmount1)
+        await campaign.connect(contributor1).contribute(contributionAmount1)
 
         await ethers.provider.send('evm_increaseTime', [
           (CAMPAIGN_DURATION - 5) * 24 * 60 * 60
@@ -741,9 +717,7 @@ describe('Campaign', function () {
           .connect(contributor2)
           .approve(await campaign.getAddress(), contributionAmount2)
 
-        await campaign
-          .connect(contributor2)
-          .contribute(await usdc.getAddress(), contributionAmount2)
+        await campaign.connect(contributor2).contribute(contributionAmount2)
 
         expect(await campaign.isCampaignActive()).to.be.true //Not past campaign end date
         expect(await campaign.isCampaignSuccessful()).to.be.true
@@ -837,17 +811,13 @@ describe('Campaign', function () {
           .connect(contributor1)
           .approve(await campaign.getAddress(), contributionAmount1)
 
-        await campaign
-          .connect(contributor1)
-          .contribute(await usdc.getAddress(), contributionAmount1)
+        await campaign.connect(contributor1).contribute(contributionAmount1)
 
         await usdc
           .connect(contributor2)
           .approve(await campaign.getAddress(), contributionAmount2)
 
-        await campaign
-          .connect(contributor2)
-          .contribute(await usdc.getAddress(), contributionAmount2)
+        await campaign.connect(contributor2).contribute(contributionAmount2)
 
         await ethers.provider.send('evm_increaseTime', [
           CAMPAIGN_DURATION * 24 * 60 * 60
@@ -951,9 +921,7 @@ describe('Campaign', function () {
           .connect(contributor1)
           .approve(await campaign.getAddress(), contributionAmount1)
 
-        await campaign
-          .connect(contributor1)
-          .contribute(await usdc.getAddress(), contributionAmount1)
+        await campaign.connect(contributor1).contribute(contributionAmount1)
 
         await ethers.provider.send('evm_increaseTime', [
           (CAMPAIGN_DURATION - 5) * 24 * 60 * 60
@@ -965,9 +933,7 @@ describe('Campaign', function () {
           .connect(contributor2)
           .approve(await campaign.getAddress(), contributionAmount2)
 
-        await campaign
-          .connect(contributor2)
-          .contribute(await usdc.getAddress(), contributionAmount2)
+        await campaign.connect(contributor2).contribute(contributionAmount2)
 
         expect(await campaign.isCampaignActive()).to.be.true //Not past campaign end date
         expect(await campaign.isCampaignSuccessful()).to.be.true
@@ -1054,17 +1020,13 @@ describe('Campaign', function () {
           .connect(contributor1)
           .approve(await campaign.getAddress(), contributionAmount1)
 
-        await campaign
-          .connect(contributor1)
-          .contribute(await usdc.getAddress(), contributionAmount1)
+        await campaign.connect(contributor1).contribute(contributionAmount1)
 
         await usdc
           .connect(contributor2)
           .approve(await campaign.getAddress(), contributionAmount2)
 
-        await campaign
-          .connect(contributor2)
-          .contribute(await usdc.getAddress(), contributionAmount2)
+        await campaign.connect(contributor2).contribute(contributionAmount2)
 
         await ethers.provider.send('evm_increaseTime', [
           CAMPAIGN_DURATION * 24 * 60 * 60
@@ -1167,17 +1129,13 @@ describe('Campaign', function () {
           .connect(contributor1)
           .approve(await campaign.getAddress(), contributionAmount1)
 
-        await campaign
-          .connect(contributor1)
-          .contribute(await usdc.getAddress(), contributionAmount1)
+        await campaign.connect(contributor1).contribute(contributionAmount1)
 
         await usdc
           .connect(contributor2)
           .approve(await campaign.getAddress(), contributionAmount2)
 
-        await campaign
-          .connect(contributor2)
-          .contribute(await usdc.getAddress(), contributionAmount2)
+        await campaign.connect(contributor2).contribute(contributionAmount2)
 
         await ethers.provider.send('evm_mine')
 
@@ -1275,9 +1233,7 @@ describe('Campaign', function () {
           .connect(contributor1)
           .approve(await campaign.getAddress(), contributionAmount1)
 
-        await campaign
-          .connect(contributor1)
-          .contribute(await usdc.getAddress(), contributionAmount1)
+        await campaign.connect(contributor1).contribute(contributionAmount1)
 
         await ethers.provider.send('evm_increaseTime', [
           (CAMPAIGN_DURATION - 5) * 24 * 60 * 60
@@ -1289,9 +1245,7 @@ describe('Campaign', function () {
           .connect(contributor2)
           .approve(await campaign.getAddress(), contributionAmount2)
 
-        await campaign
-          .connect(contributor2)
-          .contribute(await usdc.getAddress(), contributionAmount2)
+        await campaign.connect(contributor2).contribute(contributionAmount2)
 
         await campaign.connect(deployer).setAdminOverride(true)
 
@@ -1336,9 +1290,7 @@ describe('Campaign', function () {
           .connect(contributor1)
           .approve(await campaign.getAddress(), contributionAmount1)
 
-        await campaign
-          .connect(contributor1)
-          .contribute(await usdc.getAddress(), contributionAmount1)
+        await campaign.connect(contributor1).contribute(contributionAmount1)
 
         await ethers.provider.send('evm_increaseTime', [
           (CAMPAIGN_DURATION - 5) * 24 * 60 * 60
@@ -1350,9 +1302,7 @@ describe('Campaign', function () {
           .connect(contributor2)
           .approve(await campaign.getAddress(), contributionAmount2)
 
-        await campaign
-          .connect(contributor2)
-          .contribute(await usdc.getAddress(), contributionAmount2)
+        await campaign.connect(contributor2).contribute(contributionAmount2)
 
         expect(await campaign.isCampaignActive()).to.be.true //Not past campaign end date
         expect(await campaign.isCampaignSuccessful()).to.be.false
@@ -1432,9 +1382,7 @@ describe('Campaign', function () {
           .connect(contributor1)
           .approve(await campaign.getAddress(), contributionAmount1)
 
-        await campaign
-          .connect(contributor1)
-          .contribute(await usdc.getAddress(), contributionAmount1)
+        await campaign.connect(contributor1).contribute(contributionAmount1)
 
         await ethers.provider.send('evm_increaseTime', [
           (CAMPAIGN_DURATION - 5) * 24 * 60 * 60
@@ -1446,9 +1394,7 @@ describe('Campaign', function () {
           .connect(contributor2)
           .approve(await campaign.getAddress(), contributionAmount2)
 
-        await campaign
-          .connect(contributor2)
-          .contribute(await usdc.getAddress(), contributionAmount2)
+        await campaign.connect(contributor2).contribute(contributionAmount2)
 
         expect(await campaign.isCampaignActive()).to.be.true //Not past campaign end date
         expect(await campaign.isCampaignSuccessful()).to.be.true
@@ -1535,17 +1481,13 @@ describe('Campaign', function () {
           .connect(contributor1)
           .approve(await campaign.getAddress(), contributionAmount1)
 
-        await campaign
-          .connect(contributor1)
-          .contribute(await usdc.getAddress(), contributionAmount1)
+        await campaign.connect(contributor1).contribute(contributionAmount1)
 
         await usdc
           .connect(contributor2)
           .approve(await campaign.getAddress(), contributionAmount2)
 
-        await campaign
-          .connect(contributor2)
-          .contribute(await usdc.getAddress(), contributionAmount2)
+        await campaign.connect(contributor2).contribute(contributionAmount2)
 
         await ethers.provider.send('evm_increaseTime', [
           CAMPAIGN_DURATION * 24 * 60 * 60
@@ -1649,9 +1591,7 @@ describe('Campaign', function () {
           .connect(contributor1)
           .approve(await campaign.getAddress(), contributionAmount1)
 
-        await campaign
-          .connect(contributor1)
-          .contribute(await usdc.getAddress(), contributionAmount1)
+        await campaign.connect(contributor1).contribute(contributionAmount1)
 
         await ethers.provider.send('evm_increaseTime', [
           (CAMPAIGN_DURATION - 5) * 24 * 60 * 60
@@ -1663,9 +1603,7 @@ describe('Campaign', function () {
           .connect(contributor2)
           .approve(await campaign.getAddress(), contributionAmount2)
 
-        await campaign
-          .connect(contributor2)
-          .contribute(await usdc.getAddress(), contributionAmount2)
+        await campaign.connect(contributor2).contribute(contributionAmount2)
 
         expect(await campaign.isCampaignActive()).to.be.true //Not past campaign end date
         expect(await campaign.isCampaignSuccessful()).to.be.true
@@ -1752,17 +1690,13 @@ describe('Campaign', function () {
           .connect(contributor1)
           .approve(await campaign.getAddress(), contributionAmount1)
 
-        await campaign
-          .connect(contributor1)
-          .contribute(await usdc.getAddress(), contributionAmount1)
+        await campaign.connect(contributor1).contribute(contributionAmount1)
 
         await usdc
           .connect(contributor2)
           .approve(await campaign.getAddress(), contributionAmount2)
 
-        await campaign
-          .connect(contributor2)
-          .contribute(await usdc.getAddress(), contributionAmount2)
+        await campaign.connect(contributor2).contribute(contributionAmount2)
 
         await ethers.provider.send('evm_increaseTime', [
           CAMPAIGN_DURATION * 24 * 60 * 60
@@ -1865,17 +1799,13 @@ describe('Campaign', function () {
           .connect(contributor1)
           .approve(await campaign.getAddress(), contributionAmount1)
 
-        await campaign
-          .connect(contributor1)
-          .contribute(await usdc.getAddress(), contributionAmount1)
+        await campaign.connect(contributor1).contribute(contributionAmount1)
 
         await usdc
           .connect(contributor2)
           .approve(await campaign.getAddress(), contributionAmount2)
 
-        await campaign
-          .connect(contributor2)
-          .contribute(await usdc.getAddress(), contributionAmount2)
+        await campaign.connect(contributor2).contribute(contributionAmount2)
 
         await ethers.provider.send('evm_mine')
 
@@ -1973,9 +1903,7 @@ describe('Campaign', function () {
           .connect(contributor1)
           .approve(await campaign.getAddress(), contributionAmount1)
 
-        await campaign
-          .connect(contributor1)
-          .contribute(await usdc.getAddress(), contributionAmount1)
+        await campaign.connect(contributor1).contribute(contributionAmount1)
 
         await ethers.provider.send('evm_increaseTime', [
           (CAMPAIGN_DURATION - 5) * 24 * 60 * 60
@@ -1987,9 +1915,7 @@ describe('Campaign', function () {
           .connect(contributor2)
           .approve(await campaign.getAddress(), contributionAmount2)
 
-        await campaign
-          .connect(contributor2)
-          .contribute(await usdc.getAddress(), contributionAmount2)
+        await campaign.connect(contributor2).contribute(contributionAmount2)
 
         await campaign.connect(deployer).setAdminOverride(true)
 
@@ -2031,9 +1957,7 @@ describe('Campaign', function () {
           .connect(contributor1)
           .approve(await campaign.getAddress(), contributionAmount1)
 
-        await campaign
-          .connect(contributor1)
-          .contribute(await usdc.getAddress(), contributionAmount1)
+        await campaign.connect(contributor1).contribute(contributionAmount1)
 
         await ethers.provider.send('evm_increaseTime', [
           (CAMPAIGN_DURATION - 5) * 24 * 60 * 60
@@ -2045,9 +1969,7 @@ describe('Campaign', function () {
           .connect(contributor2)
           .approve(await campaign.getAddress(), contributionAmount2)
 
-        await campaign
-          .connect(contributor2)
-          .contribute(await usdc.getAddress(), contributionAmount2)
+        await campaign.connect(contributor2).contribute(contributionAmount2)
 
         expect(await campaign.isCampaignActive()).to.be.true //Override sets this to false
         expect(await campaign.isCampaignSuccessful()).to.be.true
@@ -2093,17 +2015,13 @@ describe('Campaign', function () {
           .connect(contributor1)
           .approve(await campaign.getAddress(), contributionAmount1)
 
-        await campaign
-          .connect(contributor1)
-          .contribute(await usdc.getAddress(), contributionAmount1)
+        await campaign.connect(contributor1).contribute(contributionAmount1)
 
         await usdc
           .connect(contributor2)
           .approve(await campaign.getAddress(), contributionAmount2)
 
-        await campaign
-          .connect(contributor2)
-          .contribute(await usdc.getAddress(), contributionAmount2)
+        await campaign.connect(contributor2).contribute(contributionAmount2)
 
         await ethers.provider.send('evm_increaseTime', [
           CAMPAIGN_DURATION * 24 * 60 * 60
@@ -2211,17 +2129,13 @@ describe('Campaign', function () {
           .connect(contributor1)
           .approve(await campaign.getAddress(), contributionAmount1)
 
-        await campaign
-          .connect(contributor1)
-          .contribute(await usdc.getAddress(), contributionAmount1)
+        await campaign.connect(contributor1).contribute(contributionAmount1)
 
         await usdc
           .connect(contributor2)
           .approve(await campaign.getAddress(), contributionAmount2)
 
-        await campaign
-          .connect(contributor2)
-          .contribute(await usdc.getAddress(), contributionAmount2)
+        await campaign.connect(contributor2).contribute(contributionAmount2)
 
         await ethers.provider.send('evm_increaseTime', [
           CAMPAIGN_DURATION * 24 * 60 * 60
@@ -2265,9 +2179,7 @@ describe('Campaign', function () {
           .connect(contributor1)
           .approve(await campaign.getAddress(), contributionAmount1)
 
-        await campaign
-          .connect(contributor1)
-          .contribute(await usdc.getAddress(), contributionAmount1)
+        await campaign.connect(contributor1).contribute(contributionAmount1)
 
         await ethers.provider.send('evm_increaseTime', [
           CAMPAIGN_DURATION * 24 * 60 * 60
@@ -2366,9 +2278,7 @@ describe('Campaign', function () {
           .connect(contributor1)
           .approve(await campaign.getAddress(), contributionAmount1)
 
-        await campaign
-          .connect(contributor1)
-          .contribute(await usdc.getAddress(), contributionAmount1)
+        await campaign.connect(contributor1).contribute(contributionAmount1)
 
         await ethers.provider.send('evm_increaseTime', [
           (CAMPAIGN_DURATION - 5) * 24 * 60 * 60
@@ -2418,9 +2328,7 @@ describe('Campaign', function () {
           .connect(contributor1)
           .approve(await campaign.getAddress(), contributionAmount1)
 
-        await campaign
-          .connect(contributor1)
-          .contribute(await usdc.getAddress(), contributionAmount1)
+        await campaign.connect(contributor1).contribute(contributionAmount1)
 
         await ethers.provider.send('evm_increaseTime', [
           (CAMPAIGN_DURATION - 5) * 24 * 60 * 60
@@ -2526,9 +2434,7 @@ describe('Campaign', function () {
         .approve(await campaign.getAddress(), contributionAmount1)
 
       await expect(
-        campaign
-          .connect(contributor1)
-          .contribute(await usdc.getAddress(), contributionAmount1)
+        campaign.connect(contributor1).contribute(contributionAmount1)
       )
         .to.be.revertedWithCustomError(campaign, 'CampaignError')
         .withArgs(
@@ -2540,9 +2446,7 @@ describe('Campaign', function () {
       await campaign.connect(deployer).setAdminOverride(false)
 
       await expect(
-        campaign
-          .connect(contributor1)
-          .contribute(await usdc.getAddress(), contributionAmount1)
+        campaign.connect(contributor1).contribute(contributionAmount1)
       )
         .to.emit(campaign, 'Contribution')
         .withArgs(contributor1.address, contributionAmount1)
@@ -2597,9 +2501,7 @@ describe('Campaign', function () {
       await usdc
         .connect(contributor1)
         .approve(await campaign.getAddress(), halfGoalAmount)
-      await campaign
-        .connect(contributor1)
-        .contribute(await usdc.getAddress(), halfGoalAmount)
+      await campaign.connect(contributor1).contribute(halfGoalAmount)
 
       // Still not successful
       expect(await campaign.isCampaignSuccessful()).to.be.false
@@ -2610,9 +2512,7 @@ describe('Campaign', function () {
       await usdc
         .connect(contributor2)
         .approve(await campaign.getAddress(), remainingAmount)
-      await campaign
-        .connect(contributor2)
-        .contribute(await usdc.getAddress(), remainingAmount)
+      await campaign.connect(contributor2).contribute(remainingAmount)
 
       // Now should be successful
       expect(await campaign.isCampaignSuccessful()).to.be.true
@@ -2649,9 +2549,7 @@ describe('Campaign', function () {
       await usdc
         .connect(contributor1)
         .approve(await campaign.getAddress(), goalAmount)
-      await campaign
-        .connect(contributor1)
-        .contribute(await usdc.getAddress(), goalAmount)
+      await campaign.connect(contributor1).contribute(goalAmount)
 
       // Fast forward to end
       await ethers.provider.send('evm_increaseTime', [
