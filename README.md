@@ -4,7 +4,7 @@ A decentralized fundraising solution that allows campaign creators to raise fund
 
 ## Overview
 
-This platform enables individuals to create fundraising campaigns for their projects with specific goals and duration. Funds contributed to campaigns are automatically deposited into DeFi yield-generating protocols (Aave), earning interest while the campaign is active. The platform takes a configurable fee from successful campaigns, while preserving security and transparency through a robust access control system.
+This platform enables individuals to create fundraising campaigns for their projects with specific goals and duration. Funds contributed to campaigns are automatically deposited into DeFi yield-generating protocols (Aave), earning interest while the campaign is active. The platform takes a configurable fee from successful campaigns, while preserving security and transparency through a robust access control system and comprehensive event-driven state tracking.
 
 ## Key Features
 
@@ -14,12 +14,14 @@ This platform enables individuals to create fundraising campaigns for their proj
 - **Fee sharing system** between platform and campaign creators
 - **Role-based access control** with platform admin privileges
 - **Refund functionality** for unsuccessful campaigns
+- **Event-driven state tracking** for reliable off-chain indexing and status monitoring
+- **Comprehensive campaign lifecycle management** with explicit status transitions
 
 ## Core Components
 
 ### Campaign Management
 
-- **Campaign Contract**: Individual fundraising campaign with a specific goal amount, duration, and target token
+- **Campaign Contract**: Individual fundraising campaign with a specific goal amount, duration, target token, and status tracking
 - **CampaignContractFactory**: Creates new campaign contracts and maintains a registry of all deployed campaigns
 
 ### Financial Infrastructure
@@ -38,26 +40,39 @@ This platform enables individuals to create fundraising campaigns for their proj
 1. Campaign creators deploy a new campaign through the CampaignContractFactory
 2. Contributors send supported tokens to the campaign
 3. Funds are automatically deposited into Aave through the DefiIntegrationManager
-4. After the campaign ends:
+4. Campaign status is updated when goal is reached or deadline passes
+5. After the campaign ends:
    - If successful (goal reached): Campaign creator can claim funds
    - If unsuccessful: Contributors can request refunds
-5. Platform takes a configurable percentage fee from all funds processed
+6. Platform takes a configurable percentage fee from all funds processed
 
 ## Technical Details
 
 ### Campaign Lifecycle
 
-1. **Creation**: Campaign is deployed with a specific token, goal amount, and duration
+1. **Creation**: Campaign is deployed with a specific token, goal amount, and duration (status: ACTIVE)
 2. **Active Phase**: Contributors can send tokens to the campaign
-3. **Completion**:
+3. **Status Change**: Campaign transitions to COMPLETE when either:
+   - Goal amount is reached (reason: GOAL_REACHED)
+   - End date passes without reaching the goal (reason: DEADLINE_PASSED)
+4. **Completion**:
    - Success: Goal amount reached, funds (plus yield) go to creator minus platform fees
    - Failure: Goal not reached, contributors can claim refunds
+
+### Event Sourcing
+
+- **Campaign Status Tracking**: Each campaign maintains an explicit status (ACTIVE or COMPLETE)
+- **Status Change Events**: Status transitions are recorded with clear reason codes (goal reached or deadline passed)
+- **Off-chain Indexing**: Events provide a complete audit trail for building reliable off-chain databases
+- **Deterministic State**: Campaign status is consistently tracked and queryable both on-chain and through events
+- **Campaign Identifiers**: All events include campaign identifiers for efficient correlation and filtering
 
 ### DeFi Integration
 
 - Funds are automatically deposited into Aave to generate yield while the campaign is active
 - The DefiIntegrationManager handles all interactions with external DeFi protocols
 - Yield is split between platform and campaign stakeholders based on campaign outcome
+- All DeFi operations emit events with campaign identifiers for traceability
 
 ### Fee Structure
 
@@ -78,6 +93,7 @@ This platform enables individuals to create fundraising campaigns for their proj
 - Reentrancy protection on all fund-moving functions
 - Extensive input validation and error handling
 - Standardized error codes and events for better monitoring
+- Consistent state tracking with event emissions
 
 ## Administrative Functions
 
@@ -106,8 +122,9 @@ To deploy this platform:
 The platform uses a standardized error code system across all contracts for consistency:
 
 - Error codes are represented as uint8 constants
-- Each error comes with relevant context (addresses, amounts) for debugging
+- Each error comes with relevant context (addresses, amounts, campaign IDs) for debugging
 - Events are emitted for all significant state changes
+- Campaign-specific errors include campaign IDs for easier tracing
 
 ---
 
@@ -121,9 +138,12 @@ User -> CampaignContractFactory -> Campaign -> DefiIntegrationManager -> Aave
                                     |
                                     v
                               PlatformAdmin
+                                    |
+                                    v
+                            Off-chain Indexer
 ```
 
-All components are governed by the PlatformAdmin contract that manages administrative access across the system.
+All components are governed by the PlatformAdmin contract that manages administrative access across the system. Every state change emits events that can be consumed by an off-chain indexer to maintain a synchronized database of campaign information, enabling efficient querying and reporting.
 
 ## Contract Dependencies
 
@@ -163,3 +183,16 @@ This dependency chain informs the correct deployment order. For example, you mus
 7. **PausableControl**
    - Depends on PlatformAdmin
    - Used by other core contracts to implement emergency pause functionality
+
+## Event-Based Monitoring
+
+The platform emits structured events for all important state changes, making it ideal for building off-chain monitoring systems:
+
+1. **Campaign Status Events**: Track the full lifecycle of each campaign
+2. **Contribution Events**: Record all contributions with campaign identifiers
+3. **Refund Events**: Track all refunds issued to contributors
+4. **Fund Operation Events**: Monitor all movement of funds including deposits and withdrawals
+5. **DeFi Operation Events**: Track interactions with external DeFi protocols
+6. **Admin Events**: Record administrative actions
+
+These events provide a complete audit trail that can be used to build dashboards, analytics tools, and notification systems.
