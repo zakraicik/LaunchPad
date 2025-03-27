@@ -21,9 +21,6 @@ contract CampaignContractFactory is
     uint8 private constant ERR_CAMPAIGN_CONSTRUCTOR_VALIDATION_FAILED = 1;
     uint8 private constant ERR_INVALID_ADDRESS = 2;
 
-    // State variables
-    address[] public deployedCampaigns;
-    mapping(address => address[]) public creatorToCampaigns;
     IDefiIntegrationManager public immutable defiManager;
 
     // Consolidated events with operation type parameter
@@ -90,8 +87,6 @@ contract CampaignContractFactory is
 
         // Store campaign information
         address campaignAddress = address(newCampaign);
-        deployedCampaigns.push(campaignAddress);
-        creatorToCampaigns[msg.sender].push(campaignAddress);
 
         // Emit event with operation type
         bytes32 campaignId = newCampaign.campaignId();
@@ -103,34 +98,5 @@ contract CampaignContractFactory is
         );
 
         return campaignAddress;
-    }
-
-    // View functions - these are small and don't need optimization
-    function getAllCampaigns() external view returns (address[] memory) {
-        return deployedCampaigns;
-    }
-
-    function getCampaignsByCreator(
-        address _creator
-    ) external view returns (address[] memory) {
-        if (_creator == address(0)) {
-            revert FactoryError(ERR_INVALID_ADDRESS, _creator, 0);
-        }
-
-        return creatorToCampaigns[_creator];
-    }
-
-    function getCampaignsCount() external view returns (uint256) {
-        return deployedCampaigns.length;
-    }
-
-    function getCreatorCampaignsCount(
-        address _creator
-    ) external view returns (uint256) {
-        if (_creator == address(0)) {
-            revert FactoryError(ERR_INVALID_ADDRESS, _creator, 0);
-        }
-
-        return creatorToCampaigns[_creator].length;
     }
 }
