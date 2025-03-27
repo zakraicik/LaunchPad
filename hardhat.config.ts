@@ -3,10 +3,14 @@ import { HardhatUserConfig } from 'hardhat/config'
 import '@nomicfoundation/hardhat-toolbox'
 import 'hardhat-gas-reporter'
 
+import * as dotenv from 'dotenv'
+
+dotenv.config()
+
 import IERC20ABI from './test/abis/IERC20ABI.json'
-import UniswapQuoterABI from './test/abis/UniswapQuoter.json'
-import UniswapRouterABI from './test/abis/UniswapRouter.json'
 import AavePoolABI from './test/abis/AAVEPool.json'
+
+const ALCHEMY_API_KEY = process.env.ALCHEMY_API_KEY
 
 const config: HardhatUserConfig = {
   solidity: {
@@ -21,7 +25,7 @@ const config: HardhatUserConfig = {
   networks: {
     hardhat: {
       forking: {
-        url: 'https://base-mainnet.g.alchemy.com/v2/A8wE4FsZsP3eTlR0DSDh3w5nU7wdPyUG',
+        url: `https://base-mainnet.g.alchemy.com/v2/${ALCHEMY_API_KEY}`,
         blockNumber: 27890280 // Use a recent block number
       },
       chains: {
@@ -34,7 +38,7 @@ const config: HardhatUserConfig = {
       }
     },
     baseSepolia: {
-      url: 'https://sepolia.base.org',
+      url: `https://base-sepolia.g.alchemy.com/v2/${ALCHEMY_API_KEY}`,
       chainId: 84532
     }
   },
