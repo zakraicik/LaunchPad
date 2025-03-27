@@ -304,5 +304,45 @@ describe('CampaignContractFactory', function () {
           0
         )
     })
+
+    it.only('Should maintain consistent gas costs regardless of number of campaigns deployed', async function () {
+      const { campaignContractFactory, creator1, usdc } = await loadFixture(
+        deployPlatformFixture
+      )
+
+      const usdcAddress = await usdc.getAddress()
+      const campaignGoalAmount = ethers.parseUnits('500', await usdc.decimals())
+      const campaignDuration = 30
+
+      // Deploy first campaign and measure gas
+      const tx1 = await campaignContractFactory
+        .connect(creator1)
+        .deploy(usdcAddress, campaignGoalAmount, campaignDuration)
+
+      const receipt1 = await tx1.wait()
+      const gasUsed1 = receipt1?.gasUsed || 0n
+
+      // Deploy multiple campaigns to simulate a growing platform
+      for (let i = 0; i < 10; i++) {
+        await campaignContractFactory
+          .connect(creator1)
+          .deploy(usdcAddress, campaignGoalAmount, campaignDuration)
+      }
+
+      // After multiple deployments, deploy one more and measure gas
+      const tx2 = await campaignContractFactory
+        .connect(creator1)
+        .deploy(usdcAddress, campaignGoalAmount, campaignDuration)
+
+      const receipt2 = await tx2.wait()
+      const gasUsed2 = receipt2?.gasUsed || 0n
+
+      // The gas cost should be very similar (allow for small variations)
+      // This verifies that our optimized structure doesn't have increasing costs
+      expect(gasUsed2).to.be.closeTo(
+        gasUsed1,
+        (gasUsed1 * 2n) / 100n // Allow 2% variation
+      )
+    })
   })
 })

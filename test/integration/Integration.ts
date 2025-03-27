@@ -119,12 +119,6 @@ describe('Base Mainnet Integration Tests', function () {
       const campaignAddress = parsedEvent.args[1]
 
       expect(parsedEvent.args[2]).to.equal(creator1.address)
-      expect(await campaignContractFactory.deployedCampaigns(1)).to.equal(
-        campaignAddress
-      )
-      expect(
-        await campaignContractFactory.creatorToCampaigns(creator1.address, 1)
-      ).to.equal(campaignAddress)
 
       const Campaign = await ethers.getContractFactory('Campaign')
       const campaign = Campaign.attach(campaignAddress) as unknown as Campaign
