@@ -14,55 +14,19 @@ contract FeeManager is Ownable, PlatformAdminAccessControl {
     // Use the library
     using FeeLibrary for *;
 
-    // Operation types
-    /**
-     * @dev Constant defining treasury update operation type for events
-     */
+    //Operation and error codes
     uint8 private constant OP_TREASURY_UPDATED = 1;
-
-    /**
-     * @dev Constant defining fee share update operation type for events
-     */
     uint8 private constant OP_SHARE_UPDATED = 2;
 
-    // Error codes
-    /**
-     * @dev Error code for invalid address
-     */
+    //Error codes
     uint8 private constant ERR_INVALID_ADDRESS = 1;
-
-    /**
-     * @dev Error code for invalid fee share
-     */
     uint8 private constant ERR_INVALID_SHARE = 2;
-
-    /**
-     * @dev Error code for fee share exceeding maximum allowed
-     */
     uint8 private constant ERR_SHARE_EXCEEDS_MAXIMUM = 3;
-
-    /**
-     * @dev Error code for arithmetic overflow
-     */
     uint8 private constant ERR_OVERFLOW = 4;
 
-    // State variables
-    /**
-     * @notice Address of the platform treasury where platform fees are sent
-     * @dev Can be updated by platform admins
-     */
+    //State variables
     address public platformTreasury;
-
-    /**
-     * @notice Current platform fee share in basis points (100 = 1%)
-     * @dev Default is 100 basis points (1%)
-     */
     uint16 public platformFeeShare = 100;
-
-    /**
-     * @notice Maximum allowed platform fee share in basis points
-     * @dev Constant value of 500 basis points (5%)
-     */
     uint16 public constant maximumFeeShare = 500;
 
     /**

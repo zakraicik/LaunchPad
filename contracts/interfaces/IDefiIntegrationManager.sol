@@ -17,8 +17,13 @@ interface IDefiIntegrationManager {
      * @dev Transfers tokens from the caller and deposits them into the yield protocol
      * @param _token Address of the token to deposit
      * @param _amount Amount of tokens to deposit
+     * @param campaignId Unique identifier of the campaign related to this operation
      */
-    function depositToYieldProtocol(address _token, uint256 _amount) external;
+    function depositToYieldProtocol(
+        address _token,
+        uint256 _amount,
+        bytes32 campaignId
+    ) external;
 
     /**
      * @notice Withdraws tokens from the yield protocol
@@ -26,12 +31,14 @@ interface IDefiIntegrationManager {
      * @param _token Address of the token to withdraw
      * @param _campaignSuccessful Whether the associated campaign was successful
      * @param _coverRefunds Amount needed to cover potential refunds
+     * @param campaignId Unique identifier of the campaign related to this operation
      * @return Amount withdrawn including any accrued yield
      */
     function withdrawFromYieldProtocol(
         address _token,
         bool _campaignSuccessful,
-        uint256 _coverRefunds
+        uint256 _coverRefunds,
+        bytes32 campaignId
     ) external returns (uint256);
 
     /**

@@ -25,81 +25,26 @@ contract DefiIntegrationManager is
 {
     using SafeERC20 for IERC20;
 
-    // Operation types for events
-    /**
-     * @dev Constant defining deposit operation type for events
-     */
+    // Status and operation constants (packed into single bytes)
     uint8 private constant OP_DEPOSITED = 1;
-
-    /**
-     * @dev Constant defining withdrawal operation type for events
-     */
     uint8 private constant OP_WITHDRAWN = 2;
-
-    /**
-     * @dev Constant defining configuration update operation type for events
-     */
     uint8 private constant OP_CONFIG_UPDATED = 3;
 
     // Error codes
-    /**
-     * @dev Error code for zero amount
-     */
     uint8 private constant ERR_ZERO_AMOUNT = 1;
-
-    /**
-     * @dev Error code for unsupported token
-     */
     uint8 private constant ERR_TOKEN_NOT_SUPPORTED = 2;
-
-    /**
-     * @dev Error code for failed deposit
-     */
     uint8 private constant ERR_DEPOSIT_FAILED = 3;
-
-    /**
-     * @dev Error code for failed withdrawal
-     */
     uint8 private constant ERR_WITHDRAWAL_FAILED = 4;
-
-    /**
-     * @dev Error code for invalid address
-     */
     uint8 private constant ERR_INVALID_ADDRESS = 5;
-
-    /**
-     * @dev Error code for invalid constructor parameters
-     */
     uint8 private constant ERR_INVALID_CONSTRUCTOR = 6;
-
-    /**
-     * @dev Error code for withdrawal amount mismatch
-     */
     uint8 private constant ERR_WITHDRAWAL_DOESNT_BALANCE = 7;
 
-    // External contracts
-    /**
-     * @notice Reference to the Aave Pool contract
-     * @dev Used for interacting with Aave protocol
-     */
+    //Interfaces
     IAavePool public aavePool;
-
-    /**
-     * @notice Reference to the TokenRegistry contract
-     * @dev Used for validating tokens
-     */
     ITokenRegistry public tokenRegistry;
-
-    /**
-     * @notice Reference to the FeeManager contract
-     * @dev Used for fee calculations and platform treasury
-     */
     IFeeManager public feeManager;
 
-    /**
-     * @notice Tracks user balances deposited to Aave
-     * @dev Mapping from token => user => amount
-     */
+    //State variables
     mapping(address => mapping(address => uint256)) public aaveBalances;
 
     /**
@@ -108,23 +53,47 @@ contract DefiIntegrationManager is
      * @param addr Related address (if applicable)
      */
     error DefiError(uint8 code, address addr);
+    /**
+     * @notice Thrown when a deposit to a yield protocol fails
+     * @param code Error code identifying the failure reason
+     * @param campaignId Unique identifier of the campaign related to this operation
+     * @param token Address of the token being deposited
+     * @param amount Amount of tokens being deposited
+     */
+    error DeposittoYieldProtocolError(
+        uint8 code,
+        address token,
+        uint256 amount,
+        bytes32 campaignId
+    );
+    /**
+     * @notice Thrown when a withdrawal from a yield protocol fails
+     * @param code Error code identifying the failure reason
+     * @param campaignId Unique identifier of the campaign related to this operation
+     * @param token Address of the token being withdrawn
+     * @param amount Amount of tokens being withdrawn or requested to withdraw
+     */
+    error WithdrawFromYieldProtocolError(
+        uint8 code,
+        address token,
+        uint256 amount,
+        bytes32 campaignId
+    );
 
     /**
      * @notice Emitted when a DeFi operation is performed
-     * @param opType Type of operation (1=deposit, 2=withdraw)
+     * @param opType Type of operation (1=deposit, 2=withdraw, 3=config_updated)
      * @param sender Address initiating the operation
-     * @param token Primary token involved
-     * @param secondToken Secondary token involved (if applicable)
-     * @param amount Primary amount involved
-     * @param secondAmount Secondary amount involved (if applicable)
+     * @param token Token involved in the operation
+     * @param amount Amount of tokens involved in the operation
+     * @param campaignId Unique identifier of the campaign related to this operation
      */
     event DefiOperation(
         uint8 opType,
         address indexed sender,
         address indexed token,
-        address indexed secondToken,
         uint256 amount,
-        uint256 secondAmount
+        bytes32 indexed campaignId
     );
 
     /**
@@ -231,10 +200,12 @@ contract DefiIntegrationManager is
      * @dev Transfers tokens from sender to this contract, then supplies to Aave
      * @param _token Address of the token to deposit
      * @param _amount Amount of tokens to deposit
+     * @param campaignId Unique identifier of the campaign related to this operation
      */
     function depositToYieldProtocol(
         address _token,
-        uint256 _amount
+        uint256 _amount,
+        bytes32 campaignId
     ) external nonReentrant whenNotPaused {
         bool tokenExists;
         bool isSupported;
@@ -246,16 +217,31 @@ contract DefiIntegrationManager is
         }
 
         if (!tokenExists || !isSupported) {
-            revert DefiError(ERR_TOKEN_NOT_SUPPORTED, _token);
+            revert DeposittoYieldProtocolError(
+                ERR_TOKEN_NOT_SUPPORTED,
+                _token,
+                _amount,
+                campaignId
+            );
         }
         address aToken = getATokenAddress(_token);
 
         if (aToken == address(0)) {
-            revert DefiError(ERR_INVALID_ADDRESS, aToken);
+            revert DeposittoYieldProtocolError(
+                ERR_INVALID_ADDRESS,
+                aToken,
+                _amount,
+                campaignId
+            );
         }
 
         if (_amount <= 0) {
-            revert DefiError(ERR_ZERO_AMOUNT, _token);
+            revert DeposittoYieldProtocolError(
+                ERR_ZERO_AMOUNT,
+                _token,
+                _amount,
+                campaignId
+            );
         }
 
         IERC20(_token).safeTransferFrom(msg.sender, address(this), _amount);
@@ -268,12 +254,16 @@ contract DefiIntegrationManager is
                 OP_DEPOSITED,
                 msg.sender,
                 _token,
-                address(0),
                 _amount,
-                0
+                campaignId
             );
         } catch {
-            revert DefiError(ERR_DEPOSIT_FAILED, _token);
+            revert DeposittoYieldProtocolError(
+                ERR_DEPOSIT_FAILED,
+                _token,
+                _amount,
+                campaignId
+            );
         }
     }
 
@@ -283,12 +273,14 @@ contract DefiIntegrationManager is
      * @param _token Address of the token to withdraw
      * @param campaignSuccessful Whether the campaign met its goal
      * @param coverRefunds Amount needed to cover potential refunds
+     * @param campaignId Unique identifier of the campaign related to this operation
      * @return Amount withdrawn including any accrued yield
      */
     function withdrawFromYieldProtocol(
         address _token,
         bool campaignSuccessful,
-        uint256 coverRefunds
+        uint256 coverRefunds,
+        bytes32 campaignId
     ) external nonReentrant whenNotPaused returns (uint256) {
         address aTokenAddress = getATokenAddress(_token);
 
@@ -298,7 +290,12 @@ contract DefiIntegrationManager is
             uint256 withdrawn
         ) {
             if (aTokenBalance != withdrawn) {
-                revert DefiError(ERR_WITHDRAWAL_DOESNT_BALANCE, _token);
+                revert WithdrawFromYieldProtocolError(
+                    ERR_WITHDRAWAL_DOESNT_BALANCE,
+                    _token,
+                    aTokenBalance,
+                    campaignId
+                );
             }
 
             if (campaignSuccessful) {
@@ -326,14 +323,18 @@ contract DefiIntegrationManager is
                 OP_WITHDRAWN,
                 msg.sender,
                 _token,
-                address(0),
                 withdrawn,
-                0
+                campaignId
             );
 
             return withdrawn;
         } catch {
-            revert DefiError(ERR_WITHDRAWAL_FAILED, _token);
+            revert WithdrawFromYieldProtocolError(
+                ERR_WITHDRAWAL_FAILED,
+                _token,
+                aTokenBalance,
+                campaignId
+            );
         }
     }
 

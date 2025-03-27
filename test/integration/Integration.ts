@@ -206,6 +206,9 @@ describe('Base Mainnet Integration Tests', function () {
         contributor1.address
       )
       expect(parsedContributionEvent.args.amount).to.equal(contributionAmount)
+      expect(parsedContributionEvent.args.campaignId).to.equal(
+        await campaign.campaignId()
+      )
 
       expect(await campaign.isContributor(contributor1.address)).to.be.true
       expect(await campaign.contributorsCount()).to.equal(1)
@@ -510,14 +513,20 @@ describe('Base Mainnet Integration Tests', function () {
 
       await expect(campaign.connect(creator1).claimFunds())
         .to.be.revertedWithCustomError(campaign, 'CampaignError')
-        .withArgs(ERR_FUNDS_CLAIMED, ethers.ZeroAddress, 0)
+        .withArgs(
+          ERR_FUNDS_CLAIMED,
+          ethers.ZeroAddress,
+          0,
+          await campaign.campaignId()
+        )
 
       await expect(campaign.connect(contributor1).requestRefund())
         .to.be.revertedWithCustomError(campaign, 'CampaignError')
         .withArgs(
           ERR_GOAL_REACHED,
           ethers.ZeroAddress,
-          await campaign.totalAmountRaised()
+          await campaign.totalAmountRaised(),
+          await campaign.campaignId()
         )
     })
 
@@ -664,7 +673,12 @@ describe('Base Mainnet Integration Tests', function () {
 
       await expect(campaign.connect(creator1).claimFunds())
         .to.be.revertedWithCustomError(campaign, 'CampaignError')
-        .withArgs(ERR_FUNDS_CLAIMED, ethers.ZeroAddress, 0)
+        .withArgs(
+          ERR_FUNDS_CLAIMED,
+          ethers.ZeroAddress,
+          0,
+          await campaign.campaignId()
+        )
     })
 
     it('Should allow contributors to request refund after campaign fails', async function () {
@@ -796,6 +810,7 @@ describe('Base Mainnet Integration Tests', function () {
 
       expect(parsedRefundEvent1.args[0]).to.equal(contributor1.address)
       expect(parsedRefundEvent1.args[1]).to.equal(contributor1Contribution)
+      expect(parsedRefundEvent1.args[2]).to.equal(await campaign.campaignId())
 
       expect(await campaign.hasBeenRefunded(contributor1.address)).to.be.true
       expect(await usdc.balanceOf(contributor1.address)).to.be.closeTo(
@@ -828,6 +843,7 @@ describe('Base Mainnet Integration Tests', function () {
 
       expect(parsedRefundEvent2.args[0]).to.equal(contributor2.address)
       expect(parsedRefundEvent2.args[1]).to.equal(contributor2Contribution)
+      expect(parsedRefundEvent1.args[2]).to.equal(await campaign.campaignId())
 
       expect(await campaign.hasBeenRefunded(contributor1.address)).to.be.true
       expect(await usdc.balanceOf(contributor2.address)).to.be.closeTo(
@@ -839,11 +855,21 @@ describe('Base Mainnet Integration Tests', function () {
 
       await expect(campaign.connect(contributor1).requestRefund())
         .to.be.revertedWithCustomError(campaign, 'CampaignError')
-        .withArgs(ERR_ALREADY_REFUNDED, contributor1.address, 0)
+        .withArgs(
+          ERR_ALREADY_REFUNDED,
+          contributor1.address,
+          0,
+          await campaign.campaignId()
+        )
 
       await expect(campaign.connect(contributor2).requestRefund())
         .to.be.revertedWithCustomError(campaign, 'CampaignError')
-        .withArgs(ERR_ALREADY_REFUNDED, contributor2.address, 0)
+        .withArgs(
+          ERR_ALREADY_REFUNDED,
+          contributor2.address,
+          0,
+          await campaign.campaignId()
+        )
     })
   })
 
@@ -1169,7 +1195,7 @@ describe('Base Mainnet Integration Tests', function () {
     })
 
     it('Should prevent deposits to yield protocol when platform is paused', async function () {
-      const { usdc, deployer, defiIntegrationManager, contributor1 } =
+      const { campaign, usdc, deployer, defiIntegrationManager, contributor1 } =
         await loadFixture(deployPlatformFixture)
 
       // Pause the platform
@@ -1188,7 +1214,11 @@ describe('Base Mainnet Integration Tests', function () {
       await expect(
         defiIntegrationManager
           .connect(contributor1)
-          .depositToYieldProtocol(await usdc.getAddress(), depositAmount)
+          .depositToYieldProtocol(
+            await usdc.getAddress(),
+            depositAmount,
+            await campaign.campaignId()
+          )
       ).to.be.revertedWithCustomError(defiIntegrationManager, 'EnforcedPause')
 
       // Unpause and try again - should succeed
@@ -1197,7 +1227,11 @@ describe('Base Mainnet Integration Tests', function () {
       await expect(
         defiIntegrationManager
           .connect(contributor1)
-          .depositToYieldProtocol(await usdc.getAddress(), depositAmount)
+          .depositToYieldProtocol(
+            await usdc.getAddress(),
+            depositAmount,
+            await campaign.campaignId()
+          )
       ).to.not.be.reverted
     })
 
@@ -1207,7 +1241,8 @@ describe('Base Mainnet Integration Tests', function () {
         deployer,
         defiIntegrationManager,
         contributor1,
-        IERC20ABI
+        IERC20ABI,
+        campaign
       } = await loadFixture(deployPlatformFixture)
 
       const usdcDecimals = await usdc.decimals()
@@ -1219,7 +1254,11 @@ describe('Base Mainnet Integration Tests', function () {
         .approve(defiIntegrationManager.getAddress(), depositAmount)
       await defiIntegrationManager
         .connect(contributor1)
-        .depositToYieldProtocol(await usdc.getAddress(), depositAmount)
+        .depositToYieldProtocol(
+          await usdc.getAddress(),
+          depositAmount,
+          await campaign.campaignId()
+        )
 
       const aTokenAddress = await defiIntegrationManager.getATokenAddress(
         await usdc.getAddress()
@@ -1240,7 +1279,8 @@ describe('Base Mainnet Integration Tests', function () {
           .withdrawFromYieldProtocol(
             await usdc.getAddress(),
             true,
-            depositAmount
+            depositAmount,
+            await campaign.campaignId()
           )
       ).to.be.revertedWithCustomError(defiIntegrationManager, 'EnforcedPause')
 
@@ -1261,7 +1301,8 @@ describe('Base Mainnet Integration Tests', function () {
           .withdrawFromYieldProtocol(
             await usdc.getAddress(),
             true,
-            depositAmount
+            depositAmount,
+            await campaign.campaignId()
           )
       ).to.not.be.reverted
     })

@@ -144,4 +144,17 @@ interface ICampaign {
      * @return Current admin override status
      */
     function adminOverride() external view returns (bool);
+
+    /**
+     * @notice Returns the current campaign status
+     * @return Status code (1=active, 2=complete)
+     */
+    function campaignStatus() external view returns (uint8);
+
+    /**
+     * @notice Checks and updates the campaign status if needed
+     * @dev Updates status to complete if deadline passed without reaching goal
+     * @return Current campaign status after potential update
+     */
+    function checkAndUpdateStatus() external returns (uint8);
 }

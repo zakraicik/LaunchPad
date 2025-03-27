@@ -16,81 +16,23 @@ contract TokenRegistry is Ownable, PlatformAdminAccessControl {
     // Use the TokenRegistryLibrary
     using TokenRegistryLibrary for *;
 
-    // Operation types for events
-    /**
-     * @dev Constant defining token addition operation type for events
-     */
+    //Operation codes
     uint8 private constant OP_TOKEN_ADDED = 1;
-
-    /**
-     * @dev Constant defining token removal operation type for events
-     */
     uint8 private constant OP_TOKEN_REMOVED = 2;
-
-    /**
-     * @dev Constant defining token support disabling operation type for events
-     */
     uint8 private constant OP_TOKEN_SUPPORT_DISABLED = 3;
-
-    /**
-     * @dev Constant defining token support enabling operation type for events
-     */
     uint8 private constant OP_TOKEN_SUPPORT_ENABLED = 4;
-
-    /**
-     * @dev Constant defining minimum contribution update operation type for events
-     */
     uint8 private constant OP_MIN_CONTRIBUTION_UPDATED = 5;
 
-    // Error codes for consolidated errors
-    /**
-     * @dev Error code for invalid address
-     */
+    //Error codes
     uint8 private constant ERR_INVALID_ADDRESS = 1;
-
-    /**
-     * @dev Error code for invalid token
-     */
     uint8 private constant ERR_INVALID_TOKEN = 2;
-
-    /**
-     * @dev Error code for token already existing in registry
-     */
     uint8 private constant ERR_TOKEN_ALREADY_IN_REGISTRY = 3;
-
-    /**
-     * @dev Error code for token not found in registry
-     */
     uint8 private constant ERR_TOKEN_NOT_IN_REGISTRY = 4;
-
-    /**
-     * @dev Error code for token support already enabled
-     */
     uint8 private constant ERR_TOKEN_SUPPORT_ALREADY_ENABLED = 5;
-
-    /**
-     * @dev Error code for token support already disabled
-     */
     uint8 private constant ERR_TOKEN_SUPPORT_ALREADY_DISABLED = 6;
-
-    /**
-     * @dev Error code for address not being a contract
-     */
     uint8 private constant ERR_NOT_A_CONTRACT = 7;
-
-    /**
-     * @dev Error code for token not complying with ERC20 standard
-     */
     uint8 private constant ERR_NOT_ERC20_COMPLIANT = 8;
-
-    /**
-     * @dev Error code for invalid minimum contribution amount
-     */
     uint8 private constant ERR_INVALID_MIN_CONTRIBUTION = 9;
-
-    /**
-     * @dev Error code for arithmetic overflow
-     */
     uint8 private constant ERR_OVERFLOW = 10;
 
     /**
@@ -104,22 +46,8 @@ contract TokenRegistry is Ownable, PlatformAdminAccessControl {
     }
 
     // State variables
-    /**
-     * @notice Maps token addresses to their configurations
-     * @dev Contains support status, decimals, and minimum contribution amount for each token
-     */
     mapping(address => TokenConfig) public tokenConfigs;
-
-    /**
-     * @notice Maps token addresses to their existence in the registry
-     * @dev True if token has been added (even if currently disabled), false otherwise
-     */
     mapping(address => bool) private tokenExists;
-
-    /**
-     * @notice Array of all currently supported token addresses
-     * @dev Used to enumerate all supported tokens
-     */
     address[] public supportedTokens;
 
     /**

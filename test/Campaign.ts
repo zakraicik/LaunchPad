@@ -109,7 +109,8 @@ describe('Campaign', function () {
         .withArgs(
           ERR_CAMPAIGN_CONSTRUCTOR_VALIDATION_FAILED,
           ethers.ZeroAddress,
-          0
+          0,
+          anyValue
         )
 
       await expect(
@@ -123,7 +124,7 @@ describe('Campaign', function () {
         )
       )
         .to.be.revertedWithCustomError(CampaignContractFactory, 'CampaignError')
-        .withArgs(ERR_INVALID_ADDRESS, ethers.ZeroAddress, 0)
+        .withArgs(ERR_INVALID_ADDRESS, ethers.ZeroAddress, 0, anyValue)
 
       await expect(
         CampaignContractFactory.deploy(
@@ -139,7 +140,8 @@ describe('Campaign', function () {
         .withArgs(
           ERR_CAMPAIGN_CONSTRUCTOR_VALIDATION_FAILED,
           ethers.ZeroAddress,
-          0
+          0,
+          anyValue
         )
 
       await expect(
@@ -156,7 +158,8 @@ describe('Campaign', function () {
         .withArgs(
           ERR_CAMPAIGN_CONSTRUCTOR_VALIDATION_FAILED,
           ethers.ZeroAddress,
-          0
+          0,
+          anyValue
         )
 
       await expect(
@@ -173,7 +176,8 @@ describe('Campaign', function () {
         .withArgs(
           ERR_CAMPAIGN_CONSTRUCTOR_VALIDATION_FAILED,
           ethers.ZeroAddress,
-          0
+          0,
+          anyValue
         )
 
       await expect(
@@ -190,7 +194,8 @@ describe('Campaign', function () {
         .withArgs(
           ERR_CAMPAIGN_CONSTRUCTOR_VALIDATION_FAILED,
           ethers.ZeroAddress,
-          0
+          0,
+          anyValue
         )
 
       await expect(
@@ -204,7 +209,7 @@ describe('Campaign', function () {
         )
       )
         .to.be.revertedWithCustomError(CampaignContractFactory, 'CampaignError')
-        .withArgs(ERR_INVALID_ADDRESS, ethers.ZeroAddress, 0)
+        .withArgs(ERR_INVALID_ADDRESS, ethers.ZeroAddress, 0, anyValue)
     })
   })
 
@@ -250,13 +255,18 @@ describe('Campaign', function () {
         campaign.connect(contributor1).contribute(contributionAmount)
       )
         .to.emit(campaign, 'Contribution')
-        .withArgs(contributor1.address, contributionAmount)
+        .withArgs(
+          contributor1.address,
+          contributionAmount,
+          await campaign.campaignId()
+        )
         .and.to.emit(campaign, 'FundsOperation')
         .withArgs(
           ethers.getAddress(await usdc.getAddress()), // token
           contributionAmount, // amount
           OP_DEPOSIT, // opType
-          contributor1.address // initiator
+          contributor1.address, // initiator
+          await campaign.campaignId() // campaignId
         )
 
       const aTokenBalanceAfter = await aToken.balanceOf(
@@ -333,7 +343,11 @@ describe('Campaign', function () {
         campaign.connect(contributor1).contribute(contributionAmount)
       )
         .to.emit(campaign, 'Contribution')
-        .withArgs(contributor1.address, contributionAmount)
+        .withArgs(
+          contributor1.address,
+          contributionAmount,
+          await campaign.campaignId()
+        )
 
       const aTokenBalanceAfter = await aToken.balanceOf(
         await campaign.getAddress()
@@ -506,7 +520,12 @@ describe('Campaign', function () {
 
       await expect(campaign.connect(contributor1).contribute(0))
         .to.be.revertedWithCustomError(campaign, 'CampaignError')
-        .withArgs(ERR_INVALID_AMOUNT, ethers.getAddress(usdcAddress), 0)
+        .withArgs(
+          ERR_INVALID_AMOUNT,
+          ethers.getAddress(usdcAddress),
+          0,
+          await campaign.campaignId()
+        )
     })
 
     it('Should revert when contributing with non-campaign token', async function () {
@@ -560,7 +579,8 @@ describe('Campaign', function () {
         .withArgs(
           ERR_GOAL_REACHED,
           ethers.ZeroAddress,
-          await campaign.totalAmountRaised()
+          await campaign.totalAmountRaised(),
+          await campaign.campaignId()
         )
     })
 
@@ -592,7 +612,8 @@ describe('Campaign', function () {
         .withArgs(
           ERR_CAMPAIGN_PAST_END_DATE,
           ethers.getAddress(await usdc.getAddress()),
-          0
+          0,
+          await campaign.campaignId()
         )
     })
 
@@ -608,7 +629,12 @@ describe('Campaign', function () {
         })
       )
         .to.be.revertedWithCustomError(campaign, 'CampaignError')
-        .withArgs(ERR_ETH_NOT_ACCEPTED, ethers.ZeroAddress, 0)
+        .withArgs(
+          ERR_ETH_NOT_ACCEPTED,
+          ethers.ZeroAddress,
+          0,
+          await campaign.campaignId()
+        )
     })
 
     it('Should revert for contriutions below the minimum contribution amount', async function () {
@@ -628,7 +654,8 @@ describe('Campaign', function () {
         .withArgs(
           ERR_INVALID_AMOUNT,
           ethers.getAddress(await usdc.getAddress()),
-          contributionAmount
+          contributionAmount,
+          await campaign.campaignId()
         )
     })
 
@@ -650,7 +677,11 @@ describe('Campaign', function () {
         campaign.connect(contributor1).contribute(contributionAmount)
       )
         .to.emit(campaign, 'Contribution')
-        .withArgs(contributor1.address, contributionAmount)
+        .withArgs(
+          contributor1.address,
+          contributionAmount,
+          await campaign.campaignId()
+        )
 
       expect(await campaign.contributions(contributor1.address)).to.equal(
         contributionAmount
@@ -685,7 +716,8 @@ describe('Campaign', function () {
         .withArgs(
           ERR_ADMIN_OVERRIDE_ACTIVE,
           ethers.getAddress(await usdc.getAddress()),
-          0
+          0,
+          await campaign.campaignId()
         )
     })
   })
@@ -756,13 +788,18 @@ describe('Campaign', function () {
 
         await expect(campaign.connect(creator1).claimFunds())
           .to.emit(campaign, 'FundsClaimed')
-          .withArgs(await campaign.getAddress(), anyUint)
+          .withArgs(
+            await campaign.getAddress(),
+            anyUint,
+            await campaign.campaignId()
+          )
           .and.to.emit(campaign, 'FundsOperation')
           .withArgs(
             ethers.getAddress(await usdc.getAddress()), // token
             anyUint, // amount
             OP_CLAIM_FUNDS, // opType
-            creator1.address // initiator
+            creator1.address, // initiator
+            await campaign.campaignId()
           )
 
         expect(await campaign.hasClaimedFunds()).to.be.true
@@ -796,7 +833,12 @@ describe('Campaign', function () {
 
         await expect(campaign.connect(creator1).claimFunds())
           .to.be.revertedWithCustomError(campaign, 'CampaignError')
-          .withArgs(ERR_FUNDS_CLAIMED, ethers.ZeroAddress, 0)
+          .withArgs(
+            ERR_FUNDS_CLAIMED,
+            ethers.ZeroAddress,
+            0,
+            await campaign.campaignId()
+          )
       })
 
       it('Should allow owner to claim funds when campaign is unsuccessful and distribute funds correctly', async function () {
@@ -866,7 +908,11 @@ describe('Campaign', function () {
 
         await expect(campaign.connect(creator1).claimFunds())
           .to.emit(campaign, 'FundsClaimed')
-          .withArgs(await campaign.getAddress(), anyUint)
+          .withArgs(
+            await campaign.getAddress(),
+            anyUint,
+            await campaign.campaignId()
+          )
 
         expect(await campaign.hasClaimedFunds()).to.be.true
 
@@ -905,7 +951,12 @@ describe('Campaign', function () {
 
         await expect(campaign.connect(creator1).claimFunds())
           .to.be.revertedWithCustomError(campaign, 'CampaignError')
-          .withArgs(ERR_FUNDS_CLAIMED, ethers.ZeroAddress, 0)
+          .withArgs(
+            ERR_FUNDS_CLAIMED,
+            ethers.ZeroAddress,
+            0,
+            await campaign.campaignId()
+          )
       })
 
       it('Should allow platformAdmin to claim funds after grace period when campaign is successful before campaign end date', async function () {
@@ -972,7 +1023,11 @@ describe('Campaign', function () {
 
         await expect(campaign.connect(deployer).claimFundsAdmin())
           .to.emit(campaign, 'FundsClaimed')
-          .withArgs(await campaign.getAddress(), anyUint)
+          .withArgs(
+            await campaign.getAddress(),
+            anyUint,
+            await campaign.campaignId()
+          )
 
         expect(await campaign.hasClaimedFunds()).to.be.true
 
@@ -1005,7 +1060,12 @@ describe('Campaign', function () {
 
         await expect(campaign.connect(deployer).claimFundsAdmin())
           .to.be.revertedWithCustomError(campaign, 'CampaignError')
-          .withArgs(ERR_FUNDS_CLAIMED, ethers.ZeroAddress, 0)
+          .withArgs(
+            ERR_FUNDS_CLAIMED,
+            ethers.ZeroAddress,
+            0,
+            await campaign.campaignId()
+          )
       })
 
       it('Should allow platformAdmin to claim funds when campaign is unsuccessful and distribute funds correctly', async function () {
@@ -1075,7 +1135,11 @@ describe('Campaign', function () {
 
         await expect(campaign.connect(deployer).claimFundsAdmin())
           .to.emit(campaign, 'FundsClaimed')
-          .withArgs(await campaign.getAddress(), anyUint)
+          .withArgs(
+            await campaign.getAddress(),
+            anyUint,
+            await campaign.campaignId()
+          )
 
         expect(await campaign.hasClaimedFunds()).to.be.true
 
@@ -1114,7 +1178,12 @@ describe('Campaign', function () {
 
         await expect(campaign.connect(deployer).claimFundsAdmin())
           .to.be.revertedWithCustomError(campaign, 'CampaignError')
-          .withArgs(ERR_FUNDS_CLAIMED, ethers.ZeroAddress, 0)
+          .withArgs(
+            ERR_FUNDS_CLAIMED,
+            ethers.ZeroAddress,
+            0,
+            await campaign.campaignId()
+          )
       })
 
       it('Should allow platformAdmin to claim funds when admin override is active', async function () {
@@ -1182,7 +1251,11 @@ describe('Campaign', function () {
 
         await expect(campaign.connect(deployer).claimFundsAdmin())
           .to.emit(campaign, 'FundsClaimed')
-          .withArgs(await campaign.getAddress(), anyUint)
+          .withArgs(
+            await campaign.getAddress(),
+            anyUint,
+            await campaign.campaignId()
+          )
 
         expect(await campaign.hasClaimedFunds()).to.be.true
 
@@ -1221,7 +1294,12 @@ describe('Campaign', function () {
 
         await expect(campaign.connect(deployer).claimFundsAdmin())
           .to.be.revertedWithCustomError(campaign, 'CampaignError')
-          .withArgs(ERR_FUNDS_CLAIMED, ethers.ZeroAddress, 0)
+          .withArgs(
+            ERR_FUNDS_CLAIMED,
+            ethers.ZeroAddress,
+            0,
+            await campaign.campaignId()
+          )
       })
 
       it('Should prevent creator from claiming funds when admin override is active', async function () {
@@ -1272,7 +1350,12 @@ describe('Campaign', function () {
 
         await expect(campaign.connect(creator1).claimFunds())
           .to.be.revertedWithCustomError(campaign, 'CampaignError')
-          .withArgs(ERR_ADMIN_OVERRIDE_ACTIVE, ethers.ZeroAddress, 0)
+          .withArgs(
+            ERR_ADMIN_OVERRIDE_ACTIVE,
+            ethers.ZeroAddress,
+            0,
+            await campaign.campaignId()
+          )
 
         expect(await campaign.hasClaimedFunds()).to.be.false
       })
@@ -1341,7 +1424,12 @@ describe('Campaign', function () {
 
         await expect(campaign.connect(creator1).claimFunds())
           .to.be.revertedWithCustomError(campaign, 'CampaignError')
-          .withArgs(ERR_CAMPAIGN_STILL_ACTIVE, ethers.ZeroAddress, 0)
+          .withArgs(
+            ERR_CAMPAIGN_STILL_ACTIVE,
+            ethers.ZeroAddress,
+            0,
+            await campaign.campaignId()
+          )
 
         expect(await campaign.hasClaimedFunds()).to.be.false
 
@@ -1433,7 +1521,11 @@ describe('Campaign', function () {
 
         await expect(campaign.connect(creator1).claimFunds())
           .to.emit(campaign, 'FundsClaimed')
-          .withArgs(await campaign.getAddress(), anyUint)
+          .withArgs(
+            await campaign.getAddress(),
+            anyUint,
+            await campaign.campaignId()
+          )
 
         expect(await campaign.hasClaimedFunds()).to.be.true
 
@@ -1466,7 +1558,12 @@ describe('Campaign', function () {
 
         await expect(campaign.connect(creator1).claimFunds())
           .to.be.revertedWithCustomError(campaign, 'CampaignError')
-          .withArgs(ERR_FUNDS_CLAIMED, ethers.ZeroAddress, 0)
+          .withArgs(
+            ERR_FUNDS_CLAIMED,
+            ethers.ZeroAddress,
+            0,
+            await campaign.campaignId()
+          )
       })
 
       it('Should allow owner to claim funds when campaign is unsuccessful and distribute funds correctly', async function () {
@@ -1536,7 +1633,11 @@ describe('Campaign', function () {
 
         await expect(campaign.connect(creator1).claimFunds())
           .to.emit(campaign, 'FundsClaimed')
-          .withArgs(await campaign.getAddress(), anyUint)
+          .withArgs(
+            await campaign.getAddress(),
+            anyUint,
+            await campaign.campaignId()
+          )
 
         expect(await campaign.hasClaimedFunds()).to.be.true
 
@@ -1575,7 +1676,12 @@ describe('Campaign', function () {
 
         await expect(campaign.connect(creator1).claimFunds())
           .to.be.revertedWithCustomError(campaign, 'CampaignError')
-          .withArgs(ERR_FUNDS_CLAIMED, ethers.ZeroAddress, 0)
+          .withArgs(
+            ERR_FUNDS_CLAIMED,
+            ethers.ZeroAddress,
+            0,
+            await campaign.campaignId()
+          )
       })
 
       it('Should allow platformAdmin to claim funds after grace period when campaign is successful before campaign end date', async function () {
@@ -1642,7 +1748,11 @@ describe('Campaign', function () {
 
         await expect(campaign.connect(deployer).claimFundsAdmin())
           .to.emit(campaign, 'FundsClaimed')
-          .withArgs(await campaign.getAddress(), anyUint)
+          .withArgs(
+            await campaign.getAddress(),
+            anyUint,
+            await campaign.campaignId()
+          )
 
         expect(await campaign.hasClaimedFunds()).to.be.true
 
@@ -1675,7 +1785,12 @@ describe('Campaign', function () {
 
         await expect(campaign.connect(deployer).claimFundsAdmin())
           .to.be.revertedWithCustomError(campaign, 'CampaignError')
-          .withArgs(ERR_FUNDS_CLAIMED, ethers.ZeroAddress, 0)
+          .withArgs(
+            ERR_FUNDS_CLAIMED,
+            ethers.ZeroAddress,
+            0,
+            await campaign.campaignId()
+          )
       })
 
       it('Should allow platformAdmin to claim funds when campaign is unsuccessful and distribute funds correctly', async function () {
@@ -1745,7 +1860,11 @@ describe('Campaign', function () {
 
         await expect(campaign.connect(deployer).claimFundsAdmin())
           .to.emit(campaign, 'FundsClaimed')
-          .withArgs(await campaign.getAddress(), anyUint)
+          .withArgs(
+            await campaign.getAddress(),
+            anyUint,
+            await campaign.campaignId()
+          )
 
         expect(await campaign.hasClaimedFunds()).to.be.true
 
@@ -1784,7 +1903,12 @@ describe('Campaign', function () {
 
         await expect(campaign.connect(deployer).claimFundsAdmin())
           .to.be.revertedWithCustomError(campaign, 'CampaignError')
-          .withArgs(ERR_FUNDS_CLAIMED, ethers.ZeroAddress, 0)
+          .withArgs(
+            ERR_FUNDS_CLAIMED,
+            ethers.ZeroAddress,
+            0,
+            await campaign.campaignId()
+          )
       })
 
       it('Should allow platformAdmin to claim funds when admin override is active', async function () {
@@ -1852,7 +1976,11 @@ describe('Campaign', function () {
 
         await expect(campaign.connect(deployer).claimFundsAdmin())
           .to.emit(campaign, 'FundsClaimed')
-          .withArgs(await campaign.getAddress(), anyUint)
+          .withArgs(
+            await campaign.getAddress(),
+            anyUint,
+            await campaign.campaignId()
+          )
 
         expect(await campaign.hasClaimedFunds()).to.be.true
 
@@ -1891,7 +2019,12 @@ describe('Campaign', function () {
 
         await expect(campaign.connect(deployer).claimFundsAdmin())
           .to.be.revertedWithCustomError(campaign, 'CampaignError')
-          .withArgs(ERR_FUNDS_CLAIMED, ethers.ZeroAddress, 0)
+          .withArgs(
+            ERR_FUNDS_CLAIMED,
+            ethers.ZeroAddress,
+            0,
+            await campaign.campaignId()
+          )
       })
 
       it('Should prevent creator from claiming funds when admin override is active', async function () {
@@ -1942,7 +2075,12 @@ describe('Campaign', function () {
 
         await expect(campaign.connect(creator1).claimFunds())
           .to.be.revertedWithCustomError(campaign, 'CampaignError')
-          .withArgs(ERR_ADMIN_OVERRIDE_ACTIVE, ethers.ZeroAddress, 0)
+          .withArgs(
+            ERR_ADMIN_OVERRIDE_ACTIVE,
+            ethers.ZeroAddress,
+            0,
+            await campaign.campaignId()
+          )
 
         expect(await campaign.hasClaimedFunds()).to.be.false
       })
@@ -2074,7 +2212,11 @@ describe('Campaign', function () {
 
         await expect(campaign.connect(contributor1).requestRefund())
           .to.emit(campaign, 'RefundIssued')
-          .withArgs(contributor1.address, contributionAmount1)
+          .withArgs(
+            contributor1.address,
+            contributionAmount1,
+            await campaign.campaignId()
+          )
 
         expect(await campaign.hasBeenRefunded(contributor1.address)).to.be.true
         expect(await campaign.contributions(contributor1.address)).to.equal(0)
@@ -2101,7 +2243,11 @@ describe('Campaign', function () {
 
         await expect(campaign.connect(contributor2).requestRefund())
           .to.emit(campaign, 'RefundIssued')
-          .withArgs(contributor2.address, contributionAmount2)
+          .withArgs(
+            contributor2.address,
+            contributionAmount2,
+            await campaign.campaignId()
+          )
 
         expect(await campaign.hasBeenRefunded(contributor2.address)).to.be.true
         expect(await campaign.contributions(contributor2.address)).to.equal(0)
@@ -2124,11 +2270,21 @@ describe('Campaign', function () {
 
         await expect(campaign.connect(contributor1).requestRefund())
           .to.be.revertedWithCustomError(campaign, 'CampaignError')
-          .withArgs(ERR_ALREADY_REFUNDED, contributor1.address, 0)
+          .withArgs(
+            ERR_ALREADY_REFUNDED,
+            contributor1.address,
+            0,
+            await campaign.campaignId()
+          )
 
         await expect(campaign.connect(contributor2).requestRefund())
           .to.be.revertedWithCustomError(campaign, 'CampaignError')
-          .withArgs(ERR_ALREADY_REFUNDED, contributor2.address, 0)
+          .withArgs(
+            ERR_ALREADY_REFUNDED,
+            contributor2.address,
+            0,
+            await campaign.campaignId()
+          )
       })
 
       it('Should revert when trying to request refund before funds have been claimed', async function () {
@@ -2164,7 +2320,12 @@ describe('Campaign', function () {
 
         await expect(campaign.connect(contributor1).requestRefund())
           .to.be.revertedWithCustomError(campaign, 'CampaignError')
-          .withArgs(ERR_FUNDS_NOT_CLAIMED, ethers.ZeroAddress, 0)
+          .withArgs(
+            ERR_FUNDS_NOT_CLAIMED,
+            ethers.ZeroAddress,
+            0,
+            await campaign.campaignId()
+          )
 
         expect(await campaign.hasBeenRefunded(contributor1.address)).to.be.false
         expect(await campaign.contributions(contributor1.address)).to.equal(
@@ -2173,7 +2334,12 @@ describe('Campaign', function () {
 
         await expect(campaign.connect(contributor2).requestRefund())
           .to.be.revertedWithCustomError(campaign, 'CampaignError')
-          .withArgs(ERR_FUNDS_NOT_CLAIMED, ethers.ZeroAddress, 0)
+          .withArgs(
+            ERR_FUNDS_NOT_CLAIMED,
+            ethers.ZeroAddress,
+            0,
+            await campaign.campaignId()
+          )
 
         expect(await campaign.hasBeenRefunded(contributor2.address)).to.be.false
         expect(await campaign.contributions(contributor2.address)).to.equal(
@@ -2232,7 +2398,11 @@ describe('Campaign', function () {
 
         await expect(campaign.connect(contributor1).requestRefund())
           .to.emit(campaign, 'RefundIssued')
-          .withArgs(contributor1.address, contributionAmount1)
+          .withArgs(
+            contributor1.address,
+            contributionAmount1,
+            await campaign.campaignId()
+          )
 
         expect(await campaign.hasBeenRefunded(contributor1.address)).to.be.true
         expect(await campaign.contributions(contributor1.address)).to.equal(0)
@@ -2259,7 +2429,12 @@ describe('Campaign', function () {
 
         await expect(campaign.connect(contributor2).requestRefund())
           .to.be.revertedWithCustomError(campaign, 'CampaignError')
-          .withArgs(ERR_NOTHING_TO_REFUND, contributor2.address, 0)
+          .withArgs(
+            ERR_NOTHING_TO_REFUND,
+            contributor2.address,
+            0,
+            await campaign.campaignId()
+          )
 
         expect(await campaign.hasBeenRefunded(contributor2.address)).to.be.false
         expect(await campaign.contributions(contributor2.address)).to.equal(0)
@@ -2315,7 +2490,12 @@ describe('Campaign', function () {
 
         await expect(campaign.connect(contributor1).requestRefund())
           .to.be.revertedWithCustomError(campaign, 'CampaignError')
-          .withArgs(ERR_GOAL_REACHED, ethers.ZeroAddress, totalAmountRaised)
+          .withArgs(
+            ERR_GOAL_REACHED,
+            ethers.ZeroAddress,
+            totalAmountRaised,
+            await campaign.campaignId()
+          )
 
         expect(await campaign.hasBeenRefunded(contributor1.address)).to.be.false
         expect(await campaign.contributions(contributor1.address)).to.equal(
@@ -2361,7 +2541,12 @@ describe('Campaign', function () {
 
         await expect(campaign.connect(contributor1).requestRefund())
           .to.be.revertedWithCustomError(campaign, 'CampaignError')
-          .withArgs(ERR_CAMPAIGN_STILL_ACTIVE, ethers.ZeroAddress, 0)
+          .withArgs(
+            ERR_CAMPAIGN_STILL_ACTIVE,
+            ethers.ZeroAddress,
+            0,
+            await campaign.campaignId()
+          )
 
         expect(await campaign.hasBeenRefunded(contributor1.address)).to.be.false
         expect(await campaign.contributions(contributor1.address)).to.equal(
@@ -2392,7 +2577,7 @@ describe('Campaign', function () {
 
       await expect(campaign.connect(deployer).setAdminOverride(true))
         .to.emit(campaign, 'AdminOverrideSet')
-        .withArgs(true, deployer.address)
+        .withArgs(true, deployer.address, await campaign.campaignId())
 
       // Campaign should now be inactive due to override
       expect(await campaign.isCampaignActive()).to.be.false
@@ -2400,7 +2585,7 @@ describe('Campaign', function () {
 
       await expect(campaign.connect(deployer).setAdminOverride(false))
         .to.emit(campaign, 'AdminOverrideSet')
-        .withArgs(false, deployer.address)
+        .withArgs(false, deployer.address, await campaign.campaignId())
 
       expect(await campaign.isCampaignActive()).to.be.true
       expect(await campaign.adminOverride()).to.be.false
@@ -2411,7 +2596,7 @@ describe('Campaign', function () {
 
       await expect(campaign.connect(otherAdmin).setAdminOverride(true))
         .to.emit(campaign, 'AdminOverrideSet')
-        .withArgs(true, otherAdmin.address)
+        .withArgs(true, otherAdmin.address, await campaign.campaignId())
 
       expect(await campaign.isCampaignActive()).to.be.false
       expect(await campaign.adminOverride()).to.be.true
@@ -2456,7 +2641,8 @@ describe('Campaign', function () {
         .withArgs(
           ERR_ADMIN_OVERRIDE_ACTIVE,
           ethers.getAddress(await usdc.getAddress()),
-          0
+          0,
+          await campaign.campaignId()
         )
 
       await campaign.connect(deployer).setAdminOverride(false)
@@ -2465,7 +2651,11 @@ describe('Campaign', function () {
         campaign.connect(contributor1).contribute(contributionAmount1)
       )
         .to.emit(campaign, 'Contribution')
-        .withArgs(contributor1.address, contributionAmount1)
+        .withArgs(
+          contributor1.address,
+          contributionAmount1,
+          await campaign.campaignId()
+        )
     })
   })
 

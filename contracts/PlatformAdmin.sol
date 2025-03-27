@@ -12,47 +12,18 @@ import "./interfaces/ICampaign.sol";
  * @dev Implements administrator access control for the platform
  */
 contract PlatformAdmin is Ownable, ReentrancyGuard {
-    // Operation types for consolidated events
-    /**
-     * @dev Constant defining admin addition operation type for events
-     */
+    //Operation codes
     uint8 private constant OP_ADMIN_ADDED = 1;
-
-    /**
-     * @dev Constant defining admin removal operation type for events
-     */
     uint8 private constant OP_ADMIN_REMOVED = 2;
 
-    // Error codes for consolidated errors
-    /**
-     * @dev Error code for unauthorized access
-     */
+    //Error codes
     uint8 private constant ERR_NOT_AUTHORIZED = 1;
-
-    /**
-     * @dev Error code for invalid address
-     */
     uint8 private constant ERR_INVALID_ADDRESS = 2;
-
-    /**
-     * @dev Error code for non-existent admin
-     */
     uint8 private constant ERR_ADMIN_NOT_EXISTS = 3;
-
-    /**
-     * @dev Error code for already existing admin
-     */
     uint8 private constant ERR_ADMIN_ALREADY_EXISTS = 4;
-
-    /**
-     * @dev Error code for attempts to remove the owner from admin role
-     */
     uint8 private constant ERR_CANT_REMOVE_OWNER = 5;
 
-    /**
-     * @notice Mapping of addresses to their admin status
-     * @dev True if address is a platform admin, false otherwise
-     */
+    //State variables
     mapping(address => bool) public platformAdmins;
 
     /**

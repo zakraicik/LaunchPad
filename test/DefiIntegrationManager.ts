@@ -19,6 +19,11 @@ describe('DefiIntegrationManager', function () {
   const ERR_INVALID_ADDRESS = 5
   const ERR_INVALID_CONSTRUCTOR = 6
   const ERR_WITHDRAWAL_DOESNT_BALANCE = 7
+
+  const mockCampaignId = ethers.keccak256(
+    ethers.toUtf8Bytes('mock-campaign-for-testing')
+  )
+
   describe('Deployment', function () {
     it('Should correctly deploy the defimanager', async function () {
       const {
@@ -155,7 +160,7 @@ describe('DefiIntegrationManager', function () {
         // Execute the deposit directly through the DefiIntegrationManager
         const depositTx = await defiIntegrationManager
           .connect(contributor1)
-          .depositToYieldProtocol(usdcAddress, depositAmount)
+          .depositToYieldProtocol(usdcAddress, depositAmount, mockCampaignId)
 
         const receipt = await depositTx.wait()
 
@@ -178,6 +183,7 @@ describe('DefiIntegrationManager', function () {
         expect(parsedEvent.args.sender).to.equal(contributor1.address)
         expect(parsedEvent.args.token).to.equal(ethers.getAddress(usdcAddress))
         expect(parsedEvent.args.amount).to.equal(depositAmount)
+        expect(parsedEvent.args.campaignId).to.equal(mockCampaignId)
 
         // Verify USDC was transferred from contributor to the manager
         const finalContributorBalance = await usdc.balanceOf(
@@ -214,10 +220,18 @@ describe('DefiIntegrationManager', function () {
         await expect(
           defiIntegrationManager
             .connect(contributor1)
-            .depositToYieldProtocol(usdcAddress, zeroAmount)
+            .depositToYieldProtocol(usdcAddress, zeroAmount, mockCampaignId)
         )
-          .to.be.revertedWithCustomError(defiIntegrationManager, 'DefiError')
-          .withArgs(ERR_ZERO_AMOUNT, ethers.getAddress(usdcAddress))
+          .to.be.revertedWithCustomError(
+            defiIntegrationManager,
+            'DeposittoYieldProtocolError'
+          )
+          .withArgs(
+            ERR_ZERO_AMOUNT,
+            ethers.getAddress(usdcAddress),
+            zeroAmount,
+            mockCampaignId
+          )
 
         expect(
           await defiIntegrationManager.aaveBalances(
@@ -241,10 +255,18 @@ describe('DefiIntegrationManager', function () {
         await expect(
           defiIntegrationManager
             .connect(contributor1)
-            .depositToYieldProtocol(wbtcAddress, amount)
+            .depositToYieldProtocol(wbtcAddress, amount, mockCampaignId)
         )
-          .to.be.revertedWithCustomError(defiIntegrationManager, 'DefiError')
-          .withArgs(ERR_TOKEN_NOT_SUPPORTED, ethers.getAddress(wbtcAddress))
+          .to.be.revertedWithCustomError(
+            defiIntegrationManager,
+            'DeposittoYieldProtocolError'
+          )
+          .withArgs(
+            ERR_TOKEN_NOT_SUPPORTED,
+            ethers.getAddress(wbtcAddress),
+            amount,
+            mockCampaignId
+          )
       })
 
       it('Should revert when Aave supply fails', async function () {})
@@ -280,7 +302,11 @@ describe('DefiIntegrationManager', function () {
         // First deposit
         const firstDepositTx = await defiIntegrationManager
           .connect(contributor1)
-          .depositToYieldProtocol(usdcAddress, firstDepositAmount)
+          .depositToYieldProtocol(
+            usdcAddress,
+            firstDepositAmount,
+            mockCampaignId
+          )
 
         const firstReceipt = await firstDepositTx.wait()
 
@@ -317,7 +343,11 @@ describe('DefiIntegrationManager', function () {
         // Second deposit
         const secondDepositTx = await defiIntegrationManager
           .connect(contributor1)
-          .depositToYieldProtocol(usdcAddress, secondDepositAmount)
+          .depositToYieldProtocol(
+            usdcAddress,
+            secondDepositAmount,
+            mockCampaignId
+          )
 
         const secondReceipt = await secondDepositTx.wait()
 
@@ -398,10 +428,18 @@ describe('DefiIntegrationManager', function () {
         await expect(
           defiIntegrationManager
             .connect(contributor1)
-            .depositToYieldProtocol(usdcAddress, depositAmount)
+            .depositToYieldProtocol(usdcAddress, depositAmount, mockCampaignId)
         )
-          .to.be.revertedWithCustomError(defiIntegrationManager, 'DefiError')
-          .withArgs(ERR_DEPOSIT_FAILED, ethers.getAddress(usdcAddress))
+          .to.be.revertedWithCustomError(
+            defiIntegrationManager,
+            'DeposittoYieldProtocolError'
+          )
+          .withArgs(
+            ERR_DEPOSIT_FAILED,
+            ethers.getAddress(usdcAddress),
+            depositAmount,
+            mockCampaignId
+          )
       })
 
       it('Should revert when trying to deposit zero amount', async function () {
@@ -415,12 +453,19 @@ describe('DefiIntegrationManager', function () {
         await expect(
           defiIntegrationManager
             .connect(contributor1)
-            .depositToYieldProtocol(usdcAddress, zeroAmount)
+            .depositToYieldProtocol(usdcAddress, zeroAmount, mockCampaignId)
         )
-          .to.be.revertedWithCustomError(defiIntegrationManager, 'DefiError')
-          .withArgs(ERR_ZERO_AMOUNT, ethers.getAddress(usdcAddress))
+          .to.be.revertedWithCustomError(
+            defiIntegrationManager,
+            'DeposittoYieldProtocolError'
+          )
+          .withArgs(
+            ERR_ZERO_AMOUNT,
+            ethers.getAddress(usdcAddress),
+            zeroAmount,
+            mockCampaignId
+          )
       })
-
       it('Should revert when trying to deposit an unsupported token', async function () {
         const { defiIntegrationManager, contributor1 } = await loadFixture(
           deployPlatformFixture
@@ -449,12 +494,21 @@ describe('DefiIntegrationManager', function () {
         await expect(
           defiIntegrationManager
             .connect(contributor1)
-            .depositToYieldProtocol(unsupportedTokenAddress, depositAmount)
+            .depositToYieldProtocol(
+              unsupportedTokenAddress,
+              depositAmount,
+              mockCampaignId
+            )
         )
-          .to.be.revertedWithCustomError(defiIntegrationManager, 'DefiError')
+          .to.be.revertedWithCustomError(
+            defiIntegrationManager,
+            'DeposittoYieldProtocolError'
+          )
           .withArgs(
             ERR_TOKEN_NOT_SUPPORTED,
-            ethers.getAddress(unsupportedTokenAddress)
+            ethers.getAddress(unsupportedTokenAddress),
+            depositAmount,
+            mockCampaignId
           )
       })
 
@@ -487,10 +541,22 @@ describe('DefiIntegrationManager', function () {
         await expect(
           defiIntegrationManager
             .connect(contributor1)
-            .depositToYieldProtocol(supportedTokenAddress, depositAmount)
+            .depositToYieldProtocol(
+              supportedTokenAddress,
+              depositAmount,
+              mockCampaignId
+            )
         )
-          .to.be.revertedWithCustomError(defiIntegrationManager, 'DefiError')
-          .withArgs(ERR_INVALID_ADDRESS, ethers.ZeroAddress)
+          .to.be.revertedWithCustomError(
+            defiIntegrationManager,
+            'DeposittoYieldProtocolError'
+          )
+          .withArgs(
+            ERR_INVALID_ADDRESS,
+            ethers.ZeroAddress,
+            depositAmount,
+            mockCampaignId
+          )
       })
     })
 
@@ -525,7 +591,7 @@ describe('DefiIntegrationManager', function () {
 
         await defiIntegrationManager
           .connect(contributor1)
-          .depositToYieldProtocol(usdcAddress, depositAmount)
+          .depositToYieldProtocol(usdcAddress, depositAmount, mockCampaignId)
 
         // Record balances before withdrawal
         const initialContributorBalance = await usdc.balanceOf(
@@ -558,16 +624,20 @@ describe('DefiIntegrationManager', function () {
         await expect(
           defiIntegrationManager
             .connect(contributor1)
-            .withdrawFromYieldProtocol(usdcAddress, true, depositAmount)
+            .withdrawFromYieldProtocol(
+              usdcAddress,
+              true,
+              depositAmount,
+              mockCampaignId
+            )
         )
           .to.emit(defiIntegrationManager, 'DefiOperation')
           .withArgs(
             OP_WITHDRAWN,
             contributor1.address,
             ethers.getAddress(usdcAddress),
-            ethers.ZeroAddress,
             contributorATokenBalance,
-            0
+            mockCampaignId
           )
 
         // Verify final balances
@@ -636,7 +706,7 @@ describe('DefiIntegrationManager', function () {
 
         await defiIntegrationManager
           .connect(contributor1)
-          .depositToYieldProtocol(usdcAddress, depositAmount)
+          .depositToYieldProtocol(usdcAddress, depositAmount, mockCampaignId)
 
         // Record balances before withdrawal
         const initialContributorBalance = await usdc.balanceOf(
@@ -672,16 +742,20 @@ describe('DefiIntegrationManager', function () {
         await expect(
           defiIntegrationManager
             .connect(contributor1)
-            .withdrawFromYieldProtocol(usdcAddress, false, creatorShare)
+            .withdrawFromYieldProtocol(
+              usdcAddress,
+              false,
+              creatorShare,
+              mockCampaignId
+            )
         )
           .to.emit(defiIntegrationManager, 'DefiOperation')
           .withArgs(
             OP_WITHDRAWN,
             contributor1.address,
             ethers.getAddress(usdcAddress),
-            ethers.ZeroAddress,
             contributorATokenBalance,
-            0
+            mockCampaignId
           )
 
         // Verify final balances
@@ -741,7 +815,7 @@ describe('DefiIntegrationManager', function () {
 
         await defiIntegrationManager
           .connect(contributor1)
-          .depositToYieldProtocol(usdcAddress, depositAmount)
+          .depositToYieldProtocol(usdcAddress, depositAmount, mockCampaignId)
 
         const contributorATokenBalance = await aToken.balanceOf(
           contributor1.address
@@ -750,10 +824,18 @@ describe('DefiIntegrationManager', function () {
         await expect(
           defiIntegrationManager
             .connect(contributor1)
-            .withdrawFromYieldProtocol(usdcAddress, true, 0)
+            .withdrawFromYieldProtocol(usdcAddress, true, 0, mockCampaignId)
         )
-          .to.be.revertedWithCustomError(defiIntegrationManager, 'DefiError')
-          .withArgs(ERR_WITHDRAWAL_FAILED, ethers.getAddress(usdcAddress))
+          .to.be.revertedWithCustomError(
+            defiIntegrationManager,
+            'WithdrawFromYieldProtocolError'
+          )
+          .withArgs(
+            ERR_WITHDRAWAL_FAILED,
+            ethers.getAddress(usdcAddress),
+            0,
+            mockCampaignId
+          )
 
         const depositBalance = await defiIntegrationManager.aaveBalances(
           usdcAddress,
@@ -800,7 +882,7 @@ describe('DefiIntegrationManager', function () {
 
         await defiIntegrationManager
           .connect(contributor1)
-          .depositToYieldProtocol(usdcAddress, depositAmount)
+          .depositToYieldProtocol(usdcAddress, depositAmount, mockCampaignId)
 
         // Configure mock aToken to have a balance for the defi manager
         await mockAToken.mint(
@@ -816,12 +898,19 @@ describe('DefiIntegrationManager', function () {
         await expect(
           defiIntegrationManager
             .connect(contributor1)
-            .withdrawFromYieldProtocol(usdcAddress, true, 0)
+            .withdrawFromYieldProtocol(usdcAddress, true, 0, mockCampaignId)
         )
-          .to.be.revertedWithCustomError(defiIntegrationManager, 'DefiError')
+          .to.be.revertedWithCustomError(
+            defiIntegrationManager,
+            'WithdrawFromYieldProtocolError'
+          )
           .withArgs(
             ERR_WITHDRAWAL_DOESNT_BALANCE,
-            ethers.getAddress(usdcAddress)
+            ethers.getAddress(usdcAddress),
+            await mockAToken.balanceOf(
+              await defiIntegrationManager.getAddress()
+            ),
+            mockCampaignId
           )
       })
 
@@ -862,7 +951,7 @@ describe('DefiIntegrationManager', function () {
 
         await defiIntegrationManager
           .connect(contributor1)
-          .depositToYieldProtocol(usdcAddress, depositAmount)
+          .depositToYieldProtocol(usdcAddress, depositAmount, mockCampaignId)
 
         // Configure mock aToken to have a balance for the defi manager
         await mockAToken.mint(
@@ -870,14 +959,26 @@ describe('DefiIntegrationManager', function () {
           depositAmount
         )
 
+        const aTokenBalance = await mockAToken.balanceOf(
+          await defiIntegrationManager.getAddress()
+        )
+
         // Now try to withdraw - should revert with the withdrawal failed error
         await expect(
           defiIntegrationManager
             .connect(contributor1)
-            .withdrawFromYieldProtocol(usdcAddress, true, 0)
+            .withdrawFromYieldProtocol(usdcAddress, true, 0, mockCampaignId)
         )
-          .to.be.revertedWithCustomError(defiIntegrationManager, 'DefiError')
-          .withArgs(ERR_WITHDRAWAL_FAILED, ethers.getAddress(usdcAddress))
+          .to.be.revertedWithCustomError(
+            defiIntegrationManager,
+            'WithdrawFromYieldProtocolError'
+          )
+          .withArgs(
+            ERR_WITHDRAWAL_FAILED,
+            ethers.getAddress(usdcAddress),
+            aTokenBalance,
+            mockCampaignId
+          )
       })
 
       it('Should handle zero aToken balance withdrawal attempt', async function () {
@@ -911,10 +1012,18 @@ describe('DefiIntegrationManager', function () {
         await expect(
           defiIntegrationManager
             .connect(contributor1)
-            .withdrawFromYieldProtocol(usdcAddress, true, 0)
+            .withdrawFromYieldProtocol(usdcAddress, true, 0, mockCampaignId)
         )
-          .to.be.revertedWithCustomError(defiIntegrationManager, 'DefiError')
-          .withArgs(ERR_WITHDRAWAL_FAILED, ethers.getAddress(usdcAddress))
+          .to.be.revertedWithCustomError(
+            defiIntegrationManager,
+            'WithdrawFromYieldProtocolError'
+          )
+          .withArgs(
+            ERR_WITHDRAWAL_FAILED,
+            ethers.getAddress(usdcAddress),
+            0,
+            mockCampaignId
+          )
       })
 
       it('Should handle coverRefunds greater than withdrawn amount', async function () {
@@ -953,7 +1062,7 @@ describe('DefiIntegrationManager', function () {
 
         await defiIntegrationManager
           .connect(contributor1)
-          .depositToYieldProtocol(usdcAddress, depositAmount)
+          .depositToYieldProtocol(usdcAddress, depositAmount, mockCampaignId)
 
         // Configure mock aToken to have a balance for the defi manager
         await mockAToken.mint(
@@ -969,7 +1078,12 @@ describe('DefiIntegrationManager', function () {
         await expect(
           defiIntegrationManager
             .connect(contributor1)
-            .withdrawFromYieldProtocol(usdcAddress, false, excessiveRefunds)
+            .withdrawFromYieldProtocol(
+              usdcAddress,
+              false,
+              excessiveRefunds,
+              mockCampaignId
+            )
         ).to.be.reverted // Should revert with arithmetic underflow
       })
     })

@@ -18,8 +18,7 @@ import "./libraries/FactoryLibrary.sol";
  * @title Campaign
  * @author Generated with assistance from an LLM
  * @notice Smart contract for managing crowdfunding campaigns with DeFi yield generation
- * @dev Implements core crowdfunding functionality including contributions, refunds, and fund claiming
- * with integrated DeFi yield generation through Aave
+ * @dev Implements crowdfunding with contributions, refunds, fund claiming and DeFi yield via Aave
  */
 contract Campaign is
     Ownable,
@@ -32,222 +31,141 @@ contract Campaign is
     using TokenOperations for *;
     using FactoryLibrary for *;
 
-    // Operation types for FundsOperation event
-    /**
-     * @dev Constant defining deposit operation type for events
-     */
+    // Status and operation constants (packed into single bytes)
+    uint8 private constant STATUS_ACTIVE = 1;
+    uint8 private constant STATUS_COMPLETE = 2;
+    uint8 private constant REASON_GOAL_REACHED = 1;
+    uint8 private constant REASON_DEADLINE_PASSED = 2;
     uint8 private constant OP_DEPOSIT = 1;
-
-    /**
-     * @dev Constant defining claim funds operation type for events
-     */
     uint8 private constant OP_CLAIM_FUNDS = 2;
 
-    // Error codes - more specific but still compact
-    /**
-     * @dev Error code for invalid address
-     */
+    // Error codes
     uint8 private constant ERR_INVALID_ADDRESS = 1;
-
-    /**
-     * @dev Error code for invalid amount
-     */
     uint8 private constant ERR_INVALID_AMOUNT = 2;
-
-    /**
-     * @dev Error code for ETH not being accepted
-     */
     uint8 private constant ERR_ETH_NOT_ACCEPTED = 3;
-
-    /**
-     * @dev Error code for campaign still being active
-     */
     uint8 private constant ERR_CAMPAIGN_STILL_ACTIVE = 4;
-
-    /**
-     * @dev Error code for campaign being past end date
-     */
     uint8 private constant ERR_CAMPAIGN_PAST_END_DATE = 5;
-
-    /**
-     * @dev Error code for campaign goal already reached
-     */
     uint8 private constant ERR_GOAL_REACHED = 6;
-
-    /**
-     * @dev Error code for admin override being active
-     */
     uint8 private constant ERR_ADMIN_OVERRIDE_ACTIVE = 7;
-
-    /**
-     * @dev Error code for funds already claimed
-     */
     uint8 private constant ERR_FUNDS_CLAIMED = 8;
-
-    /**
-     * @dev Error code for funds not yet claimed
-     */
     uint8 private constant ERR_FUNDS_NOT_CLAIMED = 9;
-
-    /**
-     * @dev Error code for nothing available to withdraw
-     */
     uint8 private constant ERR_NOTHING_TO_WITHDRAW = 10;
-
-    /**
-     * @dev Error code for contributor already refunded
-     */
     uint8 private constant ERR_ALREADY_REFUNDED = 11;
-
-    /**
-     * @dev Error code for nothing available to refund
-     */
     uint8 private constant ERR_NOTHING_TO_REFUND = 12;
-
-    /**
-     * @dev Error code for campaign constructor validation failure
-     */
     uint8 private constant ERR_CAMPAIGN_CONSTRUCTOR_VALIDATION_FAILED = 13;
 
-    /**
-     * @notice Reference to the DeFi integration manager for yield generation
-     * @dev Immutable reference to the DeFi integration manager contract
-     */
+    // State variables - packed for gas efficiency
     IDefiIntegrationManager public immutable defiManager;
-
-    /**
-     * @notice Reference to the token registry for token validation
-     * @dev Immutable reference to the token registry contract
-     */
     ITokenRegistry public immutable tokenRegistry;
-
-    /**
-     * @notice Address of the token used for this campaign
-     * @dev Immutable address of the campaign's contribution token
-     */
     address public immutable campaignToken;
-
-    /**
-     * @notice Unique identifier for this campaign
-     * @dev Immutable hash generated from campaign parameters at creation
-     */
     bytes32 public immutable campaignId;
-
-    /**
-     * @notice The target funding goal for this campaign
-     * @dev Immutable goal amount in campaign tokens
-     */
     uint256 public immutable campaignGoalAmount;
-
-    /**
-     * @notice Total amount raised by the campaign so far
-     * @dev Running total of contributions in campaign tokens
-     */
     uint256 public totalAmountRaised;
-
-    /**
-     * @notice Timestamp when the campaign started
-     * @dev Immutable start time set at contract creation
-     */
     uint64 public immutable campaignStartTime;
-
-    /**
-     * @notice Timestamp when the campaign will end
-     * @dev Immutable end time calculated from start time and duration
-     */
     uint64 public immutable campaignEndTime;
-
-    /**
-     * @notice Duration of the campaign in days
-     * @dev Immutable duration set at contract creation
-     */
     uint64 public immutable campaignDuration;
-
-    /**
-     * @notice Flag indicating if funds have been claimed
-     * @dev Set to true once funds are successfully claimed
-     */
-    bool public hasClaimedFunds;
-
-    /**
-     * @notice Count of unique contributors to the campaign
-     * @dev Incremented when a new contributor makes their first contribution
-     */
     uint32 public contributorsCount;
-
-    /**
-     * @notice Maps contributor addresses to their contribution amounts
-     * @dev Records total contribution amount per contributor
-     */
-    mapping(address => uint256) public contributions;
-
-    /**
-     * @notice Maps contributor addresses to their refund status
-     * @dev True if contributor has been refunded, false otherwise
-     */
-    mapping(address => bool) public hasBeenRefunded;
-
-    /**
-     * @notice Maps addresses to their contributor status
-     * @dev True if address has contributed to the campaign, false otherwise
-     */
-    mapping(address => bool) public isContributor;
-
-    /**
-     * @notice Flag for administrative override of campaign status
-     * @dev When true, allows admins to bypass normal campaign flow restrictions
-     */
+    uint8 public campaignStatus = STATUS_ACTIVE;
+    bool public hasClaimedFunds;
     bool public adminOverride;
 
+    // Maps (stored separately in storage)
+    mapping(address => uint256) public contributions;
+    mapping(address => bool) public hasBeenRefunded;
+    mapping(address => bool) public isContributor;
+
+    // Events
     /**
      * @notice Emitted when a contribution is made to the campaign
      * @param contributor Address of the contributor
      * @param amount Amount contributed
+     * @param campaignId Campaign identifier
      */
-    event Contribution(address indexed contributor, uint256 amount);
+    event Contribution(
+        address indexed contributor,
+        uint256 amount,
+        bytes32 indexed campaignId
+    );
 
     /**
-     * @notice Emitted when a refund is issued to a contributor
-     * @param contributor Address of the contributor receiving refund
+     * @notice Emitted when a refund is issued
+     * @param contributor Contributor receiving refund
      * @param amount Amount refunded
+     * @param campaignId Campaign identifier
      */
-    event RefundIssued(address indexed contributor, uint256 amount);
+    event RefundIssued(
+        address indexed contributor,
+        uint256 amount,
+        bytes32 indexed campaignId
+    );
 
     /**
      * @notice Emitted when campaign funds are claimed
-     * @param initiator Address that initiated the funds claim
-     * @param amount Amount of funds claimed
+     * @param initiator Claimer address
+     * @param amount Amount claimed
+     * @param campaignId Campaign identifier
      */
-    event FundsClaimed(address indexed initiator, uint256 amount);
+    event FundsClaimed(
+        address indexed initiator,
+        uint256 amount,
+        bytes32 indexed campaignId
+    );
 
     /**
-     * @notice Emitted when admin override status is changed
+     * @notice Emitted when admin override status changes
      * @param status New override status
-     * @param admin Address of admin who made the change
+     * @param admin Admin who made the change
+     * @param campaignId Campaign identifier
      */
-    event AdminOverrideSet(bool indexed status, address indexed admin);
+    event AdminOverrideSet(
+        bool indexed status,
+        address indexed admin,
+        bytes32 indexed campaignId
+    );
 
     /**
-     * @notice Emitted for fund operations with details
-     * @param token Address of the token involved
-     * @param amount Amount of tokens involved
-     * @param opType Type of operation (1 = deposit, 2 = claim funds)
-     * @param initiator Address that initiated the operation
+     * @notice Emitted for token operations
+     * @param token Token address
+     * @param amount Amount involved
+     * @param opType Operation type (1=deposit, 2=claim)
+     * @param initiator Operation initiator
+     * @param campaignId Campaign identifier
      */
     event FundsOperation(
         address indexed token,
         uint256 amount,
         uint8 opType,
-        address initiator
+        address initiator,
+        bytes32 indexed campaignId
     );
 
     /**
-     * @notice Thrown when a campaign operation fails
-     * @param code Error code identifying the failure reason
-     * @param addr Related address (if applicable)
-     * @param value Related value (if applicable)
+     * @notice Emitted when campaign status changes
+     * @param oldStatus Previous status
+     * @param newStatus New status
+     * @param reason Reason code (1=goal reached, 2=deadline passed)
+     * @param campaignId Campaign identifier
      */
-    error CampaignError(uint8 code, address addr, uint256 value);
+    event CampaignStatusChanged(
+        uint8 oldStatus,
+        uint8 newStatus,
+        uint8 reason,
+        bytes32 indexed campaignId
+    );
+
+    /**
+     * @notice Campaign operation error
+     * @param code Error code
+     * @param addr Related address
+     * @param value Related value
+     * @param campaignId Campaign identifier
+     */
+    error CampaignError(
+        uint8 code,
+        address addr,
+        uint256 value,
+        bytes32 campaignId
+    );
 
     /**
      * @notice Creates a new campaign
@@ -267,11 +185,34 @@ contract Campaign is
         address _defiManager,
         address _platformAdmin
     ) Ownable(_owner) PlatformAdminAccessControl(_platformAdmin) {
+        campaignStartTime = uint64(block.timestamp);
+
+        campaignId = keccak256(
+            abi.encodePacked(
+                _owner,
+                _campaignToken,
+                _campaignGoalAmount,
+                _campaignDuration,
+                campaignStartTime,
+                block.number
+            )
+        );
+
         if (_defiManager == address(0))
-            revert CampaignError(ERR_INVALID_ADDRESS, _defiManager, 0);
+            revert CampaignError(
+                ERR_INVALID_ADDRESS,
+                _defiManager,
+                0,
+                campaignId
+            );
 
         if (_platformAdmin == address(0))
-            revert CampaignError(ERR_INVALID_ADDRESS, _platformAdmin, 0);
+            revert CampaignError(
+                ERR_INVALID_ADDRESS,
+                _platformAdmin,
+                0,
+                campaignId
+            );
 
         defiManager = IDefiIntegrationManager(_defiManager);
         tokenRegistry = ITokenRegistry(defiManager.tokenRegistry());
@@ -292,7 +233,8 @@ contract Campaign is
             revert CampaignError(
                 ERR_CAMPAIGN_CONSTRUCTOR_VALIDATION_FAILED,
                 address(0),
-                0
+                0,
+                campaignId
             );
         }
 
@@ -300,20 +242,8 @@ contract Campaign is
         campaignGoalAmount = _campaignGoalAmount;
         campaignDuration = uint64(_campaignDuration);
 
-        campaignStartTime = uint64(block.timestamp);
         campaignEndTime = uint64(
             campaignStartTime + (_campaignDuration * 1 days)
-        );
-
-        campaignId = keccak256(
-            abi.encodePacked(
-                _owner,
-                _campaignToken,
-                _campaignGoalAmount,
-                _campaignDuration,
-                campaignStartTime,
-                block.number
-            )
         );
     }
 
@@ -321,7 +251,7 @@ contract Campaign is
      * @dev Fallback function to reject ETH transfers
      */
     receive() external payable {
-        revert CampaignError(ERR_ETH_NOT_ACCEPTED, address(0), 0);
+        revert CampaignError(ERR_ETH_NOT_ACCEPTED, address(0), 0, campaignId);
     }
 
     /**
@@ -330,31 +260,56 @@ contract Campaign is
      * @param amount Amount to contribute in campaign tokens
      */
     function contribute(uint256 amount) external nonReentrant whenNotPaused {
+        checkAndUpdateStatus();
+
         if (adminOverride)
-            revert CampaignError(ERR_ADMIN_OVERRIDE_ACTIVE, campaignToken, 0);
+            revert CampaignError(
+                ERR_ADMIN_OVERRIDE_ACTIVE,
+                campaignToken,
+                0,
+                campaignId
+            );
         if (amount == 0)
-            revert CampaignError(ERR_INVALID_AMOUNT, campaignToken, amount);
+            revert CampaignError(
+                ERR_INVALID_AMOUNT,
+                campaignToken,
+                amount,
+                campaignId
+            );
 
         if (!isCampaignActive())
-            revert CampaignError(ERR_CAMPAIGN_PAST_END_DATE, campaignToken, 0);
+            revert CampaignError(
+                ERR_CAMPAIGN_PAST_END_DATE,
+                campaignToken,
+                0,
+                campaignId
+            );
 
         if (isCampaignSuccessful())
             revert CampaignError(
                 ERR_GOAL_REACHED,
                 address(0),
-                totalAmountRaised
+                totalAmountRaised,
+                campaignId
             );
 
         (uint256 minAmount, ) = tokenRegistry.getMinContributionAmount(
             campaignToken
         );
         if (amount < minAmount)
-            revert CampaignError(ERR_INVALID_AMOUNT, campaignToken, amount);
+            revert CampaignError(
+                ERR_INVALID_AMOUNT,
+                campaignToken,
+                amount,
+                campaignId
+            );
 
         if (!isContributor[msg.sender]) {
             contributorsCount++;
             isContributor[msg.sender] = true;
         }
+
+        bool wasSuccessfulBefore = isCampaignSuccessful();
 
         contributions[msg.sender] += amount;
         totalAmountRaised += amount;
@@ -373,11 +328,31 @@ contract Campaign is
             amount
         );
 
-        defiManager.depositToYieldProtocol(campaignToken, amount);
+        defiManager.depositToYieldProtocol(campaignToken, amount, campaignId);
 
         // Emit events last
-        emit Contribution(msg.sender, amount);
-        emit FundsOperation(campaignToken, amount, OP_DEPOSIT, msg.sender);
+        emit Contribution(msg.sender, amount, campaignId);
+        emit FundsOperation(
+            campaignToken,
+            amount,
+            OP_DEPOSIT,
+            msg.sender,
+            campaignId
+        );
+
+        if (
+            !wasSuccessfulBefore &&
+            isCampaignSuccessful() &&
+            campaignStatus == STATUS_ACTIVE
+        ) {
+            campaignStatus = STATUS_COMPLETE;
+            emit CampaignStatusChanged(
+                STATUS_ACTIVE,
+                STATUS_COMPLETE,
+                REASON_GOAL_REACHED,
+                campaignId
+            );
+        }
     }
 
     /**
@@ -385,31 +360,54 @@ contract Campaign is
      * @dev Transfers tokens back to contributor if eligible for refund
      */
     function requestRefund() external nonReentrant whenNotPaused {
+        checkAndUpdateStatus();
+
         if (isCampaignSuccessful())
             revert CampaignError(
                 ERR_GOAL_REACHED,
                 address(0),
-                totalAmountRaised
+                totalAmountRaised,
+                campaignId
             );
 
         if (isCampaignActive())
-            revert CampaignError(ERR_CAMPAIGN_STILL_ACTIVE, address(0), 0);
+            revert CampaignError(
+                ERR_CAMPAIGN_STILL_ACTIVE,
+                address(0),
+                0,
+                campaignId
+            );
 
         if (!hasClaimedFunds) {
-            revert CampaignError(ERR_FUNDS_NOT_CLAIMED, address(0), 0);
+            revert CampaignError(
+                ERR_FUNDS_NOT_CLAIMED,
+                address(0),
+                0,
+                campaignId
+            );
         }
         if (hasBeenRefunded[msg.sender])
-            revert CampaignError(ERR_ALREADY_REFUNDED, msg.sender, 0);
+            revert CampaignError(
+                ERR_ALREADY_REFUNDED,
+                msg.sender,
+                0,
+                campaignId
+            );
 
         uint256 refundAmount = contributions[msg.sender];
         if (refundAmount == 0)
-            revert CampaignError(ERR_NOTHING_TO_REFUND, msg.sender, 0);
+            revert CampaignError(
+                ERR_NOTHING_TO_REFUND,
+                msg.sender,
+                0,
+                campaignId
+            );
 
         hasBeenRefunded[msg.sender] = true;
         contributions[msg.sender] = 0;
 
         TokenOperations.safeTransfer(campaignToken, msg.sender, refundAmount);
-        emit RefundIssued(msg.sender, refundAmount);
+        emit RefundIssued(msg.sender, refundAmount, campaignId);
     }
 
     /**
@@ -418,7 +416,12 @@ contract Campaign is
      */
     function claimFunds() external onlyOwner nonReentrant whenNotPaused {
         if (adminOverride)
-            revert CampaignError(ERR_ADMIN_OVERRIDE_ACTIVE, address(0), 0);
+            revert CampaignError(
+                ERR_ADMIN_OVERRIDE_ACTIVE,
+                address(0),
+                0,
+                campaignId
+            );
         _claimFunds();
     }
 
@@ -440,17 +443,29 @@ contract Campaign is
      * @dev Withdraws funds from yield protocol and handles distribution based on campaign success
      */
     function _claimFunds() internal {
+        checkAndUpdateStatus();
+
         if (!adminOverride) {
             if (isCampaignActive() && !isCampaignSuccessful())
-                revert CampaignError(ERR_CAMPAIGN_STILL_ACTIVE, address(0), 0);
+                revert CampaignError(
+                    ERR_CAMPAIGN_STILL_ACTIVE,
+                    address(0),
+                    0,
+                    campaignId
+                );
         }
 
         if (hasClaimedFunds)
-            revert CampaignError(ERR_FUNDS_CLAIMED, address(0), 0);
+            revert CampaignError(ERR_FUNDS_CLAIMED, address(0), 0, campaignId);
 
         address aTokenAddress = defiManager.getATokenAddress(campaignToken);
         if (aTokenAddress == address(0)) {
-            revert CampaignError(ERR_INVALID_ADDRESS, aTokenAddress, 0);
+            revert CampaignError(
+                ERR_INVALID_ADDRESS,
+                aTokenAddress,
+                0,
+                campaignId
+            );
         }
 
         IERC20 aToken = IERC20(aTokenAddress);
@@ -458,7 +473,12 @@ contract Campaign is
         uint256 aTokenBalance = aToken.balanceOf(address(this));
 
         if (aTokenBalance == 0) {
-            revert CampaignError(ERR_NOTHING_TO_WITHDRAW, address(0), 0);
+            revert CampaignError(
+                ERR_NOTHING_TO_WITHDRAW,
+                address(0),
+                0,
+                campaignId
+            );
         }
 
         hasClaimedFunds = true;
@@ -468,7 +488,8 @@ contract Campaign is
         uint256 withdrawn = defiManager.withdrawFromYieldProtocol(
             campaignToken,
             isCampaignSuccessful(),
-            totalAmountRaised
+            totalAmountRaised,
+            campaignId
         );
 
         if (isCampaignSuccessful()) {
@@ -483,10 +504,11 @@ contract Campaign is
             campaignToken,
             withdrawn,
             OP_CLAIM_FUNDS,
-            msg.sender
+            msg.sender,
+            campaignId
         );
 
-        emit FundsClaimed(address(this), withdrawn);
+        emit FundsClaimed(address(this), withdrawn, campaignId);
     }
 
     /**
@@ -496,7 +518,7 @@ contract Campaign is
      */
     function setAdminOverride(bool _adminOverride) external onlyPlatformAdmin {
         adminOverride = _adminOverride;
-        emit AdminOverrideSet(_adminOverride, msg.sender);
+        emit AdminOverrideSet(_adminOverride, msg.sender, campaignId);
     }
 
     /**
@@ -543,5 +565,29 @@ contract Campaign is
      */
     function getCampaignTokenBalance() public view returns (uint256) {
         return IERC20(campaignToken).balanceOf(address(this));
+    }
+
+    /**
+     * @notice Checks and updates the campaign status if deadline has passed
+     * @dev Can be called by anyone to update campaign status to complete if deadline passed
+     * @return Current campaign status after potential update
+     */
+    function checkAndUpdateStatus() public returns (uint8) {
+        // If already complete, just return status
+        if (campaignStatus == STATUS_COMPLETE) {
+            return campaignStatus;
+        }
+
+        if (!isCampaignActive() && !isCampaignSuccessful()) {
+            campaignStatus = STATUS_COMPLETE;
+            emit CampaignStatusChanged(
+                STATUS_ACTIVE,
+                STATUS_COMPLETE,
+                REASON_DEADLINE_PASSED,
+                campaignId
+            );
+        }
+
+        return campaignStatus;
     }
 }

@@ -10,10 +10,6 @@ import "../interfaces/IPlatformAdmin.sol";
  * @notice Implements a mechanism to restrict function access to platform administrators only
  */
 abstract contract PlatformAdminAccessControl {
-    /**
-     * @notice Reference to the platform admin contract that maintains the list of authorized admins
-     * @dev Immutable variable that cannot be changed after deployment
-     */
     IPlatformAdmin public immutable platformAdmin;
 
     /**

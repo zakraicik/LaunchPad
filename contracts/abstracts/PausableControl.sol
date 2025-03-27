@@ -14,9 +14,8 @@ import "./PlatformAdminAccessControl.sol";
  * from OpenZeppelin's Pausable or can call _beforeOperation() directly.
  */
 abstract contract PausableControl is Pausable, PlatformAdminAccessControl {
-    /// @dev Operation type for when the contract is paused
+    //Operation codes
     uint8 private constant OP_PAUSED = 1;
-    /// @dev Operation type for when the contract is unpaused
     uint8 private constant OP_UNPAUSED = 2;
 
     /**

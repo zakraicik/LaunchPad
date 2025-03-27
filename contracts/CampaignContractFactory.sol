@@ -22,26 +22,11 @@ contract CampaignContractFactory is
     // Use the library
     using FactoryLibrary for *;
 
-    // Operation and error codes for more compact representation
-    /**
-     * @dev Constant defining campaign creation operation type for events
-     */
+    //Operation and error codes
     uint8 private constant OP_CAMPAIGN_CREATED = 1;
-
-    /**
-     * @dev Error code for campaign constructor validation failure
-     */
     uint8 private constant ERR_CAMPAIGN_CONSTRUCTOR_VALIDATION_FAILED = 1;
-
-    /**
-     * @dev Error code for invalid address
-     */
     uint8 private constant ERR_INVALID_ADDRESS = 2;
 
-    /**
-     * @notice Reference to the DeFi integration manager
-     * @dev Immutable reference to the DeFi integration manager contract used by campaigns
-     */
     IDefiIntegrationManager public immutable defiManager;
 
     /**
@@ -98,10 +83,8 @@ contract CampaignContractFactory is
         uint256 _campaignGoalAmount,
         uint32 _campaignDuration
     ) external whenNotPaused returns (address) {
-        // Use the library to validate parameters
         ITokenRegistry tokenRegistry = defiManager.tokenRegistry();
 
-        // We need to create a local function reference to pass to the library
         function(address)
             external
             view
@@ -122,7 +105,6 @@ contract CampaignContractFactory is
             );
         }
 
-        // Create new campaign
         Campaign newCampaign = new Campaign(
             msg.sender,
             _campaignToken,
@@ -132,10 +114,8 @@ contract CampaignContractFactory is
             address(platformAdmin)
         );
 
-        // Store campaign information
         address campaignAddress = address(newCampaign);
 
-        // Emit event with operation type
         bytes32 campaignId = newCampaign.campaignId();
         emit FactoryOperation(
             OP_CAMPAIGN_CREATED,
