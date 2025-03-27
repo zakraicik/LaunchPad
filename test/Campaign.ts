@@ -11,6 +11,10 @@ import {
 } from '@nomicfoundation/hardhat-chai-matchers/withArgs'
 
 describe('Campaign', function () {
+  const STATUS_ACTIVE = 1
+  const STATUS_COMPLETE = 2
+  const REASON_GOAL_REACHED = 1
+  const REASON_DEADLINE_PASSED = 2
   const OP_DEPOSIT = 1
   const OP_CLAIM_FUNDS = 2
 
@@ -2771,6 +2775,157 @@ describe('Campaign', function () {
       expect(finalBalance).to.be.closeTo(0n, 5n)
 
       // For unsuccessful campaign we could test differently, but that would require a different fixture setup
+    })
+  })
+
+  describe('Campaign Status Changes', function () {
+    it('Should emit status change event when campaign becomes successful', async function () {
+      const { campaign, usdc, contributor1 } = await loadFixture(
+        deployPlatformFixture
+      )
+      const usdcDecimals = await usdc.decimals()
+
+      // Make a contribution that meets the goal
+      const contributionAmount = await campaign.campaignGoalAmount()
+      await usdc
+        .connect(contributor1)
+        .approve(await campaign.getAddress(), contributionAmount)
+
+      // The contribution should trigger a status change event
+      await expect(
+        campaign.connect(contributor1).contribute(contributionAmount)
+      )
+        .to.emit(campaign, 'CampaignStatusChanged')
+        .withArgs(
+          STATUS_ACTIVE, // oldStatus
+          STATUS_COMPLETE, // newStatus
+          REASON_GOAL_REACHED, // reason
+          await campaign.campaignId() // campaignId
+        )
+
+      // Status should be updated
+      expect(await campaign.campaignStatus()).to.equal(STATUS_COMPLETE)
+    })
+
+    it('Should emit status change event when campaign deadline passes without reaching goal', async function () {
+      const { campaign, usdc, contributor1 } = await loadFixture(
+        deployPlatformFixture
+      )
+      const usdcDecimals = await usdc.decimals()
+
+      // Make a contribution below the goal
+      const contributionAmount = (await campaign.campaignGoalAmount()) / 2n
+      await usdc
+        .connect(contributor1)
+        .approve(await campaign.getAddress(), contributionAmount)
+
+      await campaign.connect(contributor1).contribute(contributionAmount)
+
+      // Fast forward past the campaign end date
+      await ethers.provider.send('evm_increaseTime', [
+        CAMPAIGN_DURATION * 24 * 60 * 60
+      ])
+      await ethers.provider.send('evm_mine')
+
+      // Calling checkAndUpdateStatus directly should emit the event
+      await expect(campaign.checkAndUpdateStatus())
+        .to.emit(campaign, 'CampaignStatusChanged')
+        .withArgs(
+          STATUS_ACTIVE, // oldStatus
+          STATUS_COMPLETE, // newStatus
+          REASON_DEADLINE_PASSED, // reason
+          await campaign.campaignId() // campaignId
+        )
+
+      // Status should be updated
+      expect(await campaign.campaignStatus()).to.equal(STATUS_COMPLETE)
+    })
+
+    it('Should update status when calling other functions after deadline', async function () {
+      const { campaign, usdc, contributor1, creator1 } = await loadFixture(
+        deployPlatformFixture
+      )
+      const usdcDecimals = await usdc.decimals()
+
+      // Make a contribution below the goal
+      const contributionAmount = (await campaign.campaignGoalAmount()) / 2n
+      await usdc
+        .connect(contributor1)
+        .approve(await campaign.getAddress(), contributionAmount)
+
+      await campaign.connect(contributor1).contribute(contributionAmount)
+
+      // Fast forward past the campaign end date
+      await ethers.provider.send('evm_increaseTime', [
+        CAMPAIGN_DURATION * 24 * 60 * 60
+      ])
+      await ethers.provider.send('evm_mine')
+
+      // Status should update when claiming funds
+      await expect(campaign.connect(creator1).claimFunds())
+        .to.emit(campaign, 'CampaignStatusChanged')
+        .withArgs(
+          STATUS_ACTIVE, // oldStatus
+          STATUS_COMPLETE, // newStatus
+          REASON_DEADLINE_PASSED, // reason
+          await campaign.campaignId() // campaignId
+        )
+
+      // Status should be updated
+      expect(await campaign.campaignStatus()).to.equal(STATUS_COMPLETE)
+    })
+
+    it('Should not emit status change event when status is already complete', async function () {
+      const { campaign, usdc, contributor1 } = await loadFixture(
+        deployPlatformFixture
+      )
+      const usdcDecimals = await usdc.decimals()
+
+      // Make a contribution that meets the goal
+      const contributionAmount = await campaign.campaignGoalAmount()
+      await usdc
+        .connect(contributor1)
+        .approve(await campaign.getAddress(), contributionAmount)
+
+      // The first contribution should trigger a status change event
+      await campaign.connect(contributor1).contribute(contributionAmount)
+
+      // Status should be updated to complete
+      expect(await campaign.campaignStatus()).to.equal(STATUS_COMPLETE)
+
+      // Call checkAndUpdateStatus again - should not emit event
+      await expect(campaign.checkAndUpdateStatus()).to.not.emit(
+        campaign,
+        'CampaignStatusChanged'
+      )
+    })
+
+    it('Should update interface methods based on campaign status', async function () {
+      const { campaign, usdc, contributor1 } = await loadFixture(
+        deployPlatformFixture
+      )
+
+      // Initially active
+      expect(await campaign.campaignStatus()).to.equal(STATUS_ACTIVE)
+      expect(await campaign.isCampaignActive()).to.be.true
+
+      // After deadline passes
+      await ethers.provider.send('evm_increaseTime', [
+        CAMPAIGN_DURATION * 24 * 60 * 60
+      ])
+      await ethers.provider.send('evm_mine')
+
+      // Campaign is not active based on time
+      expect(await campaign.isCampaignActive()).to.be.false
+
+      // But status hasn't been updated automatically yet
+      expect(await campaign.campaignStatus()).to.equal(STATUS_ACTIVE)
+
+      // Update status
+      await campaign.checkAndUpdateStatus()
+
+      // Status should be updated
+      expect(await campaign.campaignStatus()).to.equal(STATUS_COMPLETE)
     })
   })
 })
