@@ -12,6 +12,7 @@ import "./abstracts/PlatformAdminAccessControl.sol";
 import "./abstracts/PausableControl.sol";
 import "./libraries/CampaignLibrary.sol";
 import "./libraries/TokenOperationsLibrary.sol";
+import "./libraries/FactoryLibrary.sol";
 
 contract Campaign is
     Ownable,
@@ -22,6 +23,7 @@ contract Campaign is
     using SafeERC20 for IERC20;
     using CampaignLibrary for *;
     using TokenOperations for *;
+    using FactoryLibrary for *;
 
     // Operation types for FundsOperation event
     uint8 private constant OP_DEPOSIT = 1;
@@ -30,21 +32,17 @@ contract Campaign is
     // Error codes - more specific but still compact
     uint8 private constant ERR_INVALID_ADDRESS = 1;
     uint8 private constant ERR_INVALID_AMOUNT = 2;
-    uint8 private constant ERR_INVALID_GOAL = 3;
-    uint8 private constant ERR_INVALID_DURATION = 4;
-    uint8 private constant ERR_ETH_NOT_ACCEPTED = 5;
-    uint8 private constant ERR_TOKEN_NOT_SUPPORTED = 6;
-    uint8 private constant ERR_NOT_TARGET_TOKEN = 7;
-    uint8 private constant ERR_CAMPAIGN_STILL_ACTIVE = 8;
-    uint8 private constant ERR_CAMPAIGN_PAST_END_DATE = 9;
-    uint8 private constant ERR_GOAL_REACHED = 10;
-    uint8 private constant ERR_ADMIN_OVERRIDE_ACTIVE = 11;
-    uint8 private constant ERR_FUNDS_CLAIMED = 12;
-    uint8 private constant ERR_FUNDS_NOT_CLAIMED = 13;
-    uint8 private constant ERR_NOTHING_TO_WITHDRAW = 14;
-    uint8 private constant ERR_ALREADY_REFUNDED = 15;
-    uint8 private constant ERR_NOTHING_TO_REFUND = 16;
-
+    uint8 private constant ERR_ETH_NOT_ACCEPTED = 3;
+    uint8 private constant ERR_CAMPAIGN_STILL_ACTIVE = 4;
+    uint8 private constant ERR_CAMPAIGN_PAST_END_DATE = 5;
+    uint8 private constant ERR_GOAL_REACHED = 6;
+    uint8 private constant ERR_ADMIN_OVERRIDE_ACTIVE = 7;
+    uint8 private constant ERR_FUNDS_CLAIMED = 8;
+    uint8 private constant ERR_FUNDS_NOT_CLAIMED = 9;
+    uint8 private constant ERR_NOTHING_TO_WITHDRAW = 10;
+    uint8 private constant ERR_ALREADY_REFUNDED = 11;
+    uint8 private constant ERR_NOTHING_TO_REFUND = 12;
+    uint8 private constant ERR_CAMPAIGN_CONSTRUCTOR_VALIDATION_FAILED = 13;
     // External contract references
     IDefiIntegrationManager public immutable defiManager;
     ITokenRegistry public immutable tokenRegistry;
@@ -93,12 +91,10 @@ contract Campaign is
         address _owner,
         address _campaignToken,
         uint256 _campaignGoalAmount,
-        uint256 _campaignDuration,
+        uint32 _campaignDuration,
         address _defiManager,
         address _platformAdmin
     ) Ownable(_owner) PlatformAdminAccessControl(_platformAdmin) {
-        if (_campaignToken == address(0))
-            revert CampaignError(ERR_INVALID_ADDRESS, _campaignToken, 0);
         if (_defiManager == address(0))
             revert CampaignError(ERR_INVALID_ADDRESS, _defiManager, 0);
 
@@ -108,37 +104,25 @@ contract Campaign is
         defiManager = IDefiIntegrationManager(_defiManager);
         tokenRegistry = ITokenRegistry(defiManager.tokenRegistry());
 
-        bool isSupported;
-        try tokenRegistry.isTokenSupported(_campaignToken) returns (
-            bool supported
-        ) {
-            isSupported = supported;
-        } catch {
-            isSupported = false;
-        }
+        function(address)
+            external
+            view
+            returns (bool) isTokenSupported = tokenRegistry.isTokenSupported;
 
-        if (!isSupported) {
-            revert CampaignError(ERR_TOKEN_NOT_SUPPORTED, _campaignToken, 0);
-        }
+        bool isValid = FactoryLibrary.validateCampaignParams(
+            _campaignToken,
+            _campaignGoalAmount,
+            _campaignDuration,
+            isTokenSupported
+        );
 
-        if (_campaignGoalAmount == 0)
+        if (!isValid) {
             revert CampaignError(
-                ERR_INVALID_GOAL,
+                ERR_CAMPAIGN_CONSTRUCTOR_VALIDATION_FAILED,
                 address(0),
-                _campaignGoalAmount
+                0
             );
-        if (_campaignDuration == 0)
-            revert CampaignError(
-                ERR_INVALID_DURATION,
-                address(0),
-                _campaignDuration
-            );
-        if (_campaignDuration > 365)
-            revert CampaignError(
-                ERR_INVALID_DURATION,
-                address(0),
-                _campaignDuration
-            );
+        }
 
         campaignToken = _campaignToken;
         campaignGoalAmount = _campaignGoalAmount;
@@ -325,7 +309,11 @@ contract Campaign is
     }
 
     function isCampaignSuccessful() public view returns (bool) {
-        return totalAmountRaised >= campaignGoalAmount;
+        return
+            CampaignLibrary.isCampaignSuccessful(
+                totalAmountRaised,
+                campaignGoalAmount
+            );
     }
 
     function isAdminOverrideActive() public view override returns (bool) {

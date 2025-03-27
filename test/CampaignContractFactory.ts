@@ -10,11 +10,8 @@ import { Campaign } from '../typechain-types'
 
 describe('CampaignContractFactory', function () {
   const OP_CAMPAIGN_CREATED = 1
-  const ERR_INVALID_ADDRESS = 1
-  const ERR_TOKEN_NOT_SUPPORTED = 2
-  const ERR_INVALID_GOAL = 3
-  const ERR_INVALID_DURATION = 4
-  const ERR_VALIDATION_FAILED = 5
+  const ERR_CAMPAIGN_CONSTRUCTOR_VALIDATION_FAILED = 1
+  const ERR_INVALID_ADDRESS = 2
 
   describe('Deployment', function () {
     it('Should correctly deploy campaignContractFactory', async function () {
@@ -285,7 +282,11 @@ describe('CampaignContractFactory', function () {
         )
       )
         .to.be.revertedWithCustomError(campaignContractFactory, 'FactoryError')
-        .withArgs(ERR_TOKEN_NOT_SUPPORTED, ethers.getAddress(usdcAddress), 0)
+        .withArgs(
+          ERR_CAMPAIGN_CONSTRUCTOR_VALIDATION_FAILED,
+          ethers.ZeroAddress,
+          0
+        )
     })
 
     it('Should revert when using zero address for token', async function () {
@@ -304,7 +305,11 @@ describe('CampaignContractFactory', function () {
         )
       )
         .to.be.revertedWithCustomError(campaignContractFactory, 'FactoryError')
-        .withArgs(ERR_INVALID_ADDRESS, ethers.ZeroAddress, 0)
+        .withArgs(
+          ERR_CAMPAIGN_CONSTRUCTOR_VALIDATION_FAILED,
+          ethers.ZeroAddress,
+          0
+        )
     })
 
     it('Should revert on campaignGoalAmount <= 0', async function () {
@@ -324,7 +329,11 @@ describe('CampaignContractFactory', function () {
         )
       )
         .to.be.revertedWithCustomError(campaignContractFactory, 'FactoryError')
-        .withArgs(ERR_INVALID_GOAL, ethers.ZeroAddress, campaignGoalAmount)
+        .withArgs(
+          ERR_CAMPAIGN_CONSTRUCTOR_VALIDATION_FAILED,
+          ethers.ZeroAddress,
+          campaignGoalAmount
+        )
     })
 
     it('Should revert on campaignDuration <= 0', async function () {
@@ -345,7 +354,11 @@ describe('CampaignContractFactory', function () {
         )
       )
         .to.be.revertedWithCustomError(campaignContractFactory, 'FactoryError')
-        .withArgs(ERR_INVALID_DURATION, ethers.ZeroAddress, campaignDuration)
+        .withArgs(
+          ERR_CAMPAIGN_CONSTRUCTOR_VALIDATION_FAILED,
+          ethers.ZeroAddress,
+          campaignDuration
+        )
     })
 
     it('Should allow deploying a campaign with the maximum allowed duration (365 days)', async function () {
@@ -416,7 +429,11 @@ describe('CampaignContractFactory', function () {
         )
       )
         .to.be.revertedWithCustomError(campaignContractFactory, 'FactoryError')
-        .withArgs(ERR_INVALID_DURATION, ethers.ZeroAddress, campaignDuration)
+        .withArgs(
+          ERR_CAMPAIGN_CONSTRUCTOR_VALIDATION_FAILED,
+          ethers.ZeroAddress,
+          0
+        )
     })
 
     it('Should correctly manage campaigns from different creators', async function () {

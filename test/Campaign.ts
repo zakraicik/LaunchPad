@@ -11,27 +11,23 @@ import {
 } from '@nomicfoundation/hardhat-chai-matchers/withArgs'
 
 describe('Campaign', function () {
-  // Operation types for FundsOperation event
   const OP_DEPOSIT = 1
   const OP_CLAIM_FUNDS = 2
 
   // Error codes - more specific but still compact
   const ERR_INVALID_ADDRESS = 1
   const ERR_INVALID_AMOUNT = 2
-  const ERR_INVALID_GOAL = 3
-  const ERR_INVALID_DURATION = 4
-  const ERR_ETH_NOT_ACCEPTED = 5
-  const ERR_TOKEN_NOT_SUPPORTED = 6
-  const ERR_NOT_TARGET_TOKEN = 7
-  const ERR_CAMPAIGN_STILL_ACTIVE = 8
-  const ERR_CAMPAIGN_PAST_END_DATE = 9
-  const ERR_GOAL_REACHED = 10
-  const ERR_ADMIN_OVERRIDE_ACTIVE = 11
-  const ERR_FUNDS_CLAIMED = 12
-  const ERR_FUNDS_NOT_CLAIMED = 13
-  const ERR_NOTHING_TO_WITHDRAW = 14
-  const ERR_ALREADY_REFUNDED = 15
-  const ERR_NOTHING_TO_REFUND = 16
+  const ERR_ETH_NOT_ACCEPTED = 3
+  const ERR_CAMPAIGN_STILL_ACTIVE = 4
+  const ERR_CAMPAIGN_PAST_END_DATE = 5
+  const ERR_GOAL_REACHED = 6
+  const ERR_ADMIN_OVERRIDE_ACTIVE = 7
+  const ERR_FUNDS_CLAIMED = 8
+  const ERR_FUNDS_NOT_CLAIMED = 9
+  const ERR_NOTHING_TO_WITHDRAW = 10
+  const ERR_ALREADY_REFUNDED = 11
+  const ERR_NOTHING_TO_REFUND = 12
+  const ERR_CAMPAIGN_CONSTRUCTOR_VALIDATION_FAILED = 13
 
   const CAMPAIGN_GOAL_AMOUNT = ethers.parseUnits('1000', 6) //Hardcoded USDC decimals
   const CAMPAIGN_DURATION = 30
@@ -110,7 +106,11 @@ describe('Campaign', function () {
         )
       )
         .to.be.revertedWithCustomError(CampaignContractFactory, 'CampaignError')
-        .withArgs(ERR_INVALID_ADDRESS, ethers.ZeroAddress, 0)
+        .withArgs(
+          ERR_CAMPAIGN_CONSTRUCTOR_VALIDATION_FAILED,
+          ethers.ZeroAddress,
+          0
+        )
 
       await expect(
         CampaignContractFactory.deploy(
@@ -136,7 +136,11 @@ describe('Campaign', function () {
         )
       )
         .to.be.revertedWithCustomError(CampaignContractFactory, 'CampaignError')
-        .withArgs(ERR_TOKEN_NOT_SUPPORTED, ethers.getAddress(wbtcAddress), 0)
+        .withArgs(
+          ERR_CAMPAIGN_CONSTRUCTOR_VALIDATION_FAILED,
+          ethers.ZeroAddress,
+          0
+        )
 
       await expect(
         CampaignContractFactory.deploy(
@@ -149,7 +153,11 @@ describe('Campaign', function () {
         )
       )
         .to.be.revertedWithCustomError(CampaignContractFactory, 'CampaignError')
-        .withArgs(ERR_INVALID_GOAL, ethers.ZeroAddress, 0)
+        .withArgs(
+          ERR_CAMPAIGN_CONSTRUCTOR_VALIDATION_FAILED,
+          ethers.ZeroAddress,
+          0
+        )
 
       await expect(
         CampaignContractFactory.deploy(
@@ -162,7 +170,11 @@ describe('Campaign', function () {
         )
       )
         .to.be.revertedWithCustomError(CampaignContractFactory, 'CampaignError')
-        .withArgs(ERR_INVALID_DURATION, ethers.ZeroAddress, 0)
+        .withArgs(
+          ERR_CAMPAIGN_CONSTRUCTOR_VALIDATION_FAILED,
+          ethers.ZeroAddress,
+          0
+        )
 
       await expect(
         CampaignContractFactory.deploy(
@@ -175,7 +187,11 @@ describe('Campaign', function () {
         )
       )
         .to.be.revertedWithCustomError(CampaignContractFactory, 'CampaignError')
-        .withArgs(ERR_INVALID_DURATION, ethers.ZeroAddress, 366)
+        .withArgs(
+          ERR_CAMPAIGN_CONSTRUCTOR_VALIDATION_FAILED,
+          ethers.ZeroAddress,
+          0
+        )
 
       await expect(
         CampaignContractFactory.deploy(

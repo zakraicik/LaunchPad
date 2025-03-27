@@ -18,11 +18,8 @@ contract CampaignContractFactory is
 
     // Operation and error codes for more compact representation
     uint8 private constant OP_CAMPAIGN_CREATED = 1;
-    uint8 private constant ERR_INVALID_ADDRESS = 1;
-    uint8 private constant ERR_TOKEN_NOT_SUPPORTED = 2;
-    uint8 private constant ERR_INVALID_GOAL = 3;
-    uint8 private constant ERR_INVALID_DURATION = 4;
-    uint8 private constant ERR_VALIDATION_FAILED = 5;
+    uint8 private constant ERR_CAMPAIGN_CONSTRUCTOR_VALIDATION_FAILED = 1;
+    uint8 private constant ERR_INVALID_ADDRESS = 2;
 
     // State variables
     address[] public deployedCampaigns;
@@ -55,7 +52,7 @@ contract CampaignContractFactory is
     function deploy(
         address _campaignToken,
         uint256 _campaignGoalAmount,
-        uint16 _campaignDuration
+        uint32 _campaignDuration
     ) external whenNotPaused returns (address) {
         // Use the library to validate parameters
         ITokenRegistry tokenRegistry = defiManager.tokenRegistry();
@@ -74,40 +71,11 @@ contract CampaignContractFactory is
         );
 
         if (!isValid) {
-            if (_campaignToken == address(0)) {
-                revert FactoryError(ERR_INVALID_ADDRESS, _campaignToken, 0);
-            }
-
-            bool isTokenValid;
-            try tokenRegistry.isTokenSupported(_campaignToken) returns (
-                bool supported
-            ) {
-                isTokenValid = supported;
-            } catch {
-                isTokenValid = false;
-            }
-
-            if (!isTokenValid) {
-                revert FactoryError(ERR_TOKEN_NOT_SUPPORTED, _campaignToken, 0);
-            }
-
-            if (_campaignGoalAmount <= 0) {
-                revert FactoryError(
-                    ERR_INVALID_GOAL,
-                    address(0),
-                    _campaignGoalAmount
-                );
-            }
-
-            if (_campaignDuration <= 0 || _campaignDuration > 365) {
-                revert FactoryError(
-                    ERR_INVALID_DURATION,
-                    address(0),
-                    _campaignDuration
-                );
-            }
-
-            revert FactoryError(ERR_VALIDATION_FAILED, address(0), 0);
+            revert FactoryError(
+                ERR_CAMPAIGN_CONSTRUCTOR_VALIDATION_FAILED,
+                address(0),
+                0
+            );
         }
 
         // Create new campaign

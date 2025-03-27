@@ -74,6 +74,7 @@ This platform enables individuals to create fundraising campaigns for their proj
 ### Security Features
 
 - Role-based access control with dedicated admin roles
+- Emergency pause functionality for critical operations
 - Reentrancy protection on all fund-moving functions
 - Extensive input validation and error handling
 - Standardized error codes and events for better monitoring
@@ -87,6 +88,7 @@ Platform administrators can:
 - Configure minimum contribution amounts
 - Override campaign settings in emergency situations
 - Update integration with external DeFi protocols
+- Pause and unpause critical platform functionality
 
 ## Getting Started
 
@@ -157,3 +159,7 @@ Understanding the dependencies between contracts is essential for proper deploym
    - Created by CampaignContractFactory
 
 This dependency chain informs the correct deployment order. For example, you must deploy PlatformAdmin before FeeManager, and DefiIntegrationManager needs both TokenRegistry and FeeManager to be deployed first.
+
+7. **PausableControl**
+   - Depends on PlatformAdmin
+   - Used by other core contracts to implement emergency pause functionality

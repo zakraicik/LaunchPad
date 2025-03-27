@@ -16,9 +16,9 @@ describe('Base Mainnet Integration Tests', function () {
     const OP_DEPOSIT = 1
     const OP_CAMPAIGN_CREATED = 1
     const OP_CLAIM_FUNDS = 2
-    const ERR_GOAL_REACHED = 10
-    const ERR_FUNDS_CLAIMED = 12
-    const ERR_ALREADY_REFUNDED = 15
+    const ERR_GOAL_REACHED = 6
+    const ERR_FUNDS_CLAIMED = 8
+    const ERR_ALREADY_REFUNDED = 11
 
     it('Deploy supporting contracts and set initial state correctly', async function () {
       const {
@@ -856,7 +856,7 @@ describe('Base Mainnet Integration Tests', function () {
   describe('Token Integration', function () {
     const ERR_NOT_TARGET_TOKEN = 13
     const ERR_INVALID_AMOUNT = 5
-    const ERR_TOKEN_NOT_SUPPORTED = 2
+    const ERR_CAMPAIGN_CONSTRUCTOR_VALIDATION_FAILED = 1
     const OP_TOKEN_ADDED = 1
     const OP_TOKEN_REMOVED = 2
     const OP_TOKEN_SUPPORT_DISABLED = 3
@@ -974,8 +974,8 @@ describe('Base Mainnet Integration Tests', function () {
       )
         .to.be.revertedWithCustomError(campaignContractFactory, 'FactoryError')
         .withArgs(
-          ERR_TOKEN_NOT_SUPPORTED,
-          ethers.getAddress(await wbtc.getAddress()),
+          ERR_CAMPAIGN_CONSTRUCTOR_VALIDATION_FAILED,
+          ethers.ZeroAddress,
           0
         )
 
@@ -1057,8 +1057,8 @@ describe('Base Mainnet Integration Tests', function () {
       )
         .to.be.revertedWithCustomError(campaignContractFactory, 'FactoryError')
         .withArgs(
-          ERR_TOKEN_NOT_SUPPORTED,
-          ethers.getAddress(await usdc.getAddress()),
+          ERR_CAMPAIGN_CONSTRUCTOR_VALIDATION_FAILED,
+          ethers.ZeroAddress,
           0
         )
     })
@@ -1100,8 +1100,8 @@ describe('Base Mainnet Integration Tests', function () {
       )
         .to.be.revertedWithCustomError(campaignContractFactory, 'FactoryError')
         .withArgs(
-          ERR_TOKEN_NOT_SUPPORTED,
-          ethers.getAddress(await usdc.getAddress()),
+          ERR_CAMPAIGN_CONSTRUCTOR_VALIDATION_FAILED,
+          ethers.ZeroAddress,
           0
         )
 
@@ -1131,7 +1131,7 @@ describe('Base Mainnet Integration Tests', function () {
     })
   })
 
-  describe.only('Pause Functionality Tests', function () {
+  describe('Pause Functionality Tests', function () {
     // Define constants for error codes and operation types
     const OP_PAUSED = 1
     const OP_UNPAUSED = 2

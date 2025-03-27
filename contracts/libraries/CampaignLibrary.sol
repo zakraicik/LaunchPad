@@ -26,4 +26,18 @@ library CampaignLibrary {
         }
         return (currentTime >= startTime && currentTime < endTime);
     }
+
+    function isCampaignSuccessful(
+        uint256 totalAmountRaised,
+        uint256 campaignGoalAmount
+    ) internal pure returns (bool) {
+        return totalAmountRaised >= campaignGoalAmount;
+    }
+
+    function calculateEndTime(
+        uint256 startTime,
+        uint256 durationInDays
+    ) internal pure returns (uint256) {
+        return startTime + (durationInDays * 1 days);
+    }
 }
