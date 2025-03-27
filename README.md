@@ -1,309 +1,198 @@
-# DeFi Crowdfunding Platform
+# DeFi-Powered Fundraising Platform
 
-A decentralized crowdfunding platform that allows campaign creators to earn yield on their raised funds through integration with DeFi protocols like Aave.
+A decentralized fundraising solution that allows campaign creators to raise funds for their projects while generating yield through DeFi protocols.
 
 ## Overview
 
-This platform enables users to create crowdfunding campaigns with specific goals and durations. The unique feature of this platform is that funds raised can be deposited into DeFi protocols to generate yield while the campaign is active. This yield can then be distributed to campaign contributors based on their contribution amount and timing.
+This platform enables individuals to create fundraising campaigns for their projects with specific goals and duration. Funds contributed to campaigns are automatically deposited into DeFi yield-generating protocols (Aave), earning interest while the campaign is active. The platform takes a configurable fee from successful campaigns, while preserving security and transparency through a robust access control system and comprehensive event-driven state tracking.
 
-### Key Benefits
+## Key Features
 
-- **Earn While You Wait**: Campaigns generate yield through DeFi protocols
-- **Incentivize Early Contributions**: Earlier contributors receive higher yield shares
-- **Multi-token Support**: Accept contributions in various tokens with automatic swapping
-- **Secure and Decentralized**: Built on Ethereum with robust security mechanisms
+- **Create time-bound fundraising campaigns** with specific fundraising goals
+- **Automatic DeFi integration** to generate yield on contributed funds
+- **Multiple token support** with configurable minimum contribution amounts
+- **Fee sharing system** between platform and campaign creators
+- **Role-based access control** with platform admin privileges
+- **Refund functionality** for unsuccessful campaigns
+- **Event-driven state tracking** for reliable off-chain indexing and status monitoring
+- **Comprehensive campaign lifecycle management** with explicit status transitions
 
-## Smart Contracts Architecture
+## Core Components
 
-The platform consists of several contracts that work together:
+### Campaign Management
 
-### Core Contracts
+- **Campaign Contract**: Individual fundraising campaign with a specific goal amount, duration, target token, and status tracking
+- **CampaignContractFactory**: Creates new campaign contracts and maintains a registry of all deployed campaigns
 
-#### Campaign.sol
+### Financial Infrastructure
 
-The main contract that manages individual crowdfunding campaigns. Features:
+- **DefiIntegrationManager**: Manages interactions with Aave for yield generation
+- **FeeManager**: Handles fee calculations and distribution between platform and creators
+- **TokenRegistry**: Maintains a list of supported tokens with their configurations
 
-- Campaign creation with goal amount and duration
-- Accepting contributions in various tokens
-- Yield generation through DeFi protocols
-- Weighted distribution of yield to contributors
-- Refund mechanism if the campaign goal is not reached
+### Access Control
 
-#### CampaignContractFactory.sol
-
-Factory contract for deploying new Campaign contracts with standardized parameters.
-
-- Deploys new campaigns
-- Keeps track of all deployed campaigns
-- Validates campaign parameters
-
-#### DefiIntegrationManager.sol
-
-Handles integration with external DeFi protocols (Aave) and token swaps (Uniswap).
-
-- Manages deposits and withdrawals to/from Aave
-- Handles token swaps via Uniswap
-- Calculates and distributes yield
-
-#### TokenRegistry.sol
-
-Maintains a registry of supported tokens for the platform.
-
-- Add/remove supported tokens
-- Set minimum contribution amounts
-- Enable/disable token support
-
-#### YieldDistributor.sol
-
-Manages the distribution of yield between campaign creators and the platform.
-
-- Configurable platform yield share
-- Treasury address management
-
-#### PlatformAdmin.sol
-
-Handles administrative functions and access control for the platform.
-
-- Manages platform administrators
-- Implements grace period functionality
-- Controls admin privileges for emergency actions
-
-### Libraries
-
-The system uses several libraries to encapsulate common functionality:
-
-- **CampaignLibrary**: Calculations for campaign timing and yield distribution
-- **TokenOperationsLibrary**: Safe token transfer operations
-- **DefiLibrary**: Functions for interacting with DeFi protocols
-- **FactoryLibrary**: Validation for campaign creation
-- **PlatformAdminLibrary**: Grace period calculations
-- **TokenRegistryLibrary**: Token validation and conversion
-- **YieldLibrary**: Yield share calculations
-
-## Features
-
-### For Campaign Creators
-
-1. **Create campaigns** with specific goals and durations
-2. **Accept various tokens** as contributions
-3. **Generate yield** on raised funds through Aave
-4. **Claim funds** when the campaign goal is reached
-5. **Manage yield** by depositing, withdrawing, and harvesting
-
-### For Contributors
-
-1. **Contribute** to campaigns using supported tokens
-2. **Earn yield** proportionally to contribution amount and timing
-3. **Request refunds** if the campaign doesn't reach its goal
-4. **Claim yield** after the campaign ends
-
-### For Platform Administrators
-
-1. **Manage supported tokens**
-2. **Set platform yield share**
-3. **Emergency intervention** after a grace period
-4. **Update configuration** of core components
-
-### User Flow
-
-The following sequence diagram shows the typical user journey through the platform:
-
-```mermaid
-sequenceDiagram
-    actor Creator
-    actor Contributor
-    participant Factory as CampaignFactory
-    participant Campaign
-    participant DeFi as DefiIntegrationManager
-    participant Protocol as Aave/Yield Protocol
-
-    Creator->>Factory: Create Campaign
-    Factory->>Campaign: Deploy New Campaign
-    Note over Campaign: Campaign Active
-
-    Contributor->>Campaign: Contribute Funds
-    Campaign->>Campaign: Track Contribution Time & Amount
-
-    Creator->>Campaign: Deposit to Yield Protocol
-    Campaign->>DeFi: Forward Deposit
-    DeFi->>Protocol: Supply Tokens
-    Note over Protocol: Generating Yield
-
-    loop While Campaign Active
-        Creator->>Campaign: Harvest Yield
-        Campaign->>DeFi: Request Yield
-        DeFi->>Protocol: Harvest Interest
-        Protocol-->>DeFi: Return Yield
-        DeFi-->>Campaign: Return Yield (Split)
-    end
-
-    Note over Campaign: Campaign Ends
-
-    alt Campaign Successful
-        Creator->>Campaign: Claim Funds
-        Campaign-->>Creator: Transfer Raised Funds
-    else Campaign Failed
-        Contributor->>Campaign: Request Refund
-        Campaign-->>Contributor: Return Contribution
-    end
-
-    Contributor->>Campaign: Claim Yield Share
-    Campaign->>Campaign: Calculate Weighted Share
-    Campaign-->>Contributor: Distribute Yield
-```
-
-## Technical Details
-
-### Yield Generation
-
-Funds are deposited into Aave to generate yield. The platform uses Aave v3's supply functionality to deposit tokens and earn interest.
-
-### Yield Distribution
-
-Yield is distributed based on a weighted contribution system:
-
-- Earlier contributors receive a higher weight
-- Distribution is proportional to both amount and timing of contribution
-- Platform takes a configurable percentage of all yield
-
-### Token Swapping
-
-The platform supports contributions in various tokens through integration with Uniswap. Tokens are swapped to the campaign's base token automatically.
-
-### Safety Mechanisms
-
-1. **Reentrancy protection** via OpenZeppelin's ReentrancyGuard
-2. **Access control** for administrative functions
-3. **Grace period** mechanism for emergency interventions
-4. **Batch processing** for gas-efficient operations on large datasets
-5. **Error codes** for clear error reporting
-6. **Slippage protection** for token swaps
+- **PlatformAdmin**: Manages administrative access across the platform
+- **PlatformAdminAccessControl**: Abstract contract that provides admin-only functions
 
 ## Contract Interactions
 
-### Contract Interaction Flow
+1. Campaign creators deploy a new campaign through the CampaignContractFactory
+2. Contributors send supported tokens to the campaign
+3. Funds are automatically deposited into Aave through the DefiIntegrationManager
+4. Campaign status is updated when goal is reached or deadline passes
+5. After the campaign ends:
+   - If successful (goal reached): Campaign creator can claim funds
+   - If unsuccessful: Contributors can request refunds
+6. Platform takes a configurable percentage fee from all funds processed
 
-```
-User/Creator -> CampaignContractFactory -> Deploys Campaign
+## Technical Details
 
-Contributors -> Campaign -> DefiIntegrationManager -> Aave/Uniswap
-                         -> YieldDistributor
+### Campaign Lifecycle
 
-PlatformAdmin -> Controls access to admin functions
-TokenRegistry -> Validates and configures supported tokens
-```
+1. **Creation**: Campaign is deployed with a specific token, goal amount, and duration (status: ACTIVE)
+2. **Active Phase**: Contributors can send tokens to the campaign
+3. **Status Change**: Campaign transitions to COMPLETE when either:
+   - Goal amount is reached (reason: GOAL_REACHED)
+   - End date passes without reaching the goal (reason: DEADLINE_PASSED)
+4. **Completion**:
+   - Success: Goal amount reached, funds (plus yield) go to creator minus platform fees
+   - Failure: Goal not reached, contributors can claim refunds
 
-### Contract and Library Architecture Diagram
+### Event Sourcing
 
-```mermaid
-graph TD
-    %% Core Contracts
-    CF[CampaignContractFactory]
-    CA[Campaign]
-    DI[DefiIntegrationManager]
-    TR[TokenRegistry]
-    YD[YieldDistributor]
-    PA[PlatformAdmin]
+- **Campaign Status Tracking**: Each campaign maintains an explicit status (ACTIVE or COMPLETE)
+- **Status Change Events**: Status transitions are recorded with clear reason codes (goal reached or deadline passed)
+- **Off-chain Indexing**: Events provide a complete audit trail for building reliable off-chain databases
+- **Deterministic State**: Campaign status is consistently tracked and queryable both on-chain and through events
+- **Campaign Identifiers**: All events include campaign identifiers for efficient correlation and filtering
 
-    %% Libraries
-    FL[FactoryLibrary]
-    CL[CampaignLibrary]
-    DL[DefiLibrary]
-    PAL[PlatformAdminLibrary]
-    TRL[TokenRegistryLibrary]
-    TOL[TokenOperationsLibrary]
-    YL[YieldLibrary]
+### DeFi Integration
 
-    %% External Interfaces
-    AAVE[Aave Pool]
-    UNI[Uniswap Router]
+- Funds are automatically deposited into Aave to generate yield while the campaign is active
+- The DefiIntegrationManager handles all interactions with external DeFi protocols
+- Yield is split between platform and campaign stakeholders based on campaign outcome
+- All DeFi operations emit events with campaign identifiers for traceability
 
-    %% Contract relationships
-    CF -->|deploys| CA
-    CF -->|uses| FL
-    CF -->|references| DI
+### Fee Structure
 
-    CA -->|uses| CL
-    CA -->|uses| TOL
-    CA -->|calls| DI
-    CA -->|inherits| PAC[PlatformAdminAccessControl]
+- Platform takes a configurable fee (default 10%, maximum 50%)
+- Fees are calculated and distributed by the FeeManager contract
+- Treasury address can be updated by platform administrators
 
-    DI -->|uses| DL
-    DI -->|calls| AAVE
-    DI -->|calls| UNI
-    DI -->|references| TR
-    DI -->|calls| YD
-    DI -->|inherits| PAC
+### Token Support
 
-    TR -->|uses| TRL
-    TR -->|inherits| PAC
+- Multiple ERC20 tokens can be supported
+- Each token has configurable minimum contribution amounts
+- Platform administrators can add/remove tokens or update their settings
 
-    YD -->|uses| YL
-    YD -->|inherits| PAC
+### Security Features
 
-    PA -->|uses| PAL
+- Role-based access control with dedicated admin roles
+- Emergency pause functionality for critical operations
+- Reentrancy protection on all fund-moving functions
+- Extensive input validation and error handling
+- Standardized error codes and events for better monitoring
+- Consistent state tracking with event emissions
 
-    %% Abstract contracts and inheritance
-    PAC -->|references| PA
+## Administrative Functions
 
-    %% External dependencies
-    subgraph External DeFi Protocols
-        AAVE
-        UNI
-    end
+Platform administrators can:
 
-    %% Color coding
-    classDef contract fill:#f9f,stroke:#333,stroke-width:2px
-    classDef library fill:#bbf,stroke:#333,stroke-width:1px
-    classDef external fill:#bfb,stroke:#333,stroke-width:1px
-    classDef abstract fill:#fbb,stroke:#333,stroke-width:1px
+- Add or remove supported tokens
+- Update fee structure parameters
+- Configure minimum contribution amounts
+- Override campaign settings in emergency situations
+- Update integration with external DeFi protocols
+- Pause and unpause critical platform functionality
 
-    class CF,CA,DI,TR,YD,PA contract
-    class FL,CL,DL,PAL,TRL,TOL,YL library
-    class AAVE,UNI external
-    class PAC abstract
-```
+## Getting Started
+
+To deploy this platform:
+
+1. Deploy the PlatformAdmin contract first
+2. Deploy the TokenRegistry contract
+3. Deploy the FeeManager contract
+4. Deploy the DefiIntegrationManager contract with connections to Aave
+5. Deploy the CampaignContractFactory
+6. Configure supported tokens in the TokenRegistry
 
 ## Error Handling
 
-The contracts use a consolidated error pattern with error codes for gas efficiency. Each contract defines its own set of error codes for better debugging and front-end integration.
+The platform uses a standardized error code system across all contracts for consistency:
 
-## Events
+- Error codes are represented as uint8 constants
+- Each error comes with relevant context (addresses, amounts, campaign IDs) for debugging
+- Events are emitted for all significant state changes
+- Campaign-specific errors include campaign IDs for easier tracing
 
-The contracts emit events for all important state changes to facilitate off-chain tracking and UI updates.
+---
 
-## Development Guidelines
+## Technical Architecture
 
-### Prerequisites
+```
+User -> CampaignContractFactory -> Campaign -> DefiIntegrationManager -> Aave
+                                    |
+                                    v
+                          TokenRegistry & FeeManager
+                                    |
+                                    v
+                              PlatformAdmin
+                                    |
+                                    v
+                            Off-chain Indexer
+```
 
-- Solidity ^0.8.28
-- OpenZeppelin contracts
-- Aave V3 interfaces
-- Uniswap V3 interfaces
+All components are governed by the PlatformAdmin contract that manages administrative access across the system. Every state change emits events that can be consumed by an off-chain indexer to maintain a synchronized database of campaign information, enabling efficient querying and reporting.
 
-### Framework Compatibility
+## Contract Dependencies
 
-These contracts are compatible with:
+Understanding the dependencies between contracts is essential for proper deployment:
 
-- Hardhat
-- Truffle
-- Foundry
+1. **PlatformAdmin**
 
-### Deployment Sequence
+   - No dependencies (should be deployed first)
 
-1. Deploy `TokenRegistry`
-2. Deploy `YieldDistributor`
-3. Deploy `PlatformAdmin`
-4. Deploy `DefiIntegrationManager` with addresses from steps 1-3
-5. Deploy `CampaignContractFactory` with addresses from step 4
+2. **FeeManager**
 
-### Security Considerations
+   - Depends on PlatformAdmin
 
-- All contracts use SafeERC20 for token transfers
-- Access control is implemented for administrative functions
-- Reentrancy guards are in place for external calls
-- Input validation is performed for all user-provided parameters
+3. **TokenRegistry**
 
-## License
+   - Depends on PlatformAdmin
 
-MIT License
+4. **DefiIntegrationManager**
+
+   - Depends on PlatformAdmin
+   - Depends on TokenRegistry
+   - Depends on FeeManager
+   - Depends on Aave Pool (external)
+
+5. **CampaignContractFactory**
+
+   - Depends on DefiIntegrationManager
+   - Depends on PlatformAdmin
+
+6. **Campaign**
+   - Depends on DefiIntegrationManager
+   - Depends on PlatformAdmin
+   - Created by CampaignContractFactory
+
+This dependency chain informs the correct deployment order. For example, you must deploy PlatformAdmin before FeeManager, and DefiIntegrationManager needs both TokenRegistry and FeeManager to be deployed first.
+
+7. **PausableControl**
+   - Depends on PlatformAdmin
+   - Used by other core contracts to implement emergency pause functionality
+
+## Event-Based Monitoring
+
+The platform emits structured events for all important state changes, making it ideal for building off-chain monitoring systems:
+
+1. **Campaign Status Events**: Track the full lifecycle of each campaign
+2. **Contribution Events**: Record all contributions with campaign identifiers
+3. **Refund Events**: Track all refunds issued to contributors
+4. **Fund Operation Events**: Monitor all movement of funds including deposits and withdrawals
+5. **DeFi Operation Events**: Track interactions with external DeFi protocols
+6. **Admin Events**: Record administrative actions
+
+These events provide a complete audit trail that can be used to build dashboards, analytics tools, and notification systems.

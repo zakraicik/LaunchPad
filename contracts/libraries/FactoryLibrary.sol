@@ -3,30 +3,27 @@ pragma solidity ^0.8.28;
 
 /**
  * @title FactoryLibrary
- * @dev Library containing helper functions for the CampaignContractFactory
+ * @author Generated with assistance from an LLM
+ * @dev Library for validating campaign parameters when creating new campaigns
+ * @notice Provides validation functions to ensure campaigns are created with valid parameters
  */
 library FactoryLibrary {
     /**
-     * @dev Validates campaign creation parameters
-     * @param campaignToken Address of the token being collected
-     * @param campaignGoalAmount Goal amount to raise
-     * @param campaignDuration Duration of campaign in days
-     * @param tokenRegistry Address of the token registry contract
-     * @param isTokenSupported Function to check if a token is supported
-     * @return A boolean indicating if the parameters are valid
+     * @notice Validates parameters for creating a new campaign
+     * @dev Checks if campaign token, goal amount, and duration are valid
+     * @param campaignToken Address of the token to be used for the campaign
+     * @param campaignGoalAmount The funding goal amount for the campaign
+     * @param campaignDuration Duration of the campaign in days
+     * @param isTokenSupported Function to check if a token is supported by the platform
+     * @return True if all parameters are valid, false otherwise
      */
     function validateCampaignParams(
         address campaignToken,
         uint256 campaignGoalAmount,
-        uint16 campaignDuration,
-        address tokenRegistry,
+        uint32 campaignDuration,
         function(address) external view returns (bool) isTokenSupported
     ) internal view returns (bool) {
         if (campaignToken == address(0)) {
-            return false;
-        }
-
-        if (!isTokenSupported(campaignToken)) {
             return false;
         }
 
@@ -34,7 +31,19 @@ library FactoryLibrary {
             return false;
         }
 
-        if (campaignDuration <= 0) {
+        if (campaignDuration <= 0 || campaignDuration > 365) {
+            return false;
+        }
+
+        // Check token support with try/catch to handle possible revert
+        bool isTokenValid;
+        try isTokenSupported(campaignToken) returns (bool supported) {
+            isTokenValid = supported;
+        } catch {
+            isTokenValid = false;
+        }
+
+        if (!isTokenValid) {
             return false;
         }
 

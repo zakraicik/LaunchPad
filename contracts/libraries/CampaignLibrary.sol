@@ -5,68 +5,18 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 /**
  * @title CampaignLibrary
+ * @author Generated with assistance from an LLM
  * @dev Library containing helper functions for the Campaign contract
+ * @notice Provides utility functions for campaign status checks and time calculations
  */
 library CampaignLibrary {
     /**
-     * @dev Calculates the time-based weight for a contributor's yield share
-     * @param contributionTime Timestamp of the contribution
-     * @param campaignStartTime Campaign start timestamp
-     * @param campaignEndTime Campaign end timestamp
-     * @return Weight multiplier (scaled by 100)
-     */
-    function calculateTimeWeight(
-        uint256 contributionTime,
-        uint256 campaignStartTime,
-        uint256 campaignEndTime
-    ) internal pure returns (uint256) {
-        if (contributionTime == 0) return 0;
-
-        uint256 campaignDurationSoFar = contributionTime - campaignStartTime;
-        uint256 totalDuration = campaignEndTime - campaignStartTime;
-
-        // Keep using the bit shift but ensure it's properly scaled
-        // Using 7 bits (128) for percentage calculation
-        uint256 percentageThrough = (campaignDurationSoFar << 7) /
-            totalDuration;
-
-        if (percentageThrough < 32) {
-            // ~25% of 128
-            return 15000; // 1.5x weight (scaled by 10000)
-        } else if (percentageThrough < 64) {
-            // ~50% of 128
-            return 12500; // 1.25x weight (scaled by 10000)
-        } else if (percentageThrough < 96) {
-            // ~75% of 128
-            return 11000; // 1.1x weight (scaled by 10000)
-        } else {
-            return 10000; // 1.0x weight (scaled by 10000)
-        }
-    }
-
-    /**
-     * @dev Calculates yield share for a contributor based on weighted contributions
-     * @param contributorWeight The weighted contribution of a specific contributor
-     * @param totalWeight The total of all weighted contributions
-     * @param totalYield The total amount of yield to distribute
-     * @return The contributor's yield share
-     */
-    function calculateYieldShare(
-        uint256 contributorWeight,
-        uint256 totalWeight,
-        uint256 totalYield
-    ) internal pure returns (uint256) {
-        if (contributorWeight == 0 || totalWeight == 0) {
-            return 0;
-        }
-        return (totalYield * contributorWeight) / totalWeight;
-    }
-
-    /**
-     * @dev Checks if a campaign is active based on timestamps
+     * @notice Checks if a campaign is currently active
+     * @dev A campaign is active if the current time is between start and end times, and admin override is not active
      * @param currentTime Current timestamp
      * @param startTime Campaign start timestamp
      * @param endTime Campaign end timestamp
+     * @param adminOverride Whether admin override is active
      * @return True if campaign is active, false otherwise
      */
     function isCampaignActive(
@@ -82,20 +32,30 @@ library CampaignLibrary {
     }
 
     /**
-     * @dev Calculates the share percentage with precision
-     * @param contributorWeight The weighted contribution of a specific contributor
-     * @param totalWeight The total of all weighted contributions
-     * @param precision The precision factor (e.g., 10000 for 4 decimal places)
-     * @return The percentage share with the specified precision
+     * @notice Checks if a campaign has successfully reached its funding goal
+     * @dev A campaign is successful if the total amount raised equals or exceeds the goal amount
+     * @param totalAmountRaised Total amount of tokens raised so far
+     * @param campaignGoalAmount Campaign's funding goal amount
+     * @return True if campaign is successful, false otherwise
      */
-    function calculateSharePercentage(
-        uint256 contributorWeight,
-        uint256 totalWeight,
-        uint256 precision
+    function isCampaignSuccessful(
+        uint256 totalAmountRaised,
+        uint256 campaignGoalAmount
+    ) internal pure returns (bool) {
+        return totalAmountRaised >= campaignGoalAmount;
+    }
+
+    /**
+     * @notice Calculates the campaign end time based on start time and duration
+     * @dev Converts duration from days to seconds and adds to start time
+     * @param startTime Campaign start timestamp
+     * @param durationInDays Campaign duration in days
+     * @return End timestamp for the campaign
+     */
+    function calculateEndTime(
+        uint256 startTime,
+        uint256 durationInDays
     ) internal pure returns (uint256) {
-        if (contributorWeight == 0 || totalWeight == 0) {
-            return 0;
-        }
-        return (contributorWeight * precision) / totalWeight;
+        return startTime + (durationInDays * 1 days);
     }
 }

@@ -6,18 +6,24 @@ import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IER
 import "./abstracts/PlatformAdminAccessControl.sol";
 import "./libraries/TokenRegistryLibary.sol";
 
+/**
+ * @title TokenRegistry
+ * @author Generated with assistance from an LLM
+ * @notice Registry for managing supported tokens and their configurations
+ * @dev Handles token validation, minimum contribution amounts, and token support status
+ */
 contract TokenRegistry is Ownable, PlatformAdminAccessControl {
     // Use the TokenRegistryLibrary
     using TokenRegistryLibrary for *;
 
-    // Operation types for events
+    //Operation codes
     uint8 private constant OP_TOKEN_ADDED = 1;
     uint8 private constant OP_TOKEN_REMOVED = 2;
     uint8 private constant OP_TOKEN_SUPPORT_DISABLED = 3;
     uint8 private constant OP_TOKEN_SUPPORT_ENABLED = 4;
     uint8 private constant OP_MIN_CONTRIBUTION_UPDATED = 5;
 
-    // Error codes for consolidated errors
+    //Error codes
     uint8 private constant ERR_INVALID_ADDRESS = 1;
     uint8 private constant ERR_INVALID_TOKEN = 2;
     uint8 private constant ERR_TOKEN_ALREADY_IN_REGISTRY = 3;
@@ -29,6 +35,10 @@ contract TokenRegistry is Ownable, PlatformAdminAccessControl {
     uint8 private constant ERR_INVALID_MIN_CONTRIBUTION = 9;
     uint8 private constant ERR_OVERFLOW = 10;
 
+    /**
+     * @notice Configuration struct for each token
+     * @dev Stores token support status, decimals, and minimum contribution amount
+     */
     struct TokenConfig {
         bool isSupported;
         uint8 decimals;
@@ -40,10 +50,21 @@ contract TokenRegistry is Ownable, PlatformAdminAccessControl {
     mapping(address => bool) private tokenExists;
     address[] public supportedTokens;
 
-    // Consolidated error with error code
+    /**
+     * @notice Thrown when a token registry operation fails
+     * @param code Error code identifying the failure reason
+     * @param token Address of the token involved
+     * @param value Related value (if applicable)
+     */
     error TokenRegistryError(uint8 code, address token, uint256 value);
 
-    // Consolidated event
+    /**
+     * @notice Emitted when a token registry operation is performed
+     * @param opType Type of operation (1=add, 2=remove, 3=disable, 4=enable, 5=update min)
+     * @param token Address of the token involved
+     * @param value Related value (e.g., minimum contribution amount)
+     * @param decimals Number of decimals for the token
+     */
     event TokenRegistryOperation(
         uint8 opType,
         address indexed token,
@@ -51,11 +72,23 @@ contract TokenRegistry is Ownable, PlatformAdminAccessControl {
         uint8 decimals
     );
 
+    /**
+     * @notice Creates a new TokenRegistry contract
+     * @dev Sets up initial owner and platform admin
+     * @param _owner Address of the contract owner
+     * @param _platformAdmin Address of the platform admin contract
+     */
     constructor(
         address _owner,
         address _platformAdmin
     ) Ownable(_owner) PlatformAdminAccessControl(_platformAdmin) {}
 
+    /**
+     * @notice Checks if a token is supported by the platform
+     * @dev Reverts if token is not in registry
+     * @param token Address of the token to check
+     * @return True if the token is supported, false otherwise
+     */
     function isTokenSupported(address token) external view returns (bool) {
         if (!tokenExists[token]) {
             revert TokenRegistryError(ERR_TOKEN_NOT_IN_REGISTRY, token, 0);
@@ -64,6 +97,12 @@ contract TokenRegistry is Ownable, PlatformAdminAccessControl {
         return tokenConfigs[token].isSupported;
     }
 
+    /**
+     * @notice Adds a new token to the registry
+     * @dev Validates token ERC20 compliance and sets initial configuration
+     * @param _token Address of the token to add
+     * @param _minimumContributionInWholeTokens Minimum contribution amount in whole tokens
+     */
     function addToken(
         address _token,
         uint256 _minimumContributionInWholeTokens
@@ -125,6 +164,11 @@ contract TokenRegistry is Ownable, PlatformAdminAccessControl {
         );
     }
 
+    /**
+     * @notice Removes a token from the registry
+     * @dev Completely removes token and its configuration
+     * @param _token Address of the token to remove
+     */
     function removeToken(address _token) external onlyPlatformAdmin {
         if (!tokenExists[_token]) {
             revert TokenRegistryError(ERR_TOKEN_NOT_IN_REGISTRY, _token, 0);
@@ -139,6 +183,11 @@ contract TokenRegistry is Ownable, PlatformAdminAccessControl {
         emit TokenRegistryOperation(OP_TOKEN_REMOVED, _token, 0, 0);
     }
 
+    /**
+     * @notice Disables support for a token without removing it
+     * @dev Token remains in registry but is not considered supported
+     * @param _token Address of the token to disable
+     */
     function disableTokenSupport(address _token) external onlyPlatformAdmin {
         if (!tokenExists[_token]) {
             revert TokenRegistryError(ERR_TOKEN_NOT_IN_REGISTRY, _token, 0);
@@ -160,6 +209,11 @@ contract TokenRegistry is Ownable, PlatformAdminAccessControl {
         emit TokenRegistryOperation(OP_TOKEN_SUPPORT_DISABLED, _token, 0, 0);
     }
 
+    /**
+     * @notice Enables support for a previously added token
+     * @dev Adds token back to supported tokens array
+     * @param _token Address of the token to enable
+     */
     function enableTokenSupport(address _token) external onlyPlatformAdmin {
         if (!tokenExists[_token]) {
             revert TokenRegistryError(ERR_TOKEN_NOT_IN_REGISTRY, _token, 0);
@@ -179,6 +233,12 @@ contract TokenRegistry is Ownable, PlatformAdminAccessControl {
         emit TokenRegistryOperation(OP_TOKEN_SUPPORT_ENABLED, _token, 0, 0);
     }
 
+    /**
+     * @notice Updates the minimum contribution amount for a token
+     * @dev Converts whole tokens to smallest units based on token decimals
+     * @param _token Address of the token to update
+     * @param _minimumContributionInWholeTokens New minimum contribution in whole tokens
+     */
     function updateTokenMinimumContribution(
         address _token,
         uint256 _minimumContributionInWholeTokens
@@ -218,6 +278,13 @@ contract TokenRegistry is Ownable, PlatformAdminAccessControl {
         );
     }
 
+    /**
+     * @notice Gets the minimum contribution amount for a specific token
+     * @dev Returns both the amount and the token decimals
+     * @param token Address of the token to query
+     * @return minimumAmount Minimum contribution amount in token's smallest unit
+     * @return decimals Number of decimals for the token
+     */
     function getMinContributionAmount(
         address token
     ) external view returns (uint256 minimumAmount, uint8 decimals) {
@@ -228,10 +295,12 @@ contract TokenRegistry is Ownable, PlatformAdminAccessControl {
         return (config.minimumContributionAmount, config.decimals);
     }
 
-    function getAllSupportedTokens() external view returns (address[] memory) {
-        return supportedTokens;
-    }
-
+    /**
+     * @notice Gets the decimal places for a specific token
+     * @dev Reverts if token is not in registry
+     * @param token Address of the token to query
+     * @return Number of decimal places for the token
+     */
     function getTokenDecimals(address token) external view returns (uint8) {
         if (!tokenExists[token]) {
             revert TokenRegistryError(ERR_TOKEN_NOT_IN_REGISTRY, token, 0);
@@ -239,6 +308,22 @@ contract TokenRegistry is Ownable, PlatformAdminAccessControl {
         return tokenConfigs[token].decimals;
     }
 
+    /**
+     * @notice Returns all supported token addresses
+     * @dev Returns the array of currently supported tokens
+     * @return Array of supported token addresses
+     */
+    function getAllSupportedTokens() external view returns (address[] memory) {
+        return supportedTokens;
+    }
+
+    /**
+     * @notice Utility function to convert from smallest token unit to whole tokens
+     * @dev Exposed for testing purposes
+     * @param amount Amount in smallest token unit
+     * @param decimals Number of decimals for the token
+     * @return Converted amount in whole tokens
+     */
     function testConvertFromSmallestUnit(
         uint256 amount,
         uint8 decimals

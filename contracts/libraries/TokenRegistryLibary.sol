@@ -5,6 +5,7 @@ import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IER
 
 /**
  * @title TokenRegistryLibrary
+ * @author Generated with assistance from an LLM
  * @dev Library for token registry operations and unit conversions
  */
 library TokenRegistryLibrary {

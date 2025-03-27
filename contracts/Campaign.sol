@@ -9,155 +9,183 @@ import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "./interfaces/IDefiIntegrationManager.sol";
 import "./interfaces/ITokenRegistry.sol";
 import "./abstracts/PlatformAdminAccessControl.sol";
+import "./abstracts/PausableControl.sol";
 import "./libraries/CampaignLibrary.sol";
 import "./libraries/TokenOperationsLibrary.sol";
+import "./libraries/FactoryLibrary.sol";
 
-contract Campaign is Ownable, ReentrancyGuard, PlatformAdminAccessControl {
+/**
+ * @title Campaign
+ * @author Generated with assistance from an LLM
+ * @notice Smart contract for managing crowdfunding campaigns with DeFi yield generation
+ * @dev Implements crowdfunding with contributions, refunds, fund claiming and DeFi yield via Aave
+ */
+contract Campaign is
+    Ownable,
+    ReentrancyGuard,
+    PlatformAdminAccessControl,
+    PausableControl
+{
     using SafeERC20 for IERC20;
     using CampaignLibrary for *;
     using TokenOperations for *;
+    using FactoryLibrary for *;
 
-    // Operation types for FundsOperation event
+    // Status and operation constants (packed into single bytes)
+    uint8 private constant STATUS_ACTIVE = 1;
+    uint8 private constant STATUS_COMPLETE = 2;
+    uint8 private constant REASON_GOAL_REACHED = 1;
+    uint8 private constant REASON_DEADLINE_PASSED = 2;
     uint8 private constant OP_DEPOSIT = 1;
-    uint8 private constant OP_HARVEST = 2;
-    uint8 private constant OP_WITHDRAW = 3;
-    uint8 private constant OP_WITHDRAW_ALL = 4;
+    uint8 private constant OP_CLAIM_FUNDS = 2;
 
-    // Error codes - more specific but still compact
+    // Error codes
     uint8 private constant ERR_INVALID_ADDRESS = 1;
-    uint8 private constant ERR_TOKEN_NOT_SUPPORTED = 2;
-    uint8 private constant ERR_INVALID_GOAL = 3;
-    uint8 private constant ERR_INVALID_DURATION = 4;
-    uint8 private constant ERR_INVALID_AMOUNT = 5;
-    uint8 private constant ERR_CAMPAIGN_NOT_ACTIVE = 6;
-    uint8 private constant ERR_CAMPAIGN_STILL_ACTIVE = 7;
-    uint8 private constant ERR_GOAL_REACHED = 8;
-    uint8 private constant ERR_GOAL_NOT_REACHED = 9;
-    uint8 private constant ERR_ETH_NOT_ACCEPTED = 10;
+    uint8 private constant ERR_INVALID_AMOUNT = 2;
+    uint8 private constant ERR_ETH_NOT_ACCEPTED = 3;
+    uint8 private constant ERR_CAMPAIGN_STILL_ACTIVE = 4;
+    uint8 private constant ERR_CAMPAIGN_PAST_END_DATE = 5;
+    uint8 private constant ERR_GOAL_REACHED = 6;
+    uint8 private constant ERR_ADMIN_OVERRIDE_ACTIVE = 7;
+    uint8 private constant ERR_FUNDS_CLAIMED = 8;
+    uint8 private constant ERR_FUNDS_NOT_CLAIMED = 9;
+    uint8 private constant ERR_NOTHING_TO_WITHDRAW = 10;
     uint8 private constant ERR_ALREADY_REFUNDED = 11;
     uint8 private constant ERR_NOTHING_TO_REFUND = 12;
-    uint8 private constant ERR_FUNDS_CLAIMED = 13;
-    uint8 private constant ERR_NO_YIELD = 14;
-    uint8 private constant ERR_YIELD_CLAIMED = 15;
-    uint8 private constant ERR_CALCULATION_COMPLETE = 16;
-    uint8 private constant ERR_CALCULATION_IN_PROGRESS = 17;
-    uint8 private constant ERR_WEIGHTED_NOT_CALCULATED = 18;
+    uint8 private constant ERR_CAMPAIGN_CONSTRUCTOR_VALIDATION_FAILED = 13;
 
-    // External contract references
+    // State variables - packed for gas efficiency
     IDefiIntegrationManager public immutable defiManager;
     ITokenRegistry public immutable tokenRegistry;
-
-    // Campaign token and identity
     address public immutable campaignToken;
     bytes32 public immutable campaignId;
-
-    // Campaign financial parameters
     uint256 public immutable campaignGoalAmount;
     uint256 public totalAmountRaised;
-    uint256 public totalHarvestedYield;
-
-    // Campaign timing parameters (packed for gas efficiency)
     uint64 public immutable campaignStartTime;
     uint64 public immutable campaignEndTime;
     uint64 public immutable campaignDuration;
-    bool public isClaimed;
-
-    // Contributor linked list
-    address public firstContributor;
-    mapping(address => address) public nextContributor;
-    uint256 public contributorsCount;
-
-    // Contributor data
-    mapping(address => uint256) public contributions;
-    mapping(address => uint256) public contributionTimestamps;
-    mapping(address => bool) public hasBeenRefunded;
-    mapping(address => bool) public hasClaimedYield;
-    mapping(address => bool) public isContributor;
-
-    // Batch processing state
-    address public currentProcessingContributor;
-
-    // Yield distribution variables
-    uint256 public totalWeightedContributions;
-    mapping(address => uint256) public weightedContributions;
-    bool public weightedContributionsCalculated;
+    uint32 public contributorsCount;
+    uint8 public campaignStatus = STATUS_ACTIVE;
+    bool public hasClaimedFunds;
     bool public adminOverride;
 
-    // Events
-    event Contribution(address indexed contributor, uint256 amount);
-    event RefundIssued(address indexed contributor, uint256 amount);
-    event FundsClaimed(address indexed owner, uint256 amount);
-    event AdminOverrideSet(bool indexed status, address indexed admin);
+    // Maps (stored separately in storage)
+    mapping(address => uint256) public contributions;
+    mapping(address => bool) public hasBeenRefunded;
+    mapping(address => bool) public isContributor;
 
-    // Enhanced with operation details while maintaining single event definition
+    // Events
+    /**
+     * @notice Emitted when a contribution is made to the campaign
+     * @param contributor Address of the contributor
+     * @param amount Amount contributed
+     * @param campaignId Campaign identifier
+     */
+    event Contribution(
+        address indexed contributor,
+        uint256 amount,
+        bytes32 indexed campaignId
+    );
+
+    /**
+     * @notice Emitted when a refund is issued
+     * @param contributor Contributor receiving refund
+     * @param amount Amount refunded
+     * @param campaignId Campaign identifier
+     */
+    event RefundIssued(
+        address indexed contributor,
+        uint256 amount,
+        bytes32 indexed campaignId
+    );
+
+    /**
+     * @notice Emitted when campaign funds are claimed
+     * @param initiator Claimer address
+     * @param amount Amount claimed
+     * @param campaignId Campaign identifier
+     */
+    event FundsClaimed(
+        address indexed initiator,
+        uint256 amount,
+        bytes32 indexed campaignId
+    );
+
+    /**
+     * @notice Emitted when admin override status changes
+     * @param status New override status
+     * @param admin Admin who made the change
+     * @param campaignId Campaign identifier
+     */
+    event AdminOverrideSet(
+        bool indexed status,
+        address indexed admin,
+        bytes32 indexed campaignId
+    );
+
+    /**
+     * @notice Emitted for token operations
+     * @param token Token address
+     * @param amount Amount involved
+     * @param opType Operation type (1=deposit, 2=claim)
+     * @param initiator Operation initiator
+     * @param campaignId Campaign identifier
+     */
     event FundsOperation(
         address indexed token,
         uint256 amount,
         uint8 opType,
-        uint256 yieldAmount, // Additional data for harvest operations
-        address initiator // Who initiated the operation
+        address initiator,
+        bytes32 indexed campaignId
     );
 
-    event TokensSwapped(
-        address indexed fromToken,
-        address indexed toToken,
-        uint256 amountIn,
-        uint256 amountOut
+    /**
+     * @notice Emitted when campaign status changes
+     * @param oldStatus Previous status
+     * @param newStatus New status
+     * @param reason Reason code (1=goal reached, 2=deadline passed)
+     * @param campaignId Campaign identifier
+     */
+    event CampaignStatusChanged(
+        uint8 oldStatus,
+        uint8 newStatus,
+        uint8 reason,
+        bytes32 indexed campaignId
     );
 
-    event YieldDistributed(
-        address indexed contributor,
-        uint256 amount,
-        uint256 sharePercentage
-    );
-    event YieldSharesCalculationUpdate(
-        uint256 processedCount,
-        bool isComplete,
-        uint256 totalProcessed
+    /**
+     * @notice Campaign operation error
+     * @param code Error code
+     * @param addr Related address
+     * @param value Related value
+     * @param campaignId Campaign identifier
+     */
+    error CampaignError(
+        uint8 code,
+        address addr,
+        uint256 value,
+        bytes32 campaignId
     );
 
-    // Consolidated errors with error codes
-    error CampaignError(uint8 code, address addr, uint256 value);
-
+    /**
+     * @notice Creates a new campaign
+     * @dev Sets up the campaign with specified parameters and validates inputs
+     * @param _owner Address of the campaign owner who can claim funds
+     * @param _campaignToken Address of the token used for contributions
+     * @param _campaignGoalAmount Target funding goal amount
+     * @param _campaignDuration Duration of the campaign in days
+     * @param _defiManager Address of the DeFi integration manager
+     * @param _platformAdmin Address of the platform admin contract
+     */
     constructor(
         address _owner,
         address _campaignToken,
         uint256 _campaignGoalAmount,
-        uint256 _campaignDuration,
+        uint32 _campaignDuration,
         address _defiManager,
         address _platformAdmin
     ) Ownable(_owner) PlatformAdminAccessControl(_platformAdmin) {
-        if (_campaignToken == address(0))
-            revert CampaignError(ERR_INVALID_ADDRESS, _campaignToken, 0);
-        if (_defiManager == address(0))
-            revert CampaignError(ERR_INVALID_ADDRESS, _defiManager, 0);
-
-        defiManager = IDefiIntegrationManager(_defiManager);
-        tokenRegistry = ITokenRegistry(defiManager.tokenRegistry());
-
-        if (!tokenRegistry.isTokenSupported(_campaignToken))
-            revert CampaignError(ERR_TOKEN_NOT_SUPPORTED, _campaignToken, 0);
-        if (_campaignGoalAmount == 0)
-            revert CampaignError(
-                ERR_INVALID_GOAL,
-                address(0),
-                _campaignGoalAmount
-            );
-        if (_campaignDuration == 0)
-            revert CampaignError(
-                ERR_INVALID_DURATION,
-                address(0),
-                _campaignDuration
-            );
-
-        campaignToken = _campaignToken;
-        campaignGoalAmount = _campaignGoalAmount;
-        campaignDuration = uint64(_campaignDuration);
-
         campaignStartTime = uint64(block.timestamp);
-        campaignEndTime = uint64(
-            campaignStartTime + (_campaignDuration * 1 days)
-        );
 
         campaignId = keccak256(
             abi.encodePacked(
@@ -169,358 +197,335 @@ contract Campaign is Ownable, ReentrancyGuard, PlatformAdminAccessControl {
                 block.number
             )
         );
+
+        if (_defiManager == address(0))
+            revert CampaignError(
+                ERR_INVALID_ADDRESS,
+                _defiManager,
+                0,
+                campaignId
+            );
+
+        if (_platformAdmin == address(0))
+            revert CampaignError(
+                ERR_INVALID_ADDRESS,
+                _platformAdmin,
+                0,
+                campaignId
+            );
+
+        defiManager = IDefiIntegrationManager(_defiManager);
+        tokenRegistry = ITokenRegistry(defiManager.tokenRegistry());
+
+        function(address)
+            external
+            view
+            returns (bool) isTokenSupported = tokenRegistry.isTokenSupported;
+
+        bool isValid = FactoryLibrary.validateCampaignParams(
+            _campaignToken,
+            _campaignGoalAmount,
+            _campaignDuration,
+            isTokenSupported
+        );
+
+        if (!isValid) {
+            revert CampaignError(
+                ERR_CAMPAIGN_CONSTRUCTOR_VALIDATION_FAILED,
+                address(0),
+                0,
+                campaignId
+            );
+        }
+
+        campaignToken = _campaignToken;
+        campaignGoalAmount = _campaignGoalAmount;
+        campaignDuration = uint64(_campaignDuration);
+
+        campaignEndTime = uint64(
+            campaignStartTime + (_campaignDuration * 1 days)
+        );
     }
 
+    /**
+     * @dev Fallback function to reject ETH transfers
+     */
     receive() external payable {
-        revert CampaignError(ERR_ETH_NOT_ACCEPTED, address(0), 0);
+        revert CampaignError(ERR_ETH_NOT_ACCEPTED, address(0), 0, campaignId);
     }
 
-    function contribute(
-        address fromToken,
-        uint256 amount
-    ) external nonReentrant {
+    /**
+     * @notice Allows a user to contribute to the campaign
+     * @dev Transfers tokens from user, deposits to yield protocol, and updates state
+     * @param amount Amount to contribute in campaign tokens
+     */
+    function contribute(uint256 amount) external nonReentrant whenNotPaused {
+        checkAndUpdateStatus();
+
+        if (adminOverride)
+            revert CampaignError(
+                ERR_ADMIN_OVERRIDE_ACTIVE,
+                campaignToken,
+                0,
+                campaignId
+            );
         if (amount == 0)
-            revert CampaignError(ERR_INVALID_AMOUNT, address(0), amount);
+            revert CampaignError(
+                ERR_INVALID_AMOUNT,
+                campaignToken,
+                amount,
+                campaignId
+            );
+
         if (!isCampaignActive())
-            revert CampaignError(ERR_CAMPAIGN_NOT_ACTIVE, address(0), 0);
-        if (totalAmountRaised >= campaignGoalAmount)
+            revert CampaignError(
+                ERR_CAMPAIGN_PAST_END_DATE,
+                campaignToken,
+                0,
+                campaignId
+            );
+
+        if (isCampaignSuccessful())
             revert CampaignError(
                 ERR_GOAL_REACHED,
                 address(0),
-                totalAmountRaised
+                totalAmountRaised,
+                campaignId
             );
 
-        if (!tokenRegistry.isTokenSupported(fromToken))
-            revert CampaignError(ERR_TOKEN_NOT_SUPPORTED, fromToken, 0);
-
-        uint256 contributionAmount;
-
-        if (fromToken == campaignToken) {
-            contributionAmount = amount;
-
-            TokenOperations.safeTransferFrom(
+        (uint256 minAmount, ) = tokenRegistry.getMinContributionAmount(
+            campaignToken
+        );
+        if (amount < minAmount)
+            revert CampaignError(
+                ERR_INVALID_AMOUNT,
                 campaignToken,
-                msg.sender,
-                address(this),
-                amount
-            );
-        } else {
-            TokenOperations.safeTransferFrom(
-                fromToken,
-                msg.sender,
-                address(this),
-                amount
-            );
-            TokenOperations.safeIncreaseAllowance(
-                fromToken,
-                address(defiManager),
-                amount
-            );
-
-            uint256 received = defiManager.swapTokenForTarget(
-                fromToken,
                 amount,
-                campaignToken
+                campaignId
             );
-            contributionAmount = received;
-
-            emit TokensSwapped(fromToken, campaignToken, amount, received);
-        }
-
-        contributions[msg.sender] += contributionAmount;
-        totalAmountRaised += contributionAmount;
-        contributionTimestamps[msg.sender] = block.timestamp;
 
         if (!isContributor[msg.sender]) {
-            isContributor[msg.sender] = true;
-            nextContributor[msg.sender] = firstContributor;
-            firstContributor = msg.sender;
             contributorsCount++;
+            isContributor[msg.sender] = true;
         }
 
-        emit Contribution(msg.sender, contributionAmount);
+        bool wasSuccessfulBefore = isCampaignSuccessful();
+
+        contributions[msg.sender] += amount;
+        totalAmountRaised += amount;
+
+        // Then handle external transfers (CEI pattern)
+        TokenOperations.safeTransferFrom(
+            campaignToken,
+            msg.sender,
+            address(this),
+            amount
+        );
+
+        TokenOperations.safeIncreaseAllowance(
+            campaignToken,
+            address(defiManager),
+            amount
+        );
+
+        defiManager.depositToYieldProtocol(campaignToken, amount, campaignId);
+
+        // Emit events last
+        emit Contribution(msg.sender, amount, campaignId);
+        emit FundsOperation(
+            campaignToken,
+            amount,
+            OP_DEPOSIT,
+            msg.sender,
+            campaignId
+        );
+
+        if (
+            !wasSuccessfulBefore &&
+            isCampaignSuccessful() &&
+            campaignStatus == STATUS_ACTIVE
+        ) {
+            campaignStatus = STATUS_COMPLETE;
+            emit CampaignStatusChanged(
+                STATUS_ACTIVE,
+                STATUS_COMPLETE,
+                REASON_GOAL_REACHED,
+                campaignId
+            );
+        }
     }
 
-    function requestRefund() external nonReentrant {
-        if (isCampaignActive())
-            revert CampaignError(ERR_CAMPAIGN_STILL_ACTIVE, address(0), 0);
-        if (totalAmountRaised >= campaignGoalAmount)
+    /**
+     * @notice Allows a contributor to request a refund if campaign is unsuccessful
+     * @dev Transfers tokens back to contributor if eligible for refund
+     */
+    function requestRefund() external nonReentrant whenNotPaused {
+        checkAndUpdateStatus();
+
+        if (isCampaignSuccessful())
             revert CampaignError(
                 ERR_GOAL_REACHED,
                 address(0),
-                totalAmountRaised
+                totalAmountRaised,
+                campaignId
             );
+
+        if (isCampaignActive())
+            revert CampaignError(
+                ERR_CAMPAIGN_STILL_ACTIVE,
+                address(0),
+                0,
+                campaignId
+            );
+
+        if (!hasClaimedFunds) {
+            revert CampaignError(
+                ERR_FUNDS_NOT_CLAIMED,
+                address(0),
+                0,
+                campaignId
+            );
+        }
         if (hasBeenRefunded[msg.sender])
-            revert CampaignError(ERR_ALREADY_REFUNDED, msg.sender, 0);
+            revert CampaignError(
+                ERR_ALREADY_REFUNDED,
+                msg.sender,
+                0,
+                campaignId
+            );
 
         uint256 refundAmount = contributions[msg.sender];
         if (refundAmount == 0)
-            revert CampaignError(ERR_NOTHING_TO_REFUND, msg.sender, 0);
+            revert CampaignError(
+                ERR_NOTHING_TO_REFUND,
+                msg.sender,
+                0,
+                campaignId
+            );
 
         hasBeenRefunded[msg.sender] = true;
         contributions[msg.sender] = 0;
 
         TokenOperations.safeTransfer(campaignToken, msg.sender, refundAmount);
-        emit RefundIssued(msg.sender, refundAmount);
+        emit RefundIssued(msg.sender, refundAmount, campaignId);
     }
 
-    function claimFunds() external onlyOwner nonReentrant {
-        if (isCampaignActive())
-            revert CampaignError(ERR_CAMPAIGN_STILL_ACTIVE, address(0), 0);
-        if (totalAmountRaised < campaignGoalAmount)
+    /**
+     * @notice Allows the campaign owner to claim funds if campaign is successful or ended
+     * @dev Only callable by the owner when not in admin override mode
+     */
+    function claimFunds() external onlyOwner nonReentrant whenNotPaused {
+        if (adminOverride)
             revert CampaignError(
-                ERR_GOAL_NOT_REACHED,
+                ERR_ADMIN_OVERRIDE_ACTIVE,
                 address(0),
-                totalAmountRaised
+                0,
+                campaignId
             );
-        if (isClaimed) revert CampaignError(ERR_FUNDS_CLAIMED, address(0), 0);
-
-        uint256 balance = TokenOperations.getBalance(
-            campaignToken,
-            address(this)
-        );
-        isClaimed = true;
-        TokenOperations.safeTransfer(campaignToken, owner(), balance);
-        emit FundsClaimed(owner(), balance);
+        _claimFunds();
     }
 
-    function depositToYieldProtocol(
-        address token,
-        uint256 amount
-    ) external onlyOwner nonReentrant {
-        if (!isCampaignActive())
-            revert CampaignError(ERR_CAMPAIGN_NOT_ACTIVE, address(0), 0);
-
-        TokenOperations.safeIncreaseAllowance(
-            token,
-            address(defiManager),
-            amount
-        );
-        defiManager.depositToYieldProtocol(token, amount);
-
-        emit FundsOperation(token, amount, OP_DEPOSIT, 0, msg.sender);
-    }
-
-    function harvestYield(address token) external onlyOwner nonReentrant {
-        _harvestYield(token, msg.sender);
-    }
-
-    function harvestYieldAdmin(
-        address token
-    ) external onlyPlatformAdminAfterGrace nonReentrant {
-        _harvestYield(token, msg.sender);
-    }
-
-    function _harvestYield(address token, address initiator) internal {
-        (uint256 _contributorYield, ) = defiManager.harvestYield(token);
-        totalHarvestedYield += _contributorYield;
-
-        emit FundsOperation(token, 0, OP_HARVEST, _contributorYield, initiator);
-    }
-
-    function withdrawAllFromYieldProtocol(
-        address token
-    ) external onlyOwner nonReentrant {
-        _withdrawAllFromYield(token, msg.sender);
-    }
-
-    function withdrawAllFromYieldProtocolAdmin(
-        address token
-    ) external onlyPlatformAdminAfterGrace nonReentrant {
-        _withdrawAllFromYield(token, msg.sender);
-    }
-
-    function _withdrawAllFromYield(address token, address initiator) internal {
-        uint256 withdrawn = defiManager.withdrawAllFromYieldProtocol(token);
-
-        emit FundsOperation(token, withdrawn, OP_WITHDRAW_ALL, 0, initiator);
-    }
-
-    function withdrawFromYieldProtocol(
-        address token,
-        uint256 amount
-    ) external onlyOwner nonReentrant {
-        _withdrawFromYield(token, amount, msg.sender);
-    }
-
-    function withdrawFromYieldProtocolAdmin(
-        address token,
-        uint256 amount
-    ) external onlyPlatformAdminAfterGrace nonReentrant {
-        _withdrawFromYield(token, amount, msg.sender);
-    }
-
-    function _withdrawFromYield(
-        address token,
-        uint256 amount,
-        address initiator
-    ) internal {
-        uint256 withdrawn = defiManager.withdrawFromYieldProtocol(
-            token,
-            amount
-        );
-        emit FundsOperation(token, withdrawn, OP_WITHDRAW, 0, initiator);
-    }
-
-    function calculateWeightedContributions() public {
-        if (isCampaignActive())
-            revert CampaignError(ERR_CAMPAIGN_STILL_ACTIVE, address(0), 0);
-        if (weightedContributionsCalculated)
-            revert CampaignError(ERR_CALCULATION_COMPLETE, address(0), 0);
-        if (currentProcessingContributor != address(0))
-            revert CampaignError(
-                ERR_CALCULATION_IN_PROGRESS,
-                currentProcessingContributor,
-                0
-            );
-
-        totalWeightedContributions = 0;
-        address currentContributor = firstContributor;
-        uint256 totalProcessed = 0;
-
-        while (currentContributor != address(0)) {
-            if (
-                contributions[currentContributor] > 0 &&
-                !hasBeenRefunded[currentContributor]
-            ) {
-                uint256 timeWeight = CampaignLibrary.calculateTimeWeight(
-                    contributionTimestamps[currentContributor],
-                    campaignStartTime,
-                    campaignEndTime
-                );
-                uint256 weighted = (contributions[currentContributor] *
-                    timeWeight) / 10000;
-                weightedContributions[currentContributor] = weighted;
-                unchecked {
-                    totalWeightedContributions += weighted;
-                    totalProcessed++;
-                }
-            }
-            currentContributor = nextContributor[currentContributor];
-        }
-
-        weightedContributionsCalculated = true;
-        emit YieldSharesCalculationUpdate(totalProcessed, true, totalProcessed);
-    }
-
-    function calculateWeightedContributionsBatch(
-        uint256 batchSize
-    ) public returns (bool isComplete, uint256 processedCount) {
-        if (isCampaignActive())
-            revert CampaignError(ERR_CAMPAIGN_STILL_ACTIVE, address(0), 0);
-        if (weightedContributionsCalculated)
-            revert CampaignError(ERR_CALCULATION_COMPLETE, address(0), 0);
-
-        if (currentProcessingContributor == address(0)) {
-            currentProcessingContributor = firstContributor;
-        }
-
-        processedCount = 0;
-        uint256 totalProcessed = 0;
-
-        while (
-            currentProcessingContributor != address(0) &&
-            processedCount < batchSize
-        ) {
-            if (
-                contributions[currentProcessingContributor] > 0 &&
-                !hasBeenRefunded[currentProcessingContributor]
-            ) {
-                uint256 timeWeight = CampaignLibrary.calculateTimeWeight(
-                    contributionTimestamps[currentProcessingContributor],
-                    campaignStartTime,
-                    campaignEndTime
-                );
-                uint256 weighted = (contributions[
-                    currentProcessingContributor
-                ] * timeWeight) / 10000;
-                weightedContributions[currentProcessingContributor] = weighted;
-                unchecked {
-                    totalWeightedContributions += weighted;
-                    processedCount++;
-                }
-            }
-
-            unchecked {
-                totalProcessed++;
-            }
-
-            currentProcessingContributor = nextContributor[
-                currentProcessingContributor
-            ];
-        }
-
-        isComplete = (currentProcessingContributor == address(0));
-        if (isComplete) {
-            weightedContributionsCalculated = true;
-        }
-
-        emit YieldSharesCalculationUpdate(
-            processedCount,
-            isComplete,
-            totalProcessed
-        );
-        return (isComplete, processedCount);
-    }
-
-    function resetWeightedContributionsCalculation()
+    /**
+     * @notice Allows platform admins to claim funds on behalf of the campaign
+     * @dev Only callable by platform admins, can bypass some restrictions
+     */
+    function claimFundsAdmin()
         external
         onlyPlatformAdmin
+        nonReentrant
+        whenNotPaused
     {
-        if (weightedContributionsCalculated)
-            revert CampaignError(ERR_CALCULATION_COMPLETE, address(0), 0);
-        currentProcessingContributor = address(0);
+        _claimFunds();
     }
 
-    function calculateYieldShare(
-        address contributor
-    ) public view returns (uint256) {
-        if (
-            !weightedContributionsCalculated ||
-            weightedContributions[contributor] == 0 ||
-            totalWeightedContributions == 0
-        ) {
-            return 0;
+    /**
+     * @notice Internal implementation of fund claiming logic
+     * @dev Withdraws funds from yield protocol and handles distribution based on campaign success
+     */
+    function _claimFunds() internal {
+        checkAndUpdateStatus();
+
+        if (!adminOverride) {
+            if (isCampaignActive() && !isCampaignSuccessful())
+                revert CampaignError(
+                    ERR_CAMPAIGN_STILL_ACTIVE,
+                    address(0),
+                    0,
+                    campaignId
+                );
         }
 
-        return
-            CampaignLibrary.calculateYieldShare(
-                weightedContributions[contributor],
-                totalWeightedContributions,
-                totalHarvestedYield
+        if (hasClaimedFunds)
+            revert CampaignError(ERR_FUNDS_CLAIMED, address(0), 0, campaignId);
+
+        address aTokenAddress = defiManager.getATokenAddress(campaignToken);
+        if (aTokenAddress == address(0)) {
+            revert CampaignError(
+                ERR_INVALID_ADDRESS,
+                aTokenAddress,
+                0,
+                campaignId
             );
-    }
+        }
 
-    function claimYield() external nonReentrant {
-        if (isCampaignActive())
-            revert CampaignError(ERR_CAMPAIGN_STILL_ACTIVE, address(0), 0);
-        if (!weightedContributionsCalculated)
-            revert CampaignError(ERR_WEIGHTED_NOT_CALCULATED, address(0), 0);
-        if (!isContributor[msg.sender] || contributions[msg.sender] == 0)
-            revert CampaignError(ERR_NO_YIELD, msg.sender, 0);
-        if (hasBeenRefunded[msg.sender])
-            revert CampaignError(ERR_NO_YIELD, msg.sender, 0);
-        if (hasClaimedYield[msg.sender])
-            revert CampaignError(ERR_YIELD_CLAIMED, msg.sender, 0);
-        if (totalHarvestedYield == 0)
-            revert CampaignError(ERR_NO_YIELD, address(0), 0);
+        IERC20 aToken = IERC20(aTokenAddress);
 
-        uint256 yieldShare = calculateYieldShare(msg.sender);
-        if (yieldShare == 0) revert CampaignError(ERR_NO_YIELD, msg.sender, 0);
+        uint256 aTokenBalance = aToken.balanceOf(address(this));
 
-        hasClaimedYield[msg.sender] = true;
+        if (aTokenBalance == 0) {
+            revert CampaignError(
+                ERR_NOTHING_TO_WITHDRAW,
+                address(0),
+                0,
+                campaignId
+            );
+        }
 
-        TokenOperations.safeTransfer(campaignToken, msg.sender, yieldShare);
+        hasClaimedFunds = true;
 
-        uint256 sharePercentage = CampaignLibrary.calculateSharePercentage(
-            weightedContributions[msg.sender],
-            totalWeightedContributions,
-            10000
+        aToken.safeTransfer(address(defiManager), aTokenBalance);
+
+        uint256 withdrawn = defiManager.withdrawFromYieldProtocol(
+            campaignToken,
+            isCampaignSuccessful(),
+            totalAmountRaised,
+            campaignId
         );
 
-        emit YieldDistributed(msg.sender, yieldShare, sharePercentage);
+        if (isCampaignSuccessful()) {
+            TokenOperations.safeTransfer(
+                campaignToken,
+                owner(),
+                IERC20(campaignToken).balanceOf(address(this))
+            );
+        }
+
+        emit FundsOperation(
+            campaignToken,
+            withdrawn,
+            OP_CLAIM_FUNDS,
+            msg.sender,
+            campaignId
+        );
+
+        emit FundsClaimed(address(this), withdrawn, campaignId);
     }
 
+    /**
+     * @notice Sets the admin override status
+     * @dev Only callable by platform admins
+     * @param _adminOverride New override status to set
+     */
+    function setAdminOverride(bool _adminOverride) external onlyPlatformAdmin {
+        adminOverride = _adminOverride;
+        emit AdminOverrideSet(_adminOverride, msg.sender, campaignId);
+    }
+
+    /**
+     * @notice Checks if the campaign is currently active
+     * @dev A campaign is active if current time is between start and end times and no admin override
+     * @return True if campaign is active, false otherwise
+     */
     function isCampaignActive() public view returns (bool) {
         return
             CampaignLibrary.isCampaignActive(
@@ -531,34 +536,58 @@ contract Campaign is Ownable, ReentrancyGuard, PlatformAdminAccessControl {
             );
     }
 
+    /**
+     * @notice Checks if the campaign has successfully reached its funding goal
+     * @dev A campaign is successful if total raised equals or exceeds goal amount
+     * @return True if campaign is successful, false otherwise
+     */
     function isCampaignSuccessful() public view returns (bool) {
-        return totalAmountRaised >= campaignGoalAmount;
+        return
+            CampaignLibrary.isCampaignSuccessful(
+                totalAmountRaised,
+                campaignGoalAmount
+            );
     }
 
-    function getDepositedAmount(address token) external view returns (uint256) {
-        return defiManager.getDepositedAmount(address(this), token);
-    }
-
-    function getCurrentYieldRate(
-        address token
-    ) external view returns (uint256) {
-        return defiManager.getCurrentYieldRate(token);
-    }
-
-    function getContributorsCount() external view returns (uint256) {
-        return contributorsCount;
-    }
-
-    function getAdminOverride() external view returns (bool) {
+    /**
+     * @notice Checks if admin override is currently active
+     * @dev Implementation of abstract function from PlatformAdminAccessControl
+     * @return True if admin override is active, false otherwise
+     */
+    function isAdminOverrideActive() public view override returns (bool) {
         return adminOverride;
     }
 
     /**
-     * @dev Allows platform admin to override campaign status
-     * @param _adminOverride If true, forces campaign to inactive state
+     * @notice Returns the current balance of campaign tokens held by the contract
+     * @dev Direct query of token balance not accounting for tokens in yield protocol
+     * @return Current balance of campaign tokens
      */
-    function setAdminOverride(bool _adminOverride) external onlyPlatformAdmin {
-        adminOverride = _adminOverride;
-        emit AdminOverrideSet(_adminOverride, msg.sender);
+    function getCampaignTokenBalance() public view returns (uint256) {
+        return IERC20(campaignToken).balanceOf(address(this));
+    }
+
+    /**
+     * @notice Checks and updates the campaign status if deadline has passed
+     * @dev Can be called by anyone to update campaign status to complete if deadline passed
+     * @return Current campaign status after potential update
+     */
+    function checkAndUpdateStatus() public returns (uint8) {
+        // If already complete, just return status
+        if (campaignStatus == STATUS_COMPLETE) {
+            return campaignStatus;
+        }
+
+        if (!isCampaignActive() && !isCampaignSuccessful()) {
+            campaignStatus = STATUS_COMPLETE;
+            emit CampaignStatusChanged(
+                STATUS_ACTIVE,
+                STATUS_COMPLETE,
+                REASON_DEADLINE_PASSED,
+                campaignId
+            );
+        }
+
+        return campaignStatus;
     }
 }

@@ -6,441 +6,344 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {DataTypes} from "@aave/core-v3/contracts/protocol/libraries/types/DataTypes.sol";
 import "./interfaces/ITokenRegistry.sol";
-import "./interfaces/IYieldDistributor.sol";
+import "./interfaces/IFeeManager.sol";
 import "./interfaces/IAavePool.sol";
-import "./interfaces/ISwapRouter.sol";
-import "./interfaces/IQuoter.sol";
 import "./abstracts/PlatformAdminAccessControl.sol";
-import "./libraries/DefiLibrary.sol";
+import "./abstracts/PausableControl.sol";
 
+/**
+ * @title DefiIntegrationManager
+ * @author Generated with assistance from an LLM
+ * @notice Manages interactions with DeFi protocols for yield generation
+ * @dev Handles deposits and withdrawals to Aave for campaign funds
+ */
 contract DefiIntegrationManager is
     Ownable,
     ReentrancyGuard,
-    PlatformAdminAccessControl
+    PlatformAdminAccessControl,
+    PausableControl
 {
     using SafeERC20 for IERC20;
-    using DefiLibrary for *;
 
-    // Operation types for events
-    uint8 private constant OP_YIELD_DEPOSITED = 1;
-    uint8 private constant OP_YIELD_WITHDRAWN = 2;
-    uint8 private constant OP_YIELD_HARVESTED = 3;
-    uint8 private constant OP_TOKEN_SWAPPED = 4;
-    uint8 private constant OP_CONFIG_UPDATED = 5;
+    // Status and operation constants (packed into single bytes)
+    uint8 private constant OP_DEPOSITED = 1;
+    uint8 private constant OP_WITHDRAWN = 2;
+    uint8 private constant OP_CONFIG_UPDATED = 3;
 
     // Error codes
-    uint8 private constant ERR_UNAUTHORIZED = 1;
-    uint8 private constant ERR_ZERO_AMOUNT = 2;
-    uint8 private constant ERR_INSUFFICIENT_DEPOSIT = 3;
-    uint8 private constant ERR_TOKEN_NOT_SUPPORTED = 4;
-    uint8 private constant ERR_SLIPPAGE_EXCEEDED = 5;
-    uint8 private constant ERR_YIELD_DEPOSIT_FAILED = 6;
-    uint8 private constant ERR_YIELD_WITHDRAWAL_FAILED = 7;
-    uint8 private constant ERR_INVALID_ADDRESS = 8;
-    uint8 private constant ERR_INVALID_CONSTRUCTOR = 9;
-    uint8 private constant ERR_NO_YIELD = 10;
-    uint8 private constant ERR_WITHDRAWAL_MISMATCH = 11;
-    uint8 private constant ERR_FAILED_GET_ATOKEN = 12;
-    uint8 private constant ERR_TOKENS_SAME = 13;
-    uint8 private constant ERR_SWAP_QUOTE_INVALID = 14;
-    uint8 private constant ERR_SWAP_FAILED = 15;
+    uint8 private constant ERR_ZERO_AMOUNT = 1;
+    uint8 private constant ERR_TOKEN_NOT_SUPPORTED = 2;
+    uint8 private constant ERR_DEPOSIT_FAILED = 3;
+    uint8 private constant ERR_WITHDRAWAL_FAILED = 4;
+    uint8 private constant ERR_INVALID_ADDRESS = 5;
+    uint8 private constant ERR_INVALID_CONSTRUCTOR = 6;
+    uint8 private constant ERR_WITHDRAWAL_DOESNT_BALANCE = 7;
 
-    // External contracts
+    //Interfaces
     IAavePool public aavePool;
-    ISwapRouter public uniswapRouter;
-    IQuoter public uniswapQuoter;
     ITokenRegistry public tokenRegistry;
-    IYieldDistributor public yieldDistributor;
+    IFeeManager public feeManager;
 
-    // Constants
-    uint24 public constant UNISWAP_FEE_TIER = 3000; // 0.3%
-    uint16 public constant SLIPPAGE_TOLERANCE = 50; // 0.5%
+    //State variables
+    mapping(address => mapping(address => uint256)) public aaveBalances;
 
-    // Storage
-    mapping(address => mapping(address => uint256)) public aaveDeposits;
+    /**
+     * @notice Thrown when a DeFi operation fails
+     * @param code Error code identifying the failure reason
+     * @param addr Related address (if applicable)
+     */
+    error DefiError(uint8 code, address addr);
+    /**
+     * @notice Thrown when a deposit to a yield protocol fails
+     * @param code Error code identifying the failure reason
+     * @param campaignId Unique identifier of the campaign related to this operation
+     * @param token Address of the token being deposited
+     * @param amount Amount of tokens being deposited
+     */
+    error DeposittoYieldProtocolError(
+        uint8 code,
+        address token,
+        uint256 amount,
+        bytes32 campaignId
+    );
+    /**
+     * @notice Thrown when a withdrawal from a yield protocol fails
+     * @param code Error code identifying the failure reason
+     * @param campaignId Unique identifier of the campaign related to this operation
+     * @param token Address of the token being withdrawn
+     * @param amount Amount of tokens being withdrawn or requested to withdraw
+     */
+    error WithdrawFromYieldProtocolError(
+        uint8 code,
+        address token,
+        uint256 amount,
+        bytes32 campaignId
+    );
 
-    // Consolidated error
-    error DefiError(uint8 code, address addr, uint256 value);
-
-    // Consolidated event
+    /**
+     * @notice Emitted when a DeFi operation is performed
+     * @param opType Type of operation (1=deposit, 2=withdraw, 3=config_updated)
+     * @param sender Address initiating the operation
+     * @param token Token involved in the operation
+     * @param amount Amount of tokens involved in the operation
+     * @param campaignId Unique identifier of the campaign related to this operation
+     */
     event DefiOperation(
         uint8 opType,
         address indexed sender,
         address indexed token,
-        address indexed secondToken,
         uint256 amount,
-        uint256 secondAmount
+        bytes32 indexed campaignId
     );
 
-    // Configuration update event
+    /**
+     * @notice Emitted when a configuration is updated
+     * @param configType Type of configuration updated
+     * @param oldAddress Previous address
+     * @param newAddress New address
+     */
     event ConfigUpdated(
         uint8 configType,
         address oldAddress,
         address newAddress
     );
 
+    /**
+     * @notice Creates a new DefiIntegrationManager contract
+     * @dev Sets up initial contract references and validates parameters
+     * @param _aavePool Address of the Aave Pool contract
+     * @param _tokenRegistry Address of the TokenRegistry contract
+     * @param _feeManager Address of the FeeManager contract
+     * @param _platformAdmin Address of the PlatformAdmin contract
+     * @param _owner Address of the contract owner
+     */
     constructor(
         address _aavePool,
-        address _uniswapRouter,
-        address _uniswapQuoter,
         address _tokenRegistry,
-        address _yieldDistributor,
+        address _feeManager,
         address _platformAdmin,
         address _owner
     ) Ownable(_owner) PlatformAdminAccessControl(_platformAdmin) {
         if (_aavePool == address(0)) {
-            revert DefiError(ERR_INVALID_CONSTRUCTOR, _aavePool, 0);
-        }
-
-        if (_uniswapRouter == address(0)) {
-            revert DefiError(ERR_INVALID_CONSTRUCTOR, _uniswapRouter, 1);
-        }
-
-        if (_uniswapQuoter == address(0)) {
-            revert DefiError(ERR_INVALID_CONSTRUCTOR, _uniswapQuoter, 2);
+            revert DefiError(ERR_INVALID_CONSTRUCTOR, _aavePool);
         }
 
         if (_tokenRegistry == address(0)) {
-            revert DefiError(ERR_INVALID_CONSTRUCTOR, _tokenRegistry, 3);
+            revert DefiError(ERR_INVALID_CONSTRUCTOR, _tokenRegistry);
         }
 
-        if (_yieldDistributor == address(0)) {
-            revert DefiError(ERR_INVALID_CONSTRUCTOR, _yieldDistributor, 4);
+        if (_feeManager == address(0)) {
+            revert DefiError(ERR_INVALID_CONSTRUCTOR, _feeManager);
+        }
+
+        if (_platformAdmin == address(0)) {
+            revert DefiError(ERR_INVALID_CONSTRUCTOR, _platformAdmin);
         }
 
         aavePool = IAavePool(_aavePool);
-        uniswapRouter = ISwapRouter(_uniswapRouter);
-        uniswapQuoter = IQuoter(_uniswapQuoter);
         tokenRegistry = ITokenRegistry(_tokenRegistry);
-        yieldDistributor = IYieldDistributor(_yieldDistributor);
+        feeManager = IFeeManager(_feeManager);
     }
 
+    /**
+     * @notice Updates the TokenRegistry contract reference
+     * @dev Only callable by platform admins
+     * @param _tokenRegistry Address of the new TokenRegistry contract
+     */
     function setTokenRegistry(
         address _tokenRegistry
     ) external onlyPlatformAdmin {
         if (_tokenRegistry == address(0)) {
-            revert DefiError(ERR_INVALID_ADDRESS, _tokenRegistry, 0);
+            revert DefiError(ERR_INVALID_ADDRESS, _tokenRegistry);
         }
 
         address oldRegistry = address(tokenRegistry);
         tokenRegistry = ITokenRegistry(_tokenRegistry);
 
-        emit ConfigUpdated(1, oldRegistry, _tokenRegistry);
+        emit ConfigUpdated(OP_CONFIG_UPDATED, oldRegistry, _tokenRegistry);
     }
 
-    function setYieldDistributor(
-        address _yieldDistributor
-    ) external onlyPlatformAdmin {
-        if (_yieldDistributor == address(0)) {
-            revert DefiError(ERR_INVALID_ADDRESS, _yieldDistributor, 0);
+    /**
+     * @notice Updates the FeeManager contract reference
+     * @dev Only callable by platform admins
+     * @param _feeManager Address of the new FeeManager contract
+     */
+    function setFeeManager(address _feeManager) external onlyPlatformAdmin {
+        if (_feeManager == address(0)) {
+            revert DefiError(ERR_INVALID_ADDRESS, _feeManager);
         }
 
-        address oldDistributor = address(yieldDistributor);
-        yieldDistributor = IYieldDistributor(_yieldDistributor);
+        address oldFeeManager = address(feeManager);
+        feeManager = IFeeManager(_feeManager);
 
-        emit ConfigUpdated(2, oldDistributor, _yieldDistributor);
+        emit ConfigUpdated(OP_CONFIG_UPDATED, oldFeeManager, _feeManager);
     }
 
+    /**
+     * @notice Updates the Aave Pool contract reference
+     * @dev Only callable by platform admins
+     * @param _aavePool Address of the new Aave Pool contract
+     */
     function setAavePool(address _aavePool) external onlyPlatformAdmin {
         if (_aavePool == address(0)) {
-            revert DefiError(ERR_INVALID_ADDRESS, _aavePool, 0);
+            revert DefiError(ERR_INVALID_ADDRESS, _aavePool);
         }
 
         address oldAavePool = address(aavePool);
         aavePool = IAavePool(_aavePool);
 
-        emit ConfigUpdated(3, oldAavePool, _aavePool);
+        emit ConfigUpdated(OP_CONFIG_UPDATED, oldAavePool, _aavePool);
     }
 
-    function setUniswapRouter(
-        address _uniswapRouter
-    ) external onlyPlatformAdmin {
-        if (_uniswapRouter == address(0)) {
-            revert DefiError(ERR_INVALID_ADDRESS, _uniswapRouter, 0);
-        }
-
-        address oldUniswapRouter = address(uniswapRouter);
-        uniswapRouter = ISwapRouter(_uniswapRouter);
-
-        emit ConfigUpdated(4, oldUniswapRouter, _uniswapRouter);
-    }
-
-    function setUniswapQuoter(
-        address _uniswapQuoter
-    ) external onlyPlatformAdmin {
-        if (_uniswapQuoter == address(0)) {
-            revert DefiError(ERR_INVALID_ADDRESS, _uniswapQuoter, 0);
-        }
-
-        address oldUniswapQuoter = address(uniswapQuoter);
-        uniswapQuoter = IQuoter(_uniswapQuoter);
-
-        emit ConfigUpdated(5, oldUniswapQuoter, _uniswapQuoter);
-    }
-
+    /**
+     * @notice Deposits tokens to Aave for yield generation
+     * @dev Transfers tokens from sender to this contract, then supplies to Aave
+     * @param _token Address of the token to deposit
+     * @param _amount Amount of tokens to deposit
+     * @param campaignId Unique identifier of the campaign related to this operation
+     */
     function depositToYieldProtocol(
         address _token,
-        uint256 _amount
-    ) external nonReentrant {
-        if (_amount <= 0) {
-            revert DefiError(ERR_ZERO_AMOUNT, _token, _amount);
+        uint256 _amount,
+        bytes32 campaignId
+    ) external nonReentrant whenNotPaused {
+        bool tokenExists;
+        bool isSupported;
+        try tokenRegistry.isTokenSupported(_token) returns (bool supported) {
+            tokenExists = true;
+            isSupported = supported;
+        } catch {
+            tokenExists = false;
         }
 
-        if (!tokenRegistry.isTokenSupported(_token)) {
-            revert DefiError(ERR_TOKEN_NOT_SUPPORTED, _token, 0);
+        if (!tokenExists || !isSupported) {
+            revert DeposittoYieldProtocolError(
+                ERR_TOKEN_NOT_SUPPORTED,
+                _token,
+                _amount,
+                campaignId
+            );
+        }
+        address aToken = getATokenAddress(_token);
+
+        if (aToken == address(0)) {
+            revert DeposittoYieldProtocolError(
+                ERR_INVALID_ADDRESS,
+                aToken,
+                _amount,
+                campaignId
+            );
+        }
+
+        if (_amount <= 0) {
+            revert DeposittoYieldProtocolError(
+                ERR_ZERO_AMOUNT,
+                _token,
+                _amount,
+                campaignId
+            );
         }
 
         IERC20(_token).safeTransferFrom(msg.sender, address(this), _amount);
         IERC20(_token).safeIncreaseAllowance(address(aavePool), _amount);
 
-        try aavePool.supply(_token, _amount, address(this), 0) {
-            aaveDeposits[msg.sender][_token] += _amount;
+        try aavePool.supply(_token, _amount, msg.sender, 0) {
+            aaveBalances[_token][msg.sender] += _amount;
 
             emit DefiOperation(
-                OP_YIELD_DEPOSITED,
+                OP_DEPOSITED,
                 msg.sender,
                 _token,
-                address(0),
                 _amount,
-                0
+                campaignId
             );
         } catch {
-            revert DefiError(ERR_YIELD_DEPOSIT_FAILED, _token, _amount);
+            revert DeposittoYieldProtocolError(
+                ERR_DEPOSIT_FAILED,
+                _token,
+                _amount,
+                campaignId
+            );
         }
     }
 
+    /**
+     * @notice Withdraws tokens from Aave and distributes funds based on campaign success
+     * @dev Withdraws all tokens from Aave and splits between creator and platform based on campaign outcome
+     * @param _token Address of the token to withdraw
+     * @param campaignSuccessful Whether the campaign met its goal
+     * @param coverRefunds Amount needed to cover potential refunds
+     * @param campaignId Unique identifier of the campaign related to this operation
+     * @return Amount withdrawn including any accrued yield
+     */
     function withdrawFromYieldProtocol(
         address _token,
-        uint256 _amount
-    ) external nonReentrant returns (uint256) {
-        if (_amount <= 0) {
-            revert DefiError(ERR_ZERO_AMOUNT, _token, _amount);
-        }
+        bool campaignSuccessful,
+        uint256 coverRefunds,
+        bytes32 campaignId
+    ) external nonReentrant whenNotPaused returns (uint256) {
+        address aTokenAddress = getATokenAddress(_token);
 
-        uint256 deposited = aaveDeposits[msg.sender][_token];
-        if (_amount > deposited) {
-            revert DefiError(ERR_INSUFFICIENT_DEPOSIT, _token, _amount);
-        }
+        uint256 aTokenBalance = IERC20(aTokenAddress).balanceOf(address(this));
 
-        try aavePool.withdraw(_token, _amount, address(this)) returns (
+        try aavePool.withdraw(_token, type(uint).max, address(this)) returns (
             uint256 withdrawn
         ) {
-            if (withdrawn != _amount) {
-                revert DefiError(ERR_WITHDRAWAL_MISMATCH, _token, _amount);
+            if (aTokenBalance != withdrawn) {
+                revert WithdrawFromYieldProtocolError(
+                    ERR_WITHDRAWAL_DOESNT_BALANCE,
+                    _token,
+                    aTokenBalance,
+                    campaignId
+                );
             }
 
-            aaveDeposits[msg.sender][_token] -= _amount;
-            IERC20(_token).safeTransfer(msg.sender, withdrawn);
+            if (campaignSuccessful) {
+                (uint256 creatorShare, uint256 platformShare) = feeManager
+                    .calculateFeeShares(withdrawn);
+
+                IERC20(_token).safeTransfer(msg.sender, creatorShare);
+                IERC20(_token).safeTransfer(
+                    feeManager.platformTreasury(),
+                    platformShare
+                );
+            } else {
+                uint256 remaining = withdrawn - coverRefunds;
+
+                IERC20(_token).safeTransfer(msg.sender, coverRefunds);
+                IERC20(_token).safeTransfer(
+                    feeManager.platformTreasury(),
+                    remaining
+                );
+            }
+
+            aaveBalances[_token][msg.sender] = 0;
 
             emit DefiOperation(
-                OP_YIELD_WITHDRAWN,
+                OP_WITHDRAWN,
                 msg.sender,
                 _token,
-                address(0),
                 withdrawn,
-                0
+                campaignId
             );
 
             return withdrawn;
         } catch {
-            revert DefiError(ERR_YIELD_WITHDRAWAL_FAILED, _token, _amount);
-        }
-    }
-
-    function withdrawAllFromYieldProtocol(
-        address _token
-    ) external nonReentrant returns (uint256) {
-        uint256 amount = aaveDeposits[msg.sender][_token];
-
-        if (amount <= 0) {
-            revert DefiError(ERR_ZERO_AMOUNT, _token, amount);
-        }
-
-        try aavePool.withdraw(_token, amount, address(this)) returns (
-            uint256 withdrawn
-        ) {
-            if (withdrawn != amount) {
-                revert DefiError(ERR_WITHDRAWAL_MISMATCH, _token, amount);
-            }
-
-            aaveDeposits[msg.sender][_token] = 0;
-            IERC20(_token).safeTransfer(msg.sender, withdrawn);
-
-            emit DefiOperation(
-                OP_YIELD_WITHDRAWN,
-                msg.sender,
+            revert WithdrawFromYieldProtocolError(
+                ERR_WITHDRAWAL_FAILED,
                 _token,
-                address(0),
-                withdrawn,
-                0
+                aTokenBalance,
+                campaignId
             );
-
-            return withdrawn;
-        } catch {
-            revert DefiError(ERR_YIELD_WITHDRAWAL_FAILED, _token, amount);
         }
     }
 
-    function harvestYield(
-        address _token
-    )
-        external
-        nonReentrant
-        returns (uint256 creatorYield, uint256 platformYield)
-    {
-        uint256 deposited = aaveDeposits[msg.sender][_token];
-        if (deposited <= 0) {
-            revert DefiError(ERR_INSUFFICIENT_DEPOSIT, _token, 0);
-        }
-
-        address aToken;
-        try aavePool.getReserveData(_token) returns (
-            DataTypes.ReserveData memory data
-        ) {
-            aToken = data.aTokenAddress;
-        } catch {
-            revert DefiError(ERR_FAILED_GET_ATOKEN, _token, 0);
-        }
-
-        if (aToken == address(0)) {
-            revert DefiError(ERR_INVALID_ADDRESS, aToken, 0);
-        }
-
-        uint256 aTokenBalance = IERC20(aToken).balanceOf(address(this));
-        if (aTokenBalance <= deposited) {
-            revert DefiError(ERR_NO_YIELD, _token, 0);
-        }
-
-        uint256 totalYield = aTokenBalance - deposited;
-
-        try aavePool.withdraw(_token, totalYield, address(this)) returns (
-            uint256 withdrawn
-        ) {
-            if (withdrawn != totalYield) {
-                revert DefiError(ERR_WITHDRAWAL_MISMATCH, _token, totalYield);
-            }
-
-            (creatorYield, platformYield) = yieldDistributor
-                .calculateYieldShares(withdrawn);
-
-            IERC20(_token).safeTransfer(msg.sender, creatorYield);
-
-            address treasury = yieldDistributor.getPlatformTreasury();
-            IERC20(_token).safeTransfer(treasury, platformYield);
-
-            emit DefiOperation(
-                OP_YIELD_HARVESTED,
-                msg.sender,
-                _token,
-                treasury,
-                creatorYield,
-                platformYield
-            );
-
-            return (creatorYield, platformYield);
-        } catch {
-            revert DefiError(ERR_YIELD_WITHDRAWAL_FAILED, _token, totalYield);
-        }
-    }
-
-    function getTargetTokenEquivalent(
-        address _fromToken,
-        uint256 _amount,
-        address _toToken
-    ) public view returns (uint256) {
-        if (_fromToken == _toToken) {
-            revert DefiError(ERR_TOKENS_SAME, _fromToken, 0);
-        }
-
-        try
-            uniswapQuoter.quoteExactInputSingle(
-                _fromToken,
-                _toToken,
-                UNISWAP_FEE_TIER,
-                _amount,
-                0
-            )
-        returns (uint256 quote) {
-            return quote;
-        } catch {
-            return 0;
-        }
-    }
-
-    function swapTokenForTarget(
-        address _fromToken,
-        uint256 _amount,
-        address _toToken
-    ) external nonReentrant returns (uint256) {
-        if (_amount <= 0) {
-            revert DefiError(ERR_ZERO_AMOUNT, _fromToken, _amount);
-        }
-
-        if (!tokenRegistry.isTokenSupported(_fromToken)) {
-            revert DefiError(ERR_TOKEN_NOT_SUPPORTED, _fromToken, 0);
-        }
-
-        if (!tokenRegistry.isTokenSupported(_toToken)) {
-            revert DefiError(ERR_TOKEN_NOT_SUPPORTED, _toToken, 0);
-        }
-
-        if (_fromToken == _toToken) {
-            revert DefiError(ERR_TOKENS_SAME, _fromToken, 0);
-        }
-
-        uint256 expectedOut = getTargetTokenEquivalent(
-            _fromToken,
-            _amount,
-            _toToken
-        );
-        if (expectedOut == 0) {
-            revert DefiError(ERR_SWAP_QUOTE_INVALID, _fromToken, _amount);
-        }
-
-        // Use library to calculate minimum output
-        uint256 minAmountOut = DefiLibrary.calculateMinOutput(
-            expectedOut,
-            SLIPPAGE_TOLERANCE
-        );
-
-        IERC20(_fromToken).safeTransferFrom(msg.sender, address(this), _amount);
-        IERC20(_fromToken).safeIncreaseAllowance(
-            address(uniswapRouter),
-            _amount
-        );
-
-        // Use library to create swap parameters
-        ISwapRouter.ExactInputSingleParams memory params = DefiLibrary
-            .createSwapParams(
-                _fromToken,
-                _toToken,
-                UNISWAP_FEE_TIER,
-                _amount,
-                minAmountOut
-            );
-
-        try uniswapRouter.exactInputSingle(params) returns (uint256 received) {
-            if (received < minAmountOut) {
-                revert DefiError(ERR_SLIPPAGE_EXCEEDED, _toToken, received);
-            }
-
-            IERC20(_toToken).safeTransfer(msg.sender, received);
-
-            emit DefiOperation(
-                OP_TOKEN_SWAPPED,
-                msg.sender,
-                _fromToken,
-                _toToken,
-                _amount,
-                received
-            );
-
-            return received;
-        } catch {
-            revert DefiError(ERR_SWAP_FAILED, _fromToken, _amount);
-        }
-    }
-
+    /**
+     * @notice Gets the current yield rate for a specific token
+     * @dev Queries Aave for the current liquidity rate and converts to basis points
+     * @param token Address of the token to query
+     * @return yieldRate Current yield rate in basis points (e.g., 250 = 2.5%)
+     */
     function getCurrentYieldRate(
         address token
     ) external view returns (uint256 yieldRate) {
@@ -453,14 +356,28 @@ contract DefiIntegrationManager is
         }
     }
 
-    function getDepositedAmount(
-        address campaign,
-        address token
-    ) external view returns (uint256 amount) {
-        return aaveDeposits[campaign][token];
+    /**
+     * @notice Gets the platform treasury address
+     * @dev Queries the FeeManager for the current treasury address
+     * @return Address of the platform treasury
+     */
+    function getPlatformTreasury() external view returns (address) {
+        return feeManager.platformTreasury();
     }
 
-    function getTokenRegistry() external view returns (ITokenRegistry) {
-        return tokenRegistry;
+    /**
+     * @notice Gets the aToken address for a specific underlying token
+     * @dev Queries Aave for the aToken corresponding to the provided token
+     * @param _token Address of the underlying token
+     * @return Address of the corresponding aToken, or zero address if not found
+     */
+    function getATokenAddress(address _token) public view returns (address) {
+        try aavePool.getReserveData(_token) returns (
+            DataTypes.ReserveData memory data
+        ) {
+            return data.aTokenAddress;
+        } catch {
+            return address(0);
+        }
     }
 }
