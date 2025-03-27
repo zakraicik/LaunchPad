@@ -871,6 +871,219 @@ describe('Base Mainnet Integration Tests', function () {
           await campaign.campaignId()
         )
     })
+
+    it('Should emit status change event when campaign becomes successful', async function () {
+      const { usdc, campaignContractFactory, creator1, contributor1 } =
+        await loadFixture(deployPlatformFixture)
+
+      const usdcDecimals = await usdc.decimals()
+      const CAMPAIGN_GOAL = ethers.parseUnits('500', usdcDecimals)
+      const CAMPAIGN_DURATION = 60
+
+      // Deploy campaign
+      const tx = await campaignContractFactory
+        .connect(creator1)
+        .deploy(await usdc.getAddress(), CAMPAIGN_GOAL, CAMPAIGN_DURATION)
+
+      const receipt = await tx.wait()
+
+      if (!receipt) throw new Error('Transaction failed')
+      const event = receipt.logs.find(log => {
+        try {
+          const parsed = campaignContractFactory.interface.parseLog(log)
+          return parsed && parsed.name === 'FactoryOperation'
+        } catch {
+          return false
+        }
+      })
+
+      if (!event) throw new Error('Event failed')
+
+      const parsedEvent = campaignContractFactory.interface.parseLog(event)
+
+      if (!parsedEvent) throw new Error('Event failed')
+      const campaignAddress = parsedEvent.args[1]
+
+      const Campaign = await ethers.getContractFactory('Campaign')
+      const campaign = Campaign.attach(campaignAddress) as unknown as Campaign
+
+      // Contribute enough to reach goal
+      await usdc.connect(contributor1).approve(campaignAddress, CAMPAIGN_GOAL)
+
+      // This contribution should trigger the status change event
+      const contributeTx = await campaign
+        .connect(contributor1)
+        .contribute(CAMPAIGN_GOAL)
+      const contributeReceipt = await contributeTx.wait()
+
+      if (!contributeReceipt) throw new Error('Transaction failed')
+
+      // Look for the CampaignStatusChanged event
+      const statusChangeEvent = contributeReceipt.logs.find(log => {
+        try {
+          const parsed = campaign.interface.parseLog(log)
+          return parsed && parsed.name === 'CampaignStatusChanged'
+        } catch {
+          return false
+        }
+      })
+
+      if (!statusChangeEvent) throw new Error('Event failed')
+
+      expect(statusChangeEvent).to.not.be.undefined
+      const parsedStatusEvent = campaign.interface.parseLog(statusChangeEvent)
+
+      if (!parsedStatusEvent) throw new Error('Event failed')
+
+      // Check event arguments
+      expect(parsedStatusEvent.args[0]).to.equal(1) // STATUS_ACTIVE
+      expect(parsedStatusEvent.args[1]).to.equal(2) // STATUS_COMPLETE
+      expect(parsedStatusEvent.args[2]).to.equal(1) // REASON_GOAL_REACHED
+      expect(parsedStatusEvent.args[3]).to.equal(await campaign.campaignId())
+
+      // Status should be updated
+      expect(await campaign.campaignStatus()).to.equal(2) // STATUS_COMPLETE
+    })
+
+    it('Should emit status change event when campaign ends without reaching goal', async function () {
+      const { usdc, campaignContractFactory, creator1, contributor1 } =
+        await loadFixture(deployPlatformFixture)
+
+      const usdcDecimals = await usdc.decimals()
+      const CAMPAIGN_GOAL = ethers.parseUnits('500', usdcDecimals)
+      const CAMPAIGN_DURATION = 60
+
+      // Deploy campaign
+      const tx = await campaignContractFactory
+        .connect(creator1)
+        .deploy(await usdc.getAddress(), CAMPAIGN_GOAL, CAMPAIGN_DURATION)
+
+      const receipt = await tx.wait()
+
+      if (!receipt) throw new Error('Transaction failed')
+      const event = receipt.logs.find(log => {
+        try {
+          const parsed = campaignContractFactory.interface.parseLog(log)
+          return parsed && parsed.name === 'FactoryOperation'
+        } catch {
+          return false
+        }
+      })
+
+      if (!event) throw new Error('Event failed')
+
+      const parsedEvent = campaignContractFactory.interface.parseLog(event)
+
+      if (!parsedEvent) throw new Error('Event failed')
+      const campaignAddress = parsedEvent.args[1]
+
+      const Campaign = await ethers.getContractFactory('Campaign')
+      const campaign = Campaign.attach(campaignAddress) as unknown as Campaign
+
+      // Contribute less than the goal
+      const partialAmount = CAMPAIGN_GOAL / 2n
+      await usdc.connect(contributor1).approve(campaignAddress, partialAmount)
+      await campaign.connect(contributor1).contribute(partialAmount)
+
+      // Fast forward past the end date
+      await network.provider.send('evm_increaseTime', [
+        CAMPAIGN_DURATION * 24 * 60 * 60 + 1
+      ])
+      await network.provider.send('evm_mine')
+
+      // Call claimFunds which should trigger status check
+      const claimTx = await campaign.connect(creator1).claimFunds()
+      const claimReceipt = await claimTx.wait()
+
+      if (!claimReceipt) throw new Error('Transaction failed')
+
+      // Look for the CampaignStatusChanged event
+      const statusChangeEvent = claimReceipt.logs.find(log => {
+        try {
+          const parsed = campaign.interface.parseLog(log)
+          return parsed && parsed.name === 'CampaignStatusChanged'
+        } catch {
+          return false
+        }
+      })
+
+      if (!statusChangeEvent) throw new Error('Event failed')
+
+      expect(statusChangeEvent).to.not.be.undefined
+      const parsedStatusEvent = campaign.interface.parseLog(statusChangeEvent)
+
+      if (!parsedStatusEvent) throw new Error('Event failed')
+
+      // Check event arguments
+      expect(parsedStatusEvent.args[0]).to.equal(1) // STATUS_ACTIVE
+      expect(parsedStatusEvent.args[1]).to.equal(2) // STATUS_COMPLETE
+      expect(parsedStatusEvent.args[2]).to.equal(2) // REASON_DEADLINE_PASSED
+      expect(parsedStatusEvent.args[3]).to.equal(await campaign.campaignId())
+
+      // Status should be updated
+      expect(await campaign.campaignStatus()).to.equal(2) // STATUS_COMPLETE
+    })
+
+    it('Should not emit status change event when status is already complete', async function () {
+      const { usdc, campaignContractFactory, creator1, contributor1 } =
+        await loadFixture(deployPlatformFixture)
+
+      const usdcDecimals = await usdc.decimals()
+      const CAMPAIGN_GOAL = ethers.parseUnits('500', usdcDecimals)
+      const CAMPAIGN_DURATION = 60
+
+      // Deploy campaign
+      const tx = await campaignContractFactory
+        .connect(creator1)
+        .deploy(await usdc.getAddress(), CAMPAIGN_GOAL, CAMPAIGN_DURATION)
+
+      const receipt = await tx.wait()
+
+      if (!receipt) throw new Error('Transaction failed')
+      const event = receipt.logs.find(log => {
+        try {
+          const parsed = campaignContractFactory.interface.parseLog(log)
+          return parsed && parsed.name === 'FactoryOperation'
+        } catch {
+          return false
+        }
+      })
+
+      if (!event) throw new Error('Event failed')
+
+      const parsedEvent = campaignContractFactory.interface.parseLog(event)
+
+      if (!parsedEvent) throw new Error('Event failed')
+      const campaignAddress = parsedEvent.args[1]
+
+      const Campaign = await ethers.getContractFactory('Campaign')
+      const campaign = Campaign.attach(campaignAddress) as unknown as Campaign
+
+      // Make campaign successful by contributing enough to reach goal
+      await usdc.connect(contributor1).approve(campaignAddress, CAMPAIGN_GOAL)
+      await campaign.connect(contributor1).contribute(CAMPAIGN_GOAL)
+
+      // Check current status - should be complete after contribution
+      expect(await campaign.campaignStatus()).to.equal(2) // STATUS_COMPLETE
+
+      // Call checkAndUpdateStatus - should not emit an event
+      const updateTx = await campaign.checkAndUpdateStatus()
+      const updateReceipt = await updateTx.wait()
+
+      if (!updateReceipt) throw new Error('Transaction failed')
+
+      // Look for the CampaignStatusChanged event - should NOT find it
+      const statusChangeEvent = updateReceipt.logs.find(log => {
+        try {
+          const parsed = campaign.interface.parseLog(log)
+          return parsed && parsed.name === 'CampaignStatusChanged'
+        } catch {
+          return false
+        }
+      })
+
+      expect(statusChangeEvent).to.be.undefined
+    })
   })
 
   describe('Token Integration', function () {
