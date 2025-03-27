@@ -149,10 +149,6 @@ contract DefiIntegrationManager is
             revert DefiError(ERR_ZERO_AMOUNT, _token);
         }
 
-        if (!tokenRegistry.isTokenSupported(_token)) {
-            revert DefiError(ERR_TOKEN_NOT_SUPPORTED, _token);
-        }
-
         IERC20(_token).safeTransferFrom(msg.sender, address(this), _amount);
         IERC20(_token).safeIncreaseAllowance(address(aavePool), _amount);
 
