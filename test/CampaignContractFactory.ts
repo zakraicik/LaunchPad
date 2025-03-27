@@ -305,7 +305,7 @@ describe('CampaignContractFactory', function () {
         )
     })
 
-    it.only('Should maintain consistent gas costs regardless of number of campaigns deployed', async function () {
+    it('Should maintain consistent gas costs regardless of number of campaigns deployed', async function () {
       const { campaignContractFactory, creator1, usdc } = await loadFixture(
         deployPlatformFixture
       )

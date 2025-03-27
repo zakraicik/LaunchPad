@@ -1,7 +1,21 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.28;
 
+/**
+ * @title FeeLibrary
+ * @author Generated with assistance from an LLM
+ * @dev Library for fee calculations and validations
+ * @notice Provides utility functions to calculate and validate fee shares
+ */
 library FeeLibrary {
+    /**
+     * @notice Calculates the fee splits between creator and platform
+     * @dev Splits a total amount based on platform fee percentage (in basis points)
+     * @param totalAmount The total amount to split
+     * @param platformFeePercentage Platform fee percentage in basis points (e.g., 250 = 2.5%)
+     * @return creatorShare Amount allocated to the creator
+     * @return platformShare Amount allocated to the platform
+     */
     function calculateFeeShares(
         uint256 totalAmount,
         uint16 platformFeePercentage
@@ -26,6 +40,14 @@ library FeeLibrary {
         return (creatorShare, platformShare);
     }
 
+    /**
+     * @notice Validates if a fee share is within allowed range and properly sized
+     * @dev Checks if a share value fits in uint16 and is within maximum allowed share
+     * @param share The share value to validate
+     * @param maximumShare Maximum allowed share
+     * @return isWithinRange True if share is within maximum allowed range
+     * @return fitsUint16 True if share fits within uint16 type
+     */
     function validateShare(
         uint256 share,
         uint16 maximumShare

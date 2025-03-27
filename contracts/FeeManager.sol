@@ -4,28 +4,83 @@ import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import "./abstracts/PlatformAdminAccessControl.sol";
 import "./libraries/FeeLibrary.sol";
 
+/**
+ * @title FeeManager
+ * @author Generated with assistance from an LLM
+ * @notice Contract for managing platform fees and fee distributions
+ * @dev Handles fee calculations, platform treasury management, and fee share configurations
+ */
 contract FeeManager is Ownable, PlatformAdminAccessControl {
     // Use the library
     using FeeLibrary for *;
 
     // Operation types
+    /**
+     * @dev Constant defining treasury update operation type for events
+     */
     uint8 private constant OP_TREASURY_UPDATED = 1;
+
+    /**
+     * @dev Constant defining fee share update operation type for events
+     */
     uint8 private constant OP_SHARE_UPDATED = 2;
 
     // Error codes
+    /**
+     * @dev Error code for invalid address
+     */
     uint8 private constant ERR_INVALID_ADDRESS = 1;
+
+    /**
+     * @dev Error code for invalid fee share
+     */
     uint8 private constant ERR_INVALID_SHARE = 2;
+
+    /**
+     * @dev Error code for fee share exceeding maximum allowed
+     */
     uint8 private constant ERR_SHARE_EXCEEDS_MAXIMUM = 3;
+
+    /**
+     * @dev Error code for arithmetic overflow
+     */
     uint8 private constant ERR_OVERFLOW = 4;
 
     // State variables
+    /**
+     * @notice Address of the platform treasury where platform fees are sent
+     * @dev Can be updated by platform admins
+     */
     address public platformTreasury;
+
+    /**
+     * @notice Current platform fee share in basis points (100 = 1%)
+     * @dev Default is 100 basis points (1%)
+     */
     uint16 public platformFeeShare = 100;
+
+    /**
+     * @notice Maximum allowed platform fee share in basis points
+     * @dev Constant value of 500 basis points (5%)
+     */
     uint16 public constant maximumFeeShare = 500;
 
+    /**
+     * @notice Thrown when a fee manager operation fails
+     * @param code Error code identifying the failure reason
+     * @param addr Related address (if applicable)
+     * @param value Related value (if applicable)
+     */
     error FeeManagerError(uint8 code, address addr, uint256 value);
 
-    // Consolidated events
+    /**
+     * @notice Emitted when a fee manager operation is performed
+     * @param opType Type of operation (1 = treasury updated, 2 = share updated)
+     * @param relatedAddress Primary address related to the operation (e.g., old treasury address)
+     * @param secondaryAddress Secondary address related to the operation (e.g., new treasury address)
+     * @param primaryValue Primary value related to the operation (e.g., old fee share)
+     * @param secondaryValue Secondary value related to the operation (e.g., new fee share)
+     */
     event FeeManagerOperation(
         uint8 opType,
         address indexed relatedAddress,
@@ -34,6 +89,13 @@ contract FeeManager is Ownable, PlatformAdminAccessControl {
         uint256 secondaryValue
     );
 
+    /**
+     * @notice Creates a new FeeManager contract
+     * @dev Sets up initial treasury address and platform admin
+     * @param _platformTreasury Address of the platform treasury
+     * @param _platformAdmin Address of the platform admin contract
+     * @param _owner Address of the contract owner
+     */
     constructor(
         address _platformTreasury,
         address _platformAdmin,
@@ -46,6 +108,11 @@ contract FeeManager is Ownable, PlatformAdminAccessControl {
         platformTreasury = _platformTreasury;
     }
 
+    /**
+     * @notice Updates the platform treasury address
+     * @dev Only callable by platform admins
+     * @param _platformTreasury New address for the platform treasury
+     */
     function updatePlatformTreasury(
         address _platformTreasury
     ) external onlyPlatformAdmin {
@@ -65,6 +132,11 @@ contract FeeManager is Ownable, PlatformAdminAccessControl {
         );
     }
 
+    /**
+     * @notice Updates the platform fee share percentage
+     * @dev Only callable by platform admins
+     * @param _platformFeeShare New platform fee share in basis points (e.g., 100 = 1%)
+     */
     function updatePlatformFeeShare(
         uint256 _platformFeeShare
     ) external onlyPlatformAdmin {
@@ -105,6 +177,13 @@ contract FeeManager is Ownable, PlatformAdminAccessControl {
         );
     }
 
+    /**
+     * @notice Calculates fee shares between creator and platform
+     * @dev Uses FeeLibrary to perform the calculation and checks for overflow
+     * @param totalAmount The total amount to split
+     * @return creatorShare Amount allocated to the creator
+     * @return platformShare Amount allocated to the platform
+     */
     function calculateFeeShares(
         uint256 totalAmount
     ) external view returns (uint256 creatorShare, uint256 platformShare) {

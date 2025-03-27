@@ -11,6 +11,12 @@ import "./interfaces/IAavePool.sol";
 import "./abstracts/PlatformAdminAccessControl.sol";
 import "./abstracts/PausableControl.sol";
 
+/**
+ * @title DefiIntegrationManager
+ * @author Generated with assistance from an LLM
+ * @notice Manages interactions with DeFi protocols for yield generation
+ * @dev Handles deposits and withdrawals to Aave for campaign funds
+ */
 contract DefiIntegrationManager is
     Ownable,
     ReentrancyGuard,
@@ -20,30 +26,98 @@ contract DefiIntegrationManager is
     using SafeERC20 for IERC20;
 
     // Operation types for events
+    /**
+     * @dev Constant defining deposit operation type for events
+     */
     uint8 private constant OP_DEPOSITED = 1;
+
+    /**
+     * @dev Constant defining withdrawal operation type for events
+     */
     uint8 private constant OP_WITHDRAWN = 2;
+
+    /**
+     * @dev Constant defining configuration update operation type for events
+     */
     uint8 private constant OP_CONFIG_UPDATED = 3;
 
     // Error codes
+    /**
+     * @dev Error code for zero amount
+     */
     uint8 private constant ERR_ZERO_AMOUNT = 1;
+
+    /**
+     * @dev Error code for unsupported token
+     */
     uint8 private constant ERR_TOKEN_NOT_SUPPORTED = 2;
+
+    /**
+     * @dev Error code for failed deposit
+     */
     uint8 private constant ERR_DEPOSIT_FAILED = 3;
+
+    /**
+     * @dev Error code for failed withdrawal
+     */
     uint8 private constant ERR_WITHDRAWAL_FAILED = 4;
+
+    /**
+     * @dev Error code for invalid address
+     */
     uint8 private constant ERR_INVALID_ADDRESS = 5;
+
+    /**
+     * @dev Error code for invalid constructor parameters
+     */
     uint8 private constant ERR_INVALID_CONSTRUCTOR = 6;
+
+    /**
+     * @dev Error code for withdrawal amount mismatch
+     */
     uint8 private constant ERR_WITHDRAWAL_DOESNT_BALANCE = 7;
 
     // External contracts
+    /**
+     * @notice Reference to the Aave Pool contract
+     * @dev Used for interacting with Aave protocol
+     */
     IAavePool public aavePool;
+
+    /**
+     * @notice Reference to the TokenRegistry contract
+     * @dev Used for validating tokens
+     */
     ITokenRegistry public tokenRegistry;
+
+    /**
+     * @notice Reference to the FeeManager contract
+     * @dev Used for fee calculations and platform treasury
+     */
     IFeeManager public feeManager;
 
+    /**
+     * @notice Tracks user balances deposited to Aave
+     * @dev Mapping from token => user => amount
+     */
     mapping(address => mapping(address => uint256)) public aaveBalances;
 
-    // Consolidated error
+    /**
+     * @notice Thrown when a DeFi operation fails
+     * @param code Error code identifying the failure reason
+     * @param addr Related address (if applicable)
+     */
     error DefiError(uint8 code, address addr);
 
-    // Consolidated event
+    /**
+     * @notice Emitted when a DeFi operation is performed
+     * @param opType Type of operation (1=deposit, 2=withdraw)
+     * @param sender Address initiating the operation
+     * @param token Primary token involved
+     * @param secondToken Secondary token involved (if applicable)
+     * @param amount Primary amount involved
+     * @param secondAmount Secondary amount involved (if applicable)
+     */
     event DefiOperation(
         uint8 opType,
         address indexed sender,
@@ -53,13 +127,27 @@ contract DefiIntegrationManager is
         uint256 secondAmount
     );
 
-    // Configuration update event
+    /**
+     * @notice Emitted when a configuration is updated
+     * @param configType Type of configuration updated
+     * @param oldAddress Previous address
+     * @param newAddress New address
+     */
     event ConfigUpdated(
         uint8 configType,
         address oldAddress,
         address newAddress
     );
 
+    /**
+     * @notice Creates a new DefiIntegrationManager contract
+     * @dev Sets up initial contract references and validates parameters
+     * @param _aavePool Address of the Aave Pool contract
+     * @param _tokenRegistry Address of the TokenRegistry contract
+     * @param _feeManager Address of the FeeManager contract
+     * @param _platformAdmin Address of the PlatformAdmin contract
+     * @param _owner Address of the contract owner
+     */
     constructor(
         address _aavePool,
         address _tokenRegistry,
@@ -88,6 +176,11 @@ contract DefiIntegrationManager is
         feeManager = IFeeManager(_feeManager);
     }
 
+    /**
+     * @notice Updates the TokenRegistry contract reference
+     * @dev Only callable by platform admins
+     * @param _tokenRegistry Address of the new TokenRegistry contract
+     */
     function setTokenRegistry(
         address _tokenRegistry
     ) external onlyPlatformAdmin {
@@ -101,6 +194,11 @@ contract DefiIntegrationManager is
         emit ConfigUpdated(OP_CONFIG_UPDATED, oldRegistry, _tokenRegistry);
     }
 
+    /**
+     * @notice Updates the FeeManager contract reference
+     * @dev Only callable by platform admins
+     * @param _feeManager Address of the new FeeManager contract
+     */
     function setFeeManager(address _feeManager) external onlyPlatformAdmin {
         if (_feeManager == address(0)) {
             revert DefiError(ERR_INVALID_ADDRESS, _feeManager);
@@ -112,6 +210,11 @@ contract DefiIntegrationManager is
         emit ConfigUpdated(OP_CONFIG_UPDATED, oldFeeManager, _feeManager);
     }
 
+    /**
+     * @notice Updates the Aave Pool contract reference
+     * @dev Only callable by platform admins
+     * @param _aavePool Address of the new Aave Pool contract
+     */
     function setAavePool(address _aavePool) external onlyPlatformAdmin {
         if (_aavePool == address(0)) {
             revert DefiError(ERR_INVALID_ADDRESS, _aavePool);
@@ -123,6 +226,12 @@ contract DefiIntegrationManager is
         emit ConfigUpdated(OP_CONFIG_UPDATED, oldAavePool, _aavePool);
     }
 
+    /**
+     * @notice Deposits tokens to Aave for yield generation
+     * @dev Transfers tokens from sender to this contract, then supplies to Aave
+     * @param _token Address of the token to deposit
+     * @param _amount Amount of tokens to deposit
+     */
     function depositToYieldProtocol(
         address _token,
         uint256 _amount
@@ -168,6 +277,14 @@ contract DefiIntegrationManager is
         }
     }
 
+    /**
+     * @notice Withdraws tokens from Aave and distributes funds based on campaign success
+     * @dev Withdraws all tokens from Aave and splits between creator and platform based on campaign outcome
+     * @param _token Address of the token to withdraw
+     * @param campaignSuccessful Whether the campaign met its goal
+     * @param coverRefunds Amount needed to cover potential refunds
+     * @return Amount withdrawn including any accrued yield
+     */
     function withdrawFromYieldProtocol(
         address _token,
         bool campaignSuccessful,
@@ -220,6 +337,12 @@ contract DefiIntegrationManager is
         }
     }
 
+    /**
+     * @notice Gets the current yield rate for a specific token
+     * @dev Queries Aave for the current liquidity rate and converts to basis points
+     * @param token Address of the token to query
+     * @return yieldRate Current yield rate in basis points (e.g., 250 = 2.5%)
+     */
     function getCurrentYieldRate(
         address token
     ) external view returns (uint256 yieldRate) {
@@ -232,10 +355,21 @@ contract DefiIntegrationManager is
         }
     }
 
+    /**
+     * @notice Gets the platform treasury address
+     * @dev Queries the FeeManager for the current treasury address
+     * @return Address of the platform treasury
+     */
     function getPlatformTreasury() external view returns (address) {
         return feeManager.platformTreasury();
     }
 
+    /**
+     * @notice Gets the aToken address for a specific underlying token
+     * @dev Queries Aave for the aToken corresponding to the provided token
+     * @param _token Address of the underlying token
+     * @return Address of the corresponding aToken, or zero address if not found
+     */
     function getATokenAddress(address _token) public view returns (address) {
         try aavePool.getReserveData(_token) returns (
             DataTypes.ReserveData memory data
