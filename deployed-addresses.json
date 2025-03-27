@@ -1,0 +1,7 @@
+{
+  "PlatformAdmin": "0x05Dd33778204e9351f8E55FFBDbb4dE7F43acB97",
+  "TokenRegistry": "0xBF99588b84caD40da4c7c46379Be79651Fa62F60",
+  "FeeManager": "0x063e4020eA106c70436Cc7F07512cAfC96e24bd4",
+  "DefiIntegrationManager": "0x394bdBC4A042E363aCc386093D940368717c7dAe",
+  "CampaignContractFactory": "0x3AC2837E8Bbe9385e4C27C75990f42E029bB9880"
+}
