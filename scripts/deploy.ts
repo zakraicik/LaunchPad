@@ -2,7 +2,6 @@ import { ethers } from 'hardhat'
 import { writeFileSync } from 'fs'
 
 const AAVE_POOL_ADDRESS = '0x6ae43d3271ff6888e7fc43fd7321a503ff738951' // AAVE v3 on base sepolia
-const USDC_ADDRESS = '0x1c7d4b196cb0c7b01d743fbc6116a902379c7238' //On base sepolia
 const platformTreasuryAddress = '0xbf8e22884d8d91434bc162ff6514f61dbd6fa67a'
 
 async function main () {
