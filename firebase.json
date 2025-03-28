@@ -1,14 +1,7 @@
 {
-  "firestore": {
-    "rules": "firebase/firestore.rules",
-    "indexes": "firebase/firestore.indexes.json"
-  },
-  "remoteconfig": {
-    "template": "firebase/remoteconfig.template.json"
-  },
   "functions": [
     {
-      "source": "firebase/functions",
+      "source": "functions",
       "codebase": "default",
       "ignore": [
         "node_modules",
