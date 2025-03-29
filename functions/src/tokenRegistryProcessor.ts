@@ -1,12 +1,10 @@
 // Event processor for TokenRegistry events
 import { logger } from 'firebase-functions'
 import { onDocumentCreated } from 'firebase-functions/v2/firestore'
-import { initializeApp } from 'firebase-admin/app'
 import { getFirestore } from 'firebase-admin/firestore'
 import { ethers } from 'ethers'
 
 // Initialize Firebase
-initializeApp()
 const db = getFirestore()
 
 // Define types for event logs and operation data
@@ -55,9 +53,6 @@ interface TokenData {
 
 // Event signature and interface for TokenRegistryOperation
 const eventSignature = 'TokenRegistryOperation(uint8,address,uint256,uint8)'
-
-// Create interface with proper event format
-const eventInterface = new ethers.Interface([`event ${eventSignature}`])
 
 // Event signature hash for TokenRegistryOperation
 const TOKEN_REGISTRY_OP_SIGNATURE = ethers.keccak256(
@@ -147,53 +142,29 @@ async function processTokenRegistryOperation (
       return
     }
 
-    // Parse the log using ethers
-    const parsedLog = eventInterface.parseLog({
-      topics: log.topics,
-      data: log.data
-    })
+    const tokenAddress =
+      log.topics.length > 1
+        ? ethers.dataSlice(log.topics[1], 12) // Convert bytes32 to address
+        : undefined
 
-    if (!parsedLog || !parsedLog.args) {
-      logger.error(
-        'Failed to parse TokenRegistryOperation log or missing arguments'
-      )
-      return
-    }
-
-    const args = parsedLog.args
-
-    // Get operation type
-    const opType =
-      args && typeof args[0] !== 'undefined' ? Number(args[0]) : undefined
-
-    if (opType === undefined) {
-      logger.error('Missing operation type in TokenRegistryOperation')
-      return
-    }
-
-    // Get token address from the indexed parameter
-    const tokenAddress = args[1]
     if (!tokenAddress) {
       logger.error('Missing token address in TokenRegistryOperation')
       return
     }
-    const normalizedTokenAddress = tokenAddress.toLowerCase()
 
-    // Get value (minimum contribution amount in smallest units)
-    const value = args[2]
-    if (value === undefined) {
-      logger.error('Missing value in TokenRegistryOperation')
-      return
-    }
+    // Token address needs to be properly formatted with checksum
+    const normalizedTokenAddress = ethers.getAddress(tokenAddress).toLowerCase()
 
-    // Get decimals
-    const decimals =
-      args && typeof args[3] !== 'undefined' ? Number(args[3]) : undefined
+    // Extract data from the non-indexed parameters
+    // The data field contains all non-indexed parameters packed together
+    const decodedData = ethers.AbiCoder.defaultAbiCoder().decode(
+      ['uint8', 'uint256', 'uint8'], // opType, value, decimals
+      log.data
+    )
 
-    if (decimals === undefined) {
-      logger.error('Missing decimals in TokenRegistryOperation')
-      return
-    }
+    const opType = Number(decodedData[0])
+    const value = decodedData[1]
+    const decimals = Number(decodedData[2])
 
     // Format the data
     const tokenEvent: TokenEventData = {
