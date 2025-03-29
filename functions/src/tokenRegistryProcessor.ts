@@ -9,18 +9,63 @@ import { ethers } from 'ethers'
 initializeApp()
 const db = getFirestore()
 
+// Define types for event logs and operation data
+interface EventLog {
+  topics: string[]
+  data: string
+  block?: {
+    number?: number
+    timestamp?: number
+  }
+  transaction?: {
+    hash?: string
+  }
+  account?: {
+    address?: string
+  }
+}
+
+interface TokenEventData {
+  eventType: string
+  rawEventId: string
+  createdAt: Date
+  blockNumber: number | null
+  blockTimestamp: Date | null
+  transactionHash: string | null
+  contractAddress: string | null
+  operation: {
+    code: number
+    name: string
+  }
+  token: string
+  value: string
+  formattedValue: string
+  decimals: number
+}
+
+interface TokenData {
+  address: string
+  isSupported: boolean
+  minimumContribution?: string
+  formattedMinimumContribution?: string
+  decimals?: number
+  lastUpdated: Date
+  lastOperation: string
+}
+
 // Event signature and interface for TokenRegistryOperation
-const eventFragment = [
-  'event TokenRegistryOperation(uint8 opType, address indexed token, uint256 value, uint8 decimals)'
-]
-const eventInterface = new ethers.Interface(eventFragment)
+const eventSignature = 'TokenRegistryOperation(uint8,address,uint256,uint8)'
+
+// Create interface with proper event format
+const eventInterface = new ethers.Interface([`event ${eventSignature}`])
 
 // Event signature hash for TokenRegistryOperation
-const TOKEN_REGISTRY_OP_SIGNATURE =
-  '0x182d4d874fd1e70e5b453811d53b80d9193e3bd36704cef2fe5da37175b46825'
+const TOKEN_REGISTRY_OP_SIGNATURE = ethers.keccak256(
+  ethers.toUtf8Bytes(eventSignature)
+)
 
 // Operation types mapping
-const OPERATION_TYPES = {
+const OPERATION_TYPES: Record<number, string> = {
   1: 'TOKEN_ADDED',
   2: 'TOKEN_REMOVED',
   3: 'TOKEN_SUPPORT_DISABLED',
@@ -60,7 +105,12 @@ export const processTokenRegistryEvents = onDocumentCreated(
 
       // Process each log
       for (const log of logs) {
-        if (!log || !log.topics || log.topics.length === 0) {
+        if (
+          !log ||
+          !log.topics ||
+          !Array.isArray(log.topics) ||
+          log.topics.length === 0
+        ) {
           logger.debug('Skipping log with no topics')
           continue
         }
@@ -73,7 +123,7 @@ export const processTokenRegistryEvents = onDocumentCreated(
 
         // Check if this is a TokenRegistryOperation event
         if (eventSignature === TOKEN_REGISTRY_OP_SIGNATURE) {
-          await processTokenRegistryOperation(log, rawEventId)
+          await processTokenRegistryOperation(log as EventLog, rawEventId)
         }
       }
     } catch (error) {
@@ -87,7 +137,10 @@ export const processTokenRegistryEvents = onDocumentCreated(
  * @param log The log object from the webhook
  * @param rawEventId The ID of the raw event document
  */
-async function processTokenRegistryOperation (log: any, rawEventId: string) {
+async function processTokenRegistryOperation (
+  log: EventLog,
+  rawEventId: string
+) {
   try {
     if (!log || !log.topics || !log.data) {
       logger.error('Invalid log data for TokenRegistryOperation')
@@ -107,15 +160,19 @@ async function processTokenRegistryOperation (log: any, rawEventId: string) {
       return
     }
 
+    const args = parsedLog.args
+
     // Get operation type
-    const opType = Number(parsedLog.args[0])
-    if (opType === undefined || opType === null) {
+    const opType =
+      args && typeof args[0] !== 'undefined' ? Number(args[0]) : undefined
+
+    if (opType === undefined) {
       logger.error('Missing operation type in TokenRegistryOperation')
       return
     }
 
     // Get token address from the indexed parameter
-    const tokenAddress = parsedLog.args[1]
+    const tokenAddress = args[1]
     if (!tokenAddress) {
       logger.error('Missing token address in TokenRegistryOperation')
       return
@@ -123,34 +180,35 @@ async function processTokenRegistryOperation (log: any, rawEventId: string) {
     const normalizedTokenAddress = tokenAddress.toLowerCase()
 
     // Get value (minimum contribution amount in smallest units)
-    const value = parsedLog.args[2]
-    if (value === undefined || value === null) {
+    const value = args[2]
+    if (value === undefined) {
       logger.error('Missing value in TokenRegistryOperation')
       return
     }
 
     // Get decimals
-    const decimals = Number(parsedLog.args[3])
-    if (decimals === undefined || decimals === null) {
+    const decimals =
+      args && typeof args[3] !== 'undefined' ? Number(args[3]) : undefined
+
+    if (decimals === undefined) {
       logger.error('Missing decimals in TokenRegistryOperation')
       return
     }
 
     // Format the data
-    const tokenEvent = {
+    const tokenEvent: TokenEventData = {
       eventType: 'TokenRegistryOperation',
       rawEventId,
       createdAt: new Date(),
-      blockNumber: log.block?.number,
+      blockNumber: log.block?.number || null,
       blockTimestamp: log.block?.timestamp
         ? new Date(log.block.timestamp * 1000)
         : null,
-      transactionHash: log.transaction?.hash,
-      contractAddress: log.account?.address,
+      transactionHash: log.transaction?.hash || null,
+      contractAddress: log.account?.address || null,
       operation: {
         code: opType,
-        name:
-          OPERATION_TYPES[opType as keyof typeof OPERATION_TYPES] || 'UNKNOWN'
+        name: OPERATION_TYPES[opType] || 'UNKNOWN'
       },
       token: normalizedTokenAddress,
       value: value.toString(),
@@ -217,18 +275,17 @@ async function updateTokenRecordByOpType (
     switch (opType) {
       case 1: // TOKEN_ADDED
         // Create or update token record
-        await tokenRef.set(
-          {
-            address: tokenAddress,
-            minimumContribution: value,
-            formattedMinimumContribution: ethers.formatUnits(value, decimals),
-            decimals,
-            isSupported: true,
-            lastUpdated: new Date(),
-            lastOperation: 'TOKEN_ADDED'
-          },
-          { merge: true }
-        )
+        const tokenAddedData: TokenData = {
+          address: tokenAddress,
+          minimumContribution: value,
+          formattedMinimumContribution: ethers.formatUnits(value, decimals),
+          decimals,
+          isSupported: true,
+          lastUpdated: new Date(),
+          lastOperation: 'TOKEN_ADDED'
+        }
+
+        await tokenRef.set(tokenAddedData, { merge: true })
         logger.info(`Token record created/updated for ${tokenAddress}`)
         break
 
@@ -244,11 +301,13 @@ async function updateTokenRecordByOpType (
 
       case 3: // TOKEN_SUPPORT_DISABLED
         if (tokenExists) {
-          await tokenRef.update({
+          const disableData: Partial<TokenData> = {
             isSupported: false,
             lastUpdated: new Date(),
             lastOperation: 'TOKEN_SUPPORT_DISABLED'
-          })
+          }
+
+          await tokenRef.update(disableData)
           logger.info(`Token support disabled for ${tokenAddress}`)
         } else {
           logger.warn(
@@ -259,37 +318,33 @@ async function updateTokenRecordByOpType (
 
       case 4: // TOKEN_SUPPORT_ENABLED
         if (tokenExists) {
-          await tokenRef.update({
+          const enableData: Partial<TokenData> = {
             isSupported: true,
             lastUpdated: new Date(),
             lastOperation: 'TOKEN_SUPPORT_ENABLED'
-          })
+          }
+
+          await tokenRef.update(enableData)
           logger.info(`Token support enabled for ${tokenAddress}`)
         } else {
-          // Create a new token record if it doesn't exist
-          await tokenRef.set({
-            address: tokenAddress,
-            isSupported: true,
-            minimumContribution: value,
-            formattedMinimumContribution: ethers.formatUnits(value, decimals),
-            decimals,
-            lastUpdated: new Date(),
-            lastOperation: 'TOKEN_SUPPORT_ENABLED'
-          })
-          logger.info(
-            `New token record created with support enabled for ${tokenAddress}`
+          // This case should not happen due to on-chain verification,
+          // but we handle it defensively
+          logger.warn(
+            `Attempted to enable support for non-existent token: ${tokenAddress}`
           )
         }
         break
 
       case 5: // MIN_CONTRIBUTION_UPDATED
         if (tokenExists) {
-          await tokenRef.update({
+          const updateData: Partial<TokenData> = {
             minimumContribution: value,
             formattedMinimumContribution: ethers.formatUnits(value, decimals),
             lastUpdated: new Date(),
             lastOperation: 'MIN_CONTRIBUTION_UPDATED'
-          })
+          }
+
+          await tokenRef.update(updateData)
           logger.info(`Minimum contribution updated for ${tokenAddress}`)
         } else {
           logger.warn(

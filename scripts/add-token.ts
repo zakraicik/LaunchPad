@@ -1,3 +1,5 @@
+//npx hardhat run scripts/add-token.ts --network baseSepolia
+
 // scripts/add-token.ts
 import { ethers } from 'hardhat'
 import { PlatformAdmin, TokenRegistry } from '../typechain-types'
@@ -24,14 +26,14 @@ async function main () {
     deployedAddresses.TokenRegistry
   )) as TokenRegistry
 
-  const usdcAddress = '0x5deac602762362fe5f135fa5904351916053cf70'
+  const tokenAddress = '0x1197766b82eee9c2e57674e53f0d961590e43769'
   const minimumContributionInWholeTokens = 1
 
   try {
     // Check if token is already registered
     try {
       const isAlreadySupported = await tokenRegistry.isTokenSupported(
-        usdcAddress
+        tokenAddress
       )
       console.log(
         `Token is already in registry. Supported status: ${isAlreadySupported}`
@@ -44,7 +46,7 @@ async function main () {
 
     // Add the token to the registry
     const tx = await tokenRegistry.addToken(
-      usdcAddress,
+      tokenAddress,
       minimumContributionInWholeTokens
     )
     console.log(`Transaction hash: ${tx.hash}`)
@@ -54,7 +56,7 @@ async function main () {
     console.log('Token added successfully!')
 
     // Verify the token is now supported
-    const isSupported = await tokenRegistry.isTokenSupported(usdcAddress)
+    const isSupported = await tokenRegistry.isTokenSupported(tokenAddress)
     console.log(`Is token supported: ${isSupported}`)
   } catch (error) {
     console.error('Error adding token:', error)
