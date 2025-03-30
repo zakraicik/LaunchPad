@@ -2,7 +2,7 @@ import { ethers } from 'hardhat'
 import { writeFileSync } from 'fs'
 
 const AAVE_POOL_ADDRESS = '0x6ae43d3271ff6888e7fc43fd7321a503ff738951' // AAVE v3 on base sepolia
-const platformTreasuryAddress = '0xbf8e22884d8d91434bc162ff6514f61dbd6fa67a'
+const PLATFORM_TREASURY_ADDRESS = '0xbf8e22884d8d91434bc162ff6514f61dbd6fa67a'
 
 async function main () {
   console.log('Deploying contracts to Base Sepolia...')
@@ -14,17 +14,17 @@ async function main () {
 
   const deployedAddresses: Record<string, string> = {}
 
-  //Deploy platform admin contract
-  const PlatformAdmin = await ethers.getContractFactory('PlatformAdmin')
-  const platformAdmin = await PlatformAdmin.deploy(deployer.address)
+  // Deploy PlatformAdmin contract
+  const platformAdminFactory = await ethers.getContractFactory('PlatformAdmin')
+  const platformAdmin = await platformAdminFactory.deploy(deployer.address)
   await platformAdmin.waitForDeployment()
 
   const platformAdminAddress = await platformAdmin.getAddress()
   deployedAddresses['PlatformAdmin'] = platformAdminAddress
   console.log(`PlatformAdmin deployed to: ${platformAdminAddress}`)
 
-  const TokenRegistry = await ethers.getContractFactory('TokenRegistry')
-  const tokenRegistry = await TokenRegistry.deploy(
+  const tokenRegistryFactory = await ethers.getContractFactory('TokenRegistry')
+  const tokenRegistry = await tokenRegistryFactory.deploy(
     deployer.address,
     platformAdminAddress
   )
@@ -34,9 +34,9 @@ async function main () {
   deployedAddresses['TokenRegistry'] = tokenRegistryAddress
   console.log(`TokenRegistry deployed to: ${tokenRegistryAddress}`)
 
-  const FeeManager = await ethers.getContractFactory('FeeManager')
-  const feeManager = await FeeManager.deploy(
-    platformTreasuryAddress,
+  const feeManagerFactory = await ethers.getContractFactory('FeeManager')
+  const feeManager = await feeManagerFactory.deploy(
+    PLATFORM_TREASURY_ADDRESS,
     platformAdminAddress,
     deployer.address
   )
@@ -46,10 +46,10 @@ async function main () {
   deployedAddresses['FeeManager'] = feeManagerAddress
   console.log(`FeeManager deployed to: ${feeManagerAddress}`)
 
-  const DefiIntegrationManager = await ethers.getContractFactory(
+  const defiIntegrationManagerFactory = await ethers.getContractFactory(
     'DefiIntegrationManager'
   )
-  const defiIntegrationManager = await DefiIntegrationManager.deploy(
+  const defiIntegrationManager = await defiIntegrationManagerFactory.deploy(
     AAVE_POOL_ADDRESS,
     tokenRegistryAddress,
     feeManagerAddress,
@@ -64,12 +64,30 @@ async function main () {
     `DefiIntegrationManager deployed to: ${defiIntegrationManagerAddress}`
   )
 
-  const CampaignContractFactory = await ethers.getContractFactory(
+  const campaignEventCollectorFactory = await ethers.getContractFactory(
+    'CampaignEventCollector'
+  )
+
+  const campaignEventCollector = await campaignEventCollectorFactory.deploy(
+    platformAdminAddress,
+    deployer.address
+  )
+  await campaignEventCollector.waitForDeployment()
+
+  const campaignEventCollectorAddress =
+    await campaignEventCollector.getAddress()
+  deployedAddresses['CampaignEventCollector'] = campaignEventCollectorAddress
+  console.log(
+    `CampaignEventCollector deployed to: ${campaignEventCollectorAddress}`
+  )
+
+  const campaignContractFactoryFactory = await ethers.getContractFactory(
     'CampaignContractFactory'
   )
-  const campaignContractFactory = await CampaignContractFactory.deploy(
+  const campaignContractFactory = await campaignContractFactoryFactory.deploy(
     defiIntegrationManagerAddress,
     platformAdminAddress,
+    campaignEventCollectorAddress,
     deployer.address
   )
   await campaignContractFactory.waitForDeployment()
