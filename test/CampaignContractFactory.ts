@@ -23,11 +23,17 @@ describe('CampaignContractFactory', function () {
     })
 
     it('Should correctly set the initial state', async function () {
-      const { campaignContractFactory, defiIntegrationManager, platformAdmin } =
-        await loadFixture(deployPlatformFixture)
+      const {
+        campaignContractFactory,
+        defiIntegrationManager,
+        platformAdmin,
+        campaignEventCollector
+      } = await loadFixture(deployPlatformFixture)
 
       const defiManagerAddress = await defiIntegrationManager.getAddress()
       const platformAdminAddress = await platformAdmin.getAddress()
+      const campaignEventCollectorAddress =
+        await campaignEventCollector.getAddress()
 
       expect(await campaignContractFactory.defiManager()).to.equal(
         defiManagerAddress
@@ -35,17 +41,21 @@ describe('CampaignContractFactory', function () {
       expect(await campaignContractFactory.platformAdmin()).to.equal(
         platformAdminAddress
       )
+
+      expect(await campaignContractFactory.campaignEventCollector()).to.equal(
+        campaignEventCollectorAddress
+      )
     })
 
     it('Should revert if an invalid defiManager address is passed to the constructor', async function () {
-      const { platformAdmin, deployer } = await loadFixture(
-        deployPlatformFixture
-      )
+      const { platformAdmin, deployer, campaignEventCollector } =
+        await loadFixture(deployPlatformFixture)
 
       await expect(
         ethers.deployContract('CampaignContractFactory', [
           ethers.ZeroAddress,
           await platformAdmin.getAddress(),
+          await campaignEventCollector.getAddress(),
           deployer.address
         ])
       )
@@ -57,13 +67,31 @@ describe('CampaignContractFactory', function () {
     })
 
     it('Should revert if an invalid platformAdmin address is passed to the constructor', async function () {
-      const { defiIntegrationManager, deployer } = await loadFixture(
-        deployPlatformFixture
-      )
+      const { defiIntegrationManager, deployer, campaignEventCollector } =
+        await loadFixture(deployPlatformFixture)
 
       await expect(
         ethers.deployContract('CampaignContractFactory', [
           await defiIntegrationManager.getAddress(),
+          ethers.ZeroAddress,
+          await campaignEventCollector.getAddress(),
+          deployer.address
+        ])
+      )
+        .to.be.revertedWithCustomError(
+          await ethers.getContractFactory('CampaignContractFactory'),
+          'FactoryError'
+        )
+        .withArgs(ERR_INVALID_ADDRESS, ethers.ZeroAddress, 0)
+    })
+    it('Should revert if an invalid eventCollector address is passed to the constructor', async function () {
+      const { defiIntegrationManager, deployer, platformAdmin } =
+        await loadFixture(deployPlatformFixture)
+
+      await expect(
+        ethers.deployContract('CampaignContractFactory', [
+          await defiIntegrationManager.getAddress(),
+          await platformAdmin.getAddress(),
           ethers.ZeroAddress,
           deployer.address
         ])
@@ -343,6 +371,43 @@ describe('CampaignContractFactory', function () {
         gasUsed1,
         (gasUsed1 * 2n) / 100n // Allow 2% variation
       )
+    })
+
+    it('Should authorize new campaign in the EventCollector when deployed', async function () {
+      const {
+        campaignContractFactory,
+        creator1,
+        usdc,
+        campaignEventCollector
+      } = await loadFixture(deployPlatformFixture)
+
+      const usdcAddress = await usdc.getAddress()
+      const campaignGoalAmount = ethers.parseUnits('500', await usdc.decimals())
+      const campaignDuration = 30
+
+      // Deploy a new campaign
+      const tx = await campaignContractFactory
+        .connect(creator1)
+        .deploy(usdcAddress, campaignGoalAmount, campaignDuration)
+
+      const receipt = await tx.wait()
+
+      // Extract the campaign address from the event
+      const event = receipt.logs.find(log => {
+        try {
+          const parsed = campaignContractFactory.interface.parseLog(log)
+          return parsed && parsed.name === 'FactoryOperation'
+        } catch {
+          return false
+        }
+      })
+
+      const parsedEvent = campaignContractFactory.interface.parseLog(event)
+      const campaignAddress = parsedEvent.args[1]
+
+      // Verify the campaign is authorized in the EventCollector
+      expect(await campaignEventCollector.authorizedCampaigns(campaignAddress))
+        .to.be.true
     })
   })
 })

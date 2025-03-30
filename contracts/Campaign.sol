@@ -13,6 +13,7 @@ import "./abstracts/PausableControl.sol";
 import "./libraries/CampaignLibrary.sol";
 import "./libraries/TokenOperationsLibrary.sol";
 import "./libraries/FactoryLibrary.sol";
+import "./interfaces/ICampaignEventCollector.sol";
 
 /**
  * @title Campaign
@@ -57,6 +58,7 @@ contract Campaign is
     // State variables - packed for gas efficiency
     IDefiIntegrationManager public immutable defiManager;
     ITokenRegistry public immutable tokenRegistry;
+    ICampaignEventCollector public immutable campaignEventCollector;
     address public immutable campaignToken;
     bytes32 public immutable campaignId;
     uint256 public immutable campaignGoalAmount;
@@ -73,85 +75,6 @@ contract Campaign is
     mapping(address => uint256) public contributions;
     mapping(address => bool) public hasBeenRefunded;
     mapping(address => bool) public isContributor;
-
-    // Events
-    /**
-     * @notice Emitted when a contribution is made to the campaign
-     * @param contributor Address of the contributor
-     * @param amount Amount contributed
-     * @param campaignId Campaign identifier
-     */
-    event Contribution(
-        address indexed contributor,
-        uint256 amount,
-        bytes32 indexed campaignId
-    );
-
-    /**
-     * @notice Emitted when a refund is issued
-     * @param contributor Contributor receiving refund
-     * @param amount Amount refunded
-     * @param campaignId Campaign identifier
-     */
-    event RefundIssued(
-        address indexed contributor,
-        uint256 amount,
-        bytes32 indexed campaignId
-    );
-
-    /**
-     * @notice Emitted when campaign funds are claimed
-     * @param initiator Claimer address
-     * @param amount Amount claimed
-     * @param campaignId Campaign identifier
-     */
-    event FundsClaimed(
-        address indexed initiator,
-        uint256 amount,
-        bytes32 indexed campaignId
-    );
-
-    /**
-     * @notice Emitted when admin override status changes
-     * @param status New override status
-     * @param admin Admin who made the change
-     * @param campaignId Campaign identifier
-     */
-    event AdminOverrideSet(
-        bool indexed status,
-        address indexed admin,
-        bytes32 indexed campaignId
-    );
-
-    /**
-     * @notice Emitted for token operations
-     * @param token Token address
-     * @param amount Amount involved
-     * @param opType Operation type (1=deposit, 2=claim)
-     * @param initiator Operation initiator
-     * @param campaignId Campaign identifier
-     */
-    event FundsOperation(
-        address indexed token,
-        uint256 amount,
-        uint8 opType,
-        address initiator,
-        bytes32 indexed campaignId
-    );
-
-    /**
-     * @notice Emitted when campaign status changes
-     * @param oldStatus Previous status
-     * @param newStatus New status
-     * @param reason Reason code (1=goal reached, 2=deadline passed)
-     * @param campaignId Campaign identifier
-     */
-    event CampaignStatusChanged(
-        uint8 oldStatus,
-        uint8 newStatus,
-        uint8 reason,
-        bytes32 indexed campaignId
-    );
 
     /**
      * @notice Campaign operation error
@@ -183,7 +106,8 @@ contract Campaign is
         uint256 _campaignGoalAmount,
         uint32 _campaignDuration,
         address _defiManager,
-        address _platformAdmin
+        address _platformAdmin,
+        address _campaignEventCollector
     ) Ownable(_owner) PlatformAdminAccessControl(_platformAdmin) {
         campaignStartTime = uint64(block.timestamp);
 
@@ -214,8 +138,19 @@ contract Campaign is
                 campaignId
             );
 
+        if (_campaignEventCollector == address(0))
+            revert CampaignError(
+                ERR_INVALID_ADDRESS,
+                _campaignEventCollector,
+                0,
+                campaignId
+            );
+
         defiManager = IDefiIntegrationManager(_defiManager);
         tokenRegistry = ITokenRegistry(defiManager.tokenRegistry());
+        campaignEventCollector = ICampaignEventCollector(
+            _campaignEventCollector
+        );
 
         function(address)
             external
@@ -331,8 +266,8 @@ contract Campaign is
         defiManager.depositToYieldProtocol(campaignToken, amount, campaignId);
 
         // Emit events last
-        emit Contribution(msg.sender, amount, campaignId);
-        emit FundsOperation(
+        campaignEventCollector.emitContribution(msg.sender, amount, campaignId);
+        campaignEventCollector.emitFundsOperation(
             campaignToken,
             amount,
             OP_DEPOSIT,
@@ -346,7 +281,7 @@ contract Campaign is
             campaignStatus == STATUS_ACTIVE
         ) {
             campaignStatus = STATUS_COMPLETE;
-            emit CampaignStatusChanged(
+            campaignEventCollector.emitCampaignStatusChanged(
                 STATUS_ACTIVE,
                 STATUS_COMPLETE,
                 REASON_GOAL_REACHED,
@@ -407,7 +342,12 @@ contract Campaign is
         contributions[msg.sender] = 0;
 
         TokenOperations.safeTransfer(campaignToken, msg.sender, refundAmount);
-        emit RefundIssued(msg.sender, refundAmount, campaignId);
+
+        campaignEventCollector.emitRefundIssued(
+            msg.sender,
+            refundAmount,
+            campaignId
+        );
     }
 
     /**
@@ -500,15 +440,18 @@ contract Campaign is
             );
         }
 
-        emit FundsOperation(
+        campaignEventCollector.emitFundsClaimed(
+            msg.sender,
+            withdrawn,
+            campaignId
+        );
+        campaignEventCollector.emitFundsOperation(
             campaignToken,
             withdrawn,
             OP_CLAIM_FUNDS,
             msg.sender,
             campaignId
         );
-
-        emit FundsClaimed(address(this), withdrawn, campaignId);
     }
 
     /**
@@ -518,7 +461,11 @@ contract Campaign is
      */
     function setAdminOverride(bool _adminOverride) external onlyPlatformAdmin {
         adminOverride = _adminOverride;
-        emit AdminOverrideSet(_adminOverride, msg.sender, campaignId);
+        campaignEventCollector.emitAdminOverrideSet(
+            _adminOverride,
+            msg.sender,
+            campaignId
+        );
     }
 
     /**
@@ -580,7 +527,7 @@ contract Campaign is
 
         if (!isCampaignActive() && !isCampaignSuccessful()) {
             campaignStatus = STATUS_COMPLETE;
-            emit CampaignStatusChanged(
+            campaignEventCollector.emitCampaignStatusChanged(
                 STATUS_ACTIVE,
                 STATUS_COMPLETE,
                 REASON_DEADLINE_PASSED,

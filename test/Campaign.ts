@@ -47,7 +47,8 @@ describe('Campaign', function () {
       const {
         campaign,
         creator1, //Owner of campaign deployed in fixture
-        usdc
+        usdc,
+        campaignEventCollector
       } = await loadFixture(deployPlatformFixture)
 
       const usdcAddress = await usdc.getAddress()
@@ -76,6 +77,9 @@ describe('Campaign', function () {
       )
       expect(await campaign.campaignGoalAmount()).to.equal(CAMPAIGN_GOAL_AMOUNT)
       expect(await campaign.campaignDuration()).to.equal(CAMPAIGN_DURATION)
+      expect(await campaign.campaignEventCollector()).to.equal(
+        await campaignEventCollector.getAddress()
+      )
 
       const campaignId = await campaign.campaignId()
 
@@ -86,14 +90,22 @@ describe('Campaign', function () {
     })
 
     it('Should revert if invalid inputs are passed to constructor', async function () {
-      const { creator1, platformAdmin, usdc, wbtc, defiIntegrationManager } =
-        await loadFixture(deployPlatformFixture)
+      const {
+        creator1,
+        platformAdmin,
+        usdc,
+        wbtc,
+        defiIntegrationManager,
+        campaignEventCollector
+      } = await loadFixture(deployPlatformFixture)
 
       const usdcAddress = await usdc.getAddress()
       const usdcDecimals = await usdc.decimals()
       const wbtcAddress = await wbtc.getAddress()
       const defiManagerAddress = await defiIntegrationManager.getAddress()
       const platformAdminAddress = await platformAdmin.getAddress()
+      const campaignEventCollectorAddress =
+        await campaignEventCollector.getAddress()
 
       const CampaignContractFactory = await ethers.getContractFactory(
         'Campaign'
@@ -106,7 +118,8 @@ describe('Campaign', function () {
           CAMPAIGN_GOAL_AMOUNT,
           CAMPAIGN_DURATION,
           defiManagerAddress,
-          platformAdminAddress
+          platformAdminAddress,
+          campaignEventCollectorAddress
         )
       )
         .to.be.revertedWithCustomError(CampaignContractFactory, 'CampaignError')
@@ -124,7 +137,8 @@ describe('Campaign', function () {
           CAMPAIGN_GOAL_AMOUNT,
           CAMPAIGN_DURATION,
           ethers.ZeroAddress,
-          platformAdminAddress
+          platformAdminAddress,
+          campaignEventCollectorAddress
         )
       )
         .to.be.revertedWithCustomError(CampaignContractFactory, 'CampaignError')
@@ -137,7 +151,8 @@ describe('Campaign', function () {
           CAMPAIGN_GOAL_AMOUNT,
           CAMPAIGN_DURATION,
           defiManagerAddress,
-          platformAdminAddress
+          platformAdminAddress,
+          campaignEventCollectorAddress
         )
       )
         .to.be.revertedWithCustomError(CampaignContractFactory, 'CampaignError')
@@ -155,7 +170,8 @@ describe('Campaign', function () {
           ethers.parseUnits('0', usdcDecimals),
           CAMPAIGN_DURATION,
           defiManagerAddress,
-          platformAdminAddress
+          platformAdminAddress,
+          campaignEventCollectorAddress
         )
       )
         .to.be.revertedWithCustomError(CampaignContractFactory, 'CampaignError')
@@ -173,7 +189,8 @@ describe('Campaign', function () {
           CAMPAIGN_GOAL_AMOUNT,
           0,
           defiManagerAddress,
-          platformAdminAddress
+          platformAdminAddress,
+          campaignEventCollectorAddress
         )
       )
         .to.be.revertedWithCustomError(CampaignContractFactory, 'CampaignError')
@@ -191,7 +208,8 @@ describe('Campaign', function () {
           CAMPAIGN_GOAL_AMOUNT,
           366,
           defiManagerAddress,
-          platformAdminAddress
+          platformAdminAddress,
+          campaignEventCollectorAddress
         )
       )
         .to.be.revertedWithCustomError(CampaignContractFactory, 'CampaignError')
@@ -209,6 +227,21 @@ describe('Campaign', function () {
           CAMPAIGN_GOAL_AMOUNT,
           CAMPAIGN_DURATION,
           defiManagerAddress,
+          ethers.ZeroAddress,
+          campaignEventCollectorAddress
+        )
+      )
+        .to.be.revertedWithCustomError(CampaignContractFactory, 'CampaignError')
+        .withArgs(ERR_INVALID_ADDRESS, ethers.ZeroAddress, 0, anyValue)
+
+      await expect(
+        CampaignContractFactory.deploy(
+          creator1.address,
+          usdcAddress,
+          CAMPAIGN_GOAL_AMOUNT,
+          CAMPAIGN_DURATION,
+          defiManagerAddress,
+          platformAdminAddress,
           ethers.ZeroAddress
         )
       )
@@ -224,7 +257,8 @@ describe('Campaign', function () {
         usdc,
         contributor1,
         defiIntegrationManager,
-        IERC20ABI
+        IERC20ABI,
+        campaignEventCollector
       } = await loadFixture(deployPlatformFixture)
 
       const usdcDecimals = await usdc.decimals()
@@ -258,19 +292,21 @@ describe('Campaign', function () {
       await expect(
         campaign.connect(contributor1).contribute(contributionAmount)
       )
-        .to.emit(campaign, 'Contribution')
+        .to.emit(campaignEventCollector, 'Contribution')
         .withArgs(
           contributor1.address,
           contributionAmount,
-          await campaign.campaignId()
+          await campaign.campaignId(),
+          await campaign.getAddress()
         )
-        .and.to.emit(campaign, 'FundsOperation')
+        .and.to.emit(campaignEventCollector, 'FundsOperation')
         .withArgs(
           ethers.getAddress(await usdc.getAddress()), // token
           contributionAmount, // amount
           OP_DEPOSIT, // opType
           contributor1.address, // initiator
-          await campaign.campaignId() // campaignId
+          await campaign.campaignId(), // campaignId,
+          await campaign.getAddress()
         )
 
       const aTokenBalanceAfter = await aToken.balanceOf(
@@ -312,7 +348,8 @@ describe('Campaign', function () {
         usdc,
         contributor1,
         defiIntegrationManager,
-        IERC20ABI
+        IERC20ABI,
+        campaignEventCollector
       } = await loadFixture(deployPlatformFixture)
 
       const usdcDecimals = await usdc.decimals()
@@ -346,11 +383,12 @@ describe('Campaign', function () {
       await expect(
         campaign.connect(contributor1).contribute(contributionAmount)
       )
-        .to.emit(campaign, 'Contribution')
+        .to.emit(campaignEventCollector, 'Contribution')
         .withArgs(
           contributor1.address,
           contributionAmount,
-          await campaign.campaignId()
+          await campaign.campaignId(),
+          await campaign.getAddress()
         )
 
       const aTokenBalanceAfter = await aToken.balanceOf(
@@ -664,9 +702,13 @@ describe('Campaign', function () {
     })
 
     it('Should allow  contriutions at the minimum contribution amount', async function () {
-      const { campaign, contributor1, tokenRegistry, usdc } = await loadFixture(
-        deployPlatformFixture
-      )
+      const {
+        campaign,
+        contributor1,
+        tokenRegistry,
+        usdc,
+        campaignEventCollector
+      } = await loadFixture(deployPlatformFixture)
 
       const { minimumAmount, decimals } =
         await tokenRegistry.getMinContributionAmount(await usdc.getAddress())
@@ -680,11 +722,12 @@ describe('Campaign', function () {
       await expect(
         campaign.connect(contributor1).contribute(contributionAmount)
       )
-        .to.emit(campaign, 'Contribution')
+        .to.emit(campaignEventCollector, 'Contribution')
         .withArgs(
           contributor1.address,
           contributionAmount,
-          await campaign.campaignId()
+          await campaign.campaignId(),
+          await campaign.getAddress()
         )
 
       expect(await campaign.contributions(contributor1.address)).to.equal(
@@ -738,7 +781,8 @@ describe('Campaign', function () {
           creator1,
           IERC20ABI,
           feeManager,
-          platformTreasury
+          platformTreasury,
+          campaignEventCollector
         } = await loadFixture(deployPlatformFixture)
 
         const usdcAddress = await usdc.getAddress()
@@ -791,19 +835,21 @@ describe('Campaign', function () {
         expect(await campaign.hasClaimedFunds()).to.be.false
 
         await expect(campaign.connect(creator1).claimFunds())
-          .to.emit(campaign, 'FundsClaimed')
+          .to.emit(campaignEventCollector, 'FundsClaimed')
           .withArgs(
-            await campaign.getAddress(),
+            await creator1.getAddress(),
             anyUint,
-            await campaign.campaignId()
+            await campaign.campaignId(),
+            await campaign.getAddress()
           )
-          .and.to.emit(campaign, 'FundsOperation')
+          .and.to.emit(campaignEventCollector, 'FundsOperation')
           .withArgs(
             ethers.getAddress(await usdc.getAddress()), // token
             anyUint, // amount
             OP_CLAIM_FUNDS, // opType
             creator1.address, // initiator
-            await campaign.campaignId()
+            await campaign.campaignId(),
+            await campaign.getAddress()
           )
 
         expect(await campaign.hasClaimedFunds()).to.be.true
@@ -854,7 +900,8 @@ describe('Campaign', function () {
           usdc,
           creator1,
           IERC20ABI,
-          platformTreasury
+          platformTreasury,
+          campaignEventCollector
         } = await loadFixture(deployPlatformFixture)
 
         const usdcAddress = await usdc.getAddress()
@@ -911,11 +958,12 @@ describe('Campaign', function () {
         expect(await campaign.hasClaimedFunds()).to.be.false
 
         await expect(campaign.connect(creator1).claimFunds())
-          .to.emit(campaign, 'FundsClaimed')
+          .to.emit(campaignEventCollector, 'FundsClaimed')
           .withArgs(
-            await campaign.getAddress(),
+            await creator1.getAddress(),
             anyUint,
-            await campaign.campaignId()
+            await campaign.campaignId(),
+            await campaign.getAddress()
           )
 
         expect(await campaign.hasClaimedFunds()).to.be.true
@@ -973,7 +1021,8 @@ describe('Campaign', function () {
           IERC20ABI,
           feeManager,
           platformTreasury,
-          deployer
+          deployer,
+          campaignEventCollector
         } = await loadFixture(deployPlatformFixture)
 
         const usdcAddress = await usdc.getAddress()
@@ -1026,11 +1075,12 @@ describe('Campaign', function () {
         expect(await campaign.hasClaimedFunds()).to.be.false
 
         await expect(campaign.connect(deployer).claimFundsAdmin())
-          .to.emit(campaign, 'FundsClaimed')
+          .to.emit(campaignEventCollector, 'FundsClaimed')
           .withArgs(
-            await campaign.getAddress(),
+            await deployer.getAddress(),
             anyUint,
-            await campaign.campaignId()
+            await campaign.campaignId(),
+            await campaign.getAddress()
           )
 
         expect(await campaign.hasClaimedFunds()).to.be.true
@@ -1081,7 +1131,8 @@ describe('Campaign', function () {
           usdc,
           IERC20ABI,
           platformTreasury,
-          deployer //admin
+          deployer, //admin
+          campaignEventCollector
         } = await loadFixture(deployPlatformFixture)
 
         const usdcAddress = await usdc.getAddress()
@@ -1138,11 +1189,12 @@ describe('Campaign', function () {
         expect(await campaign.hasClaimedFunds()).to.be.false
 
         await expect(campaign.connect(deployer).claimFundsAdmin())
-          .to.emit(campaign, 'FundsClaimed')
+          .to.emit(campaignEventCollector, 'FundsClaimed')
           .withArgs(
-            await campaign.getAddress(),
+            await deployer.getAddress(),
             anyUint,
-            await campaign.campaignId()
+            await campaign.campaignId(),
+            await campaign.getAddress()
           )
 
         expect(await campaign.hasClaimedFunds()).to.be.true
@@ -1199,7 +1251,8 @@ describe('Campaign', function () {
           usdc,
           IERC20ABI,
           platformTreasury,
-          deployer //admin
+          deployer, //admin
+          campaignEventCollector
         } = await loadFixture(deployPlatformFixture)
 
         const usdcAddress = await usdc.getAddress()
@@ -1254,11 +1307,12 @@ describe('Campaign', function () {
         await campaign.connect(deployer).setAdminOverride(true)
 
         await expect(campaign.connect(deployer).claimFundsAdmin())
-          .to.emit(campaign, 'FundsClaimed')
+          .to.emit(campaignEventCollector, 'FundsClaimed')
           .withArgs(
-            await campaign.getAddress(),
+            await deployer.getAddress(),
             anyUint,
-            await campaign.campaignId()
+            await campaign.campaignId(),
+            await campaign.getAddress()
           )
 
         expect(await campaign.hasClaimedFunds()).to.be.true
@@ -1471,7 +1525,8 @@ describe('Campaign', function () {
           creator1,
           IERC20ABI,
           feeManager,
-          platformTreasury
+          platformTreasury,
+          campaignEventCollector
         } = await loadFixture(deployPlatformFixture)
 
         const usdcAddress = await usdc.getAddress()
@@ -1524,11 +1579,12 @@ describe('Campaign', function () {
         expect(await campaign.hasClaimedFunds()).to.be.false
 
         await expect(campaign.connect(creator1).claimFunds())
-          .to.emit(campaign, 'FundsClaimed')
+          .to.emit(campaignEventCollector, 'FundsClaimed')
           .withArgs(
-            await campaign.getAddress(),
+            await creator1.getAddress(),
             anyUint,
-            await campaign.campaignId()
+            await campaign.campaignId(),
+            await campaign.getAddress()
           )
 
         expect(await campaign.hasClaimedFunds()).to.be.true
@@ -1579,7 +1635,8 @@ describe('Campaign', function () {
           usdc,
           creator1,
           IERC20ABI,
-          platformTreasury
+          platformTreasury,
+          campaignEventCollector
         } = await loadFixture(deployPlatformFixture)
 
         const usdcAddress = await usdc.getAddress()
@@ -1636,11 +1693,12 @@ describe('Campaign', function () {
         expect(await campaign.hasClaimedFunds()).to.be.false
 
         await expect(campaign.connect(creator1).claimFunds())
-          .to.emit(campaign, 'FundsClaimed')
+          .to.emit(campaignEventCollector, 'FundsClaimed')
           .withArgs(
-            await campaign.getAddress(),
+            await creator1.getAddress(),
             anyUint,
-            await campaign.campaignId()
+            await campaign.campaignId(),
+            await campaign.getAddress()
           )
 
         expect(await campaign.hasClaimedFunds()).to.be.true
@@ -1698,7 +1756,8 @@ describe('Campaign', function () {
           IERC20ABI,
           feeManager,
           platformTreasury,
-          deployer
+          deployer,
+          campaignEventCollector
         } = await loadFixture(deployPlatformFixture)
 
         const usdcAddress = await usdc.getAddress()
@@ -1751,11 +1810,12 @@ describe('Campaign', function () {
         expect(await campaign.hasClaimedFunds()).to.be.false
 
         await expect(campaign.connect(deployer).claimFundsAdmin())
-          .to.emit(campaign, 'FundsClaimed')
+          .to.emit(campaignEventCollector, 'FundsClaimed')
           .withArgs(
-            await campaign.getAddress(),
+            await deployer.getAddress(),
             anyUint,
-            await campaign.campaignId()
+            await campaign.campaignId(),
+            await campaign.getAddress()
           )
 
         expect(await campaign.hasClaimedFunds()).to.be.true
@@ -1806,7 +1866,8 @@ describe('Campaign', function () {
           usdc,
           IERC20ABI,
           platformTreasury,
-          deployer //admin
+          deployer, //admin
+          campaignEventCollector
         } = await loadFixture(deployPlatformFixture)
 
         const usdcAddress = await usdc.getAddress()
@@ -1863,11 +1924,12 @@ describe('Campaign', function () {
         expect(await campaign.hasClaimedFunds()).to.be.false
 
         await expect(campaign.connect(deployer).claimFundsAdmin())
-          .to.emit(campaign, 'FundsClaimed')
+          .to.emit(campaignEventCollector, 'FundsClaimed')
           .withArgs(
-            await campaign.getAddress(),
+            await deployer.getAddress(),
             anyUint,
-            await campaign.campaignId()
+            await campaign.campaignId(),
+            await campaign.getAddress()
           )
 
         expect(await campaign.hasClaimedFunds()).to.be.true
@@ -1924,7 +1986,8 @@ describe('Campaign', function () {
           usdc,
           IERC20ABI,
           platformTreasury,
-          deployer //admin
+          deployer, //admin
+          campaignEventCollector
         } = await loadFixture(deployPlatformFixture)
 
         const usdcAddress = await usdc.getAddress()
@@ -1979,11 +2042,12 @@ describe('Campaign', function () {
         await campaign.connect(deployer).setAdminOverride(true)
 
         await expect(campaign.connect(deployer).claimFundsAdmin())
-          .to.emit(campaign, 'FundsClaimed')
+          .to.emit(campaignEventCollector, 'FundsClaimed')
           .withArgs(
-            await campaign.getAddress(),
+            await deployer.getAddress(),
             anyUint,
-            await campaign.campaignId()
+            await campaign.campaignId(),
+            await campaign.getAddress()
           )
 
         expect(await campaign.hasClaimedFunds()).to.be.true
@@ -2160,8 +2224,14 @@ describe('Campaign', function () {
 
     describe('Refunds', function () {
       it('Should allow successful refund when campaign is over and goal not reached', async function () {
-        const { campaign, contributor1, contributor2, usdc, creator1 } =
-          await loadFixture(deployPlatformFixture)
+        const {
+          campaign,
+          contributor1,
+          contributor2,
+          usdc,
+          creator1,
+          campaignEventCollector
+        } = await loadFixture(deployPlatformFixture)
 
         const usdcAddress = await usdc.getAddress()
         const usdcDecimals = await usdc.decimals()
@@ -2215,11 +2285,12 @@ describe('Campaign', function () {
         )
 
         await expect(campaign.connect(contributor1).requestRefund())
-          .to.emit(campaign, 'RefundIssued')
+          .to.emit(campaignEventCollector, 'RefundIssued')
           .withArgs(
             contributor1.address,
             contributionAmount1,
-            await campaign.campaignId()
+            await campaign.campaignId(),
+            await campaign.getAddress()
           )
 
         expect(await campaign.hasBeenRefunded(contributor1.address)).to.be.true
@@ -2246,11 +2317,12 @@ describe('Campaign', function () {
         )
 
         await expect(campaign.connect(contributor2).requestRefund())
-          .to.emit(campaign, 'RefundIssued')
+          .to.emit(campaignEventCollector, 'RefundIssued')
           .withArgs(
             contributor2.address,
             contributionAmount2,
-            await campaign.campaignId()
+            await campaign.campaignId(),
+            await campaign.getAddress()
           )
 
         expect(await campaign.hasBeenRefunded(contributor2.address)).to.be.true
@@ -2352,8 +2424,14 @@ describe('Campaign', function () {
       })
 
       it('Should revert if contributor has made no contributions', async function () {
-        const { campaign, contributor1, contributor2, usdc, creator1 } =
-          await loadFixture(deployPlatformFixture)
+        const {
+          campaign,
+          contributor1,
+          contributor2,
+          usdc,
+          creator1,
+          campaignEventCollector
+        } = await loadFixture(deployPlatformFixture)
 
         const usdcAddress = await usdc.getAddress()
         const usdcDecimals = await usdc.decimals()
@@ -2401,11 +2479,12 @@ describe('Campaign', function () {
         )
 
         await expect(campaign.connect(contributor1).requestRefund())
-          .to.emit(campaign, 'RefundIssued')
+          .to.emit(campaignEventCollector, 'RefundIssued')
           .withArgs(
             contributor1.address,
             contributionAmount1,
-            await campaign.campaignId()
+            await campaign.campaignId(),
+            await campaign.getAddress()
           )
 
         expect(await campaign.hasBeenRefunded(contributor1.address)).to.be.true
@@ -2570,8 +2649,13 @@ describe('Campaign', function () {
 
   describe('Admin Functions', function () {
     it('Should allow other platform admin to set admin override', async function () {
-      const { campaign, platformAdmin, deployer, otherAdmin } =
-        await loadFixture(deployPlatformFixture)
+      const {
+        campaign,
+        platformAdmin,
+        deployer,
+        otherAdmin,
+        campaignEventCollector
+      } = await loadFixture(deployPlatformFixture)
 
       // Initially campaign should be active
       expect(await campaign.isCampaignActive()).to.be.true
@@ -2580,16 +2664,26 @@ describe('Campaign', function () {
       // Set admin override to true
 
       await expect(campaign.connect(deployer).setAdminOverride(true))
-        .to.emit(campaign, 'AdminOverrideSet')
-        .withArgs(true, deployer.address, await campaign.campaignId())
+        .to.emit(campaignEventCollector, 'AdminOverrideSet')
+        .withArgs(
+          true,
+          deployer.address,
+          await campaign.campaignId(),
+          await campaign.getAddress()
+        )
 
       // Campaign should now be inactive due to override
       expect(await campaign.isCampaignActive()).to.be.false
       expect(await campaign.adminOverride()).to.be.true
 
       await expect(campaign.connect(deployer).setAdminOverride(false))
-        .to.emit(campaign, 'AdminOverrideSet')
-        .withArgs(false, deployer.address, await campaign.campaignId())
+        .to.emit(campaignEventCollector, 'AdminOverrideSet')
+        .withArgs(
+          false,
+          deployer.address,
+          await campaign.campaignId(),
+          await campaign.getAddress()
+        )
 
       expect(await campaign.isCampaignActive()).to.be.true
       expect(await campaign.adminOverride()).to.be.false
@@ -2599,8 +2693,13 @@ describe('Campaign', function () {
       expect(await platformAdmin.isPlatformAdmin(otherAdmin.address)).to.be.true
 
       await expect(campaign.connect(otherAdmin).setAdminOverride(true))
-        .to.emit(campaign, 'AdminOverrideSet')
-        .withArgs(true, otherAdmin.address, await campaign.campaignId())
+        .to.emit(campaignEventCollector, 'AdminOverrideSet')
+        .withArgs(
+          true,
+          otherAdmin.address,
+          await campaign.campaignId(),
+          await campaign.getAddress()
+        )
 
       expect(await campaign.isCampaignActive()).to.be.false
       expect(await campaign.adminOverride()).to.be.true
@@ -2615,8 +2714,14 @@ describe('Campaign', function () {
     })
 
     it('Should allow admin to reactivate campaign by removing override', async function () {
-      const { campaign, platformAdmin, deployer, contributor1, usdc } =
-        await loadFixture(deployPlatformFixture)
+      const {
+        campaign,
+        platformAdmin,
+        deployer,
+        contributor1,
+        usdc,
+        campaignEventCollector
+      } = await loadFixture(deployPlatformFixture)
 
       const usdcDecimals = await usdc.decimals()
 
@@ -2654,11 +2759,12 @@ describe('Campaign', function () {
       await expect(
         campaign.connect(contributor1).contribute(contributionAmount1)
       )
-        .to.emit(campaign, 'Contribution')
+        .to.emit(campaignEventCollector, 'Contribution')
         .withArgs(
           contributor1.address,
           contributionAmount1,
-          await campaign.campaignId()
+          await campaign.campaignId(),
+          await campaign.getAddress()
         )
     })
   })
@@ -2780,9 +2886,8 @@ describe('Campaign', function () {
 
   describe('Campaign Status Changes', function () {
     it('Should emit status change event when campaign becomes successful', async function () {
-      const { campaign, usdc, contributor1 } = await loadFixture(
-        deployPlatformFixture
-      )
+      const { campaign, usdc, contributor1, campaignEventCollector } =
+        await loadFixture(deployPlatformFixture)
       const usdcDecimals = await usdc.decimals()
 
       // Make a contribution that meets the goal
@@ -2795,12 +2900,13 @@ describe('Campaign', function () {
       await expect(
         campaign.connect(contributor1).contribute(contributionAmount)
       )
-        .to.emit(campaign, 'CampaignStatusChanged')
+        .to.emit(campaignEventCollector, 'CampaignStatusChanged')
         .withArgs(
           STATUS_ACTIVE, // oldStatus
           STATUS_COMPLETE, // newStatus
           REASON_GOAL_REACHED, // reason
-          await campaign.campaignId() // campaignId
+          await campaign.campaignId(), // campaignId
+          await campaign.getAddress()
         )
 
       // Status should be updated
@@ -2808,9 +2914,8 @@ describe('Campaign', function () {
     })
 
     it('Should emit status change event when campaign deadline passes without reaching goal', async function () {
-      const { campaign, usdc, contributor1 } = await loadFixture(
-        deployPlatformFixture
-      )
+      const { campaign, usdc, contributor1, campaignEventCollector } =
+        await loadFixture(deployPlatformFixture)
       const usdcDecimals = await usdc.decimals()
 
       // Make a contribution below the goal
@@ -2829,12 +2934,13 @@ describe('Campaign', function () {
 
       // Calling checkAndUpdateStatus directly should emit the event
       await expect(campaign.checkAndUpdateStatus())
-        .to.emit(campaign, 'CampaignStatusChanged')
+        .to.emit(campaignEventCollector, 'CampaignStatusChanged')
         .withArgs(
           STATUS_ACTIVE, // oldStatus
           STATUS_COMPLETE, // newStatus
           REASON_DEADLINE_PASSED, // reason
-          await campaign.campaignId() // campaignId
+          await campaign.campaignId(), // campaignId
+          await campaign.getAddress()
         )
 
       // Status should be updated
@@ -2842,9 +2948,8 @@ describe('Campaign', function () {
     })
 
     it('Should update status when calling other functions after deadline', async function () {
-      const { campaign, usdc, contributor1, creator1 } = await loadFixture(
-        deployPlatformFixture
-      )
+      const { campaign, usdc, contributor1, creator1, campaignEventCollector } =
+        await loadFixture(deployPlatformFixture)
       const usdcDecimals = await usdc.decimals()
 
       // Make a contribution below the goal
@@ -2863,12 +2968,13 @@ describe('Campaign', function () {
 
       // Status should update when claiming funds
       await expect(campaign.connect(creator1).claimFunds())
-        .to.emit(campaign, 'CampaignStatusChanged')
+        .to.emit(campaignEventCollector, 'CampaignStatusChanged')
         .withArgs(
           STATUS_ACTIVE, // oldStatus
           STATUS_COMPLETE, // newStatus
           REASON_DEADLINE_PASSED, // reason
-          await campaign.campaignId() // campaignId
+          await campaign.campaignId(), // campaignId
+          await campaign.getAddress()
         )
 
       // Status should be updated
@@ -2876,9 +2982,8 @@ describe('Campaign', function () {
     })
 
     it('Should not emit status change event when status is already complete', async function () {
-      const { campaign, usdc, contributor1 } = await loadFixture(
-        deployPlatformFixture
-      )
+      const { campaign, usdc, contributor1, campaignEventCollector } =
+        await loadFixture(deployPlatformFixture)
       const usdcDecimals = await usdc.decimals()
 
       // Make a contribution that meets the goal
@@ -2895,7 +3000,7 @@ describe('Campaign', function () {
 
       // Call checkAndUpdateStatus again - should not emit event
       await expect(campaign.checkAndUpdateStatus()).to.not.emit(
-        campaign,
+        campaignEventCollector,
         'CampaignStatusChanged'
       )
     })

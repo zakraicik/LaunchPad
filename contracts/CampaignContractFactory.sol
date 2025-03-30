@@ -7,6 +7,7 @@ import "./interfaces/IPlatformAdmin.sol";
 import "./libraries/FactoryLibrary.sol";
 import "./abstracts/PausableControl.sol";
 import "./abstracts/PlatformAdminAccessControl.sol";
+import "./interfaces/ICampaignEventCollector.sol";
 
 /**
  * @title CampaignContractFactory
@@ -28,6 +29,7 @@ contract CampaignContractFactory is
     uint8 private constant ERR_INVALID_ADDRESS = 2;
 
     IDefiIntegrationManager public immutable defiManager;
+    ICampaignEventCollector public immutable campaignEventCollector;
 
     /**
      * @notice Emitted when a factory operation is performed
@@ -61,13 +63,21 @@ contract CampaignContractFactory is
     constructor(
         address _defiManager,
         address _platformAdmin,
+        address _campaignEventCollector,
         address _owner
     ) Ownable(_owner) PlatformAdminAccessControl(_platformAdmin) {
-        if (_defiManager == address(0) || _platformAdmin == address(0)) {
+        if (
+            _defiManager == address(0) ||
+            _platformAdmin == address(0) ||
+            _campaignEventCollector == address(0)
+        ) {
             revert FactoryError(ERR_INVALID_ADDRESS, address(0), 0);
         }
         defiManager = IDefiIntegrationManager(_defiManager);
         platformAdmin = IPlatformAdmin(_platformAdmin);
+        campaignEventCollector = ICampaignEventCollector(
+            _campaignEventCollector
+        );
     }
 
     /**
@@ -111,10 +121,13 @@ contract CampaignContractFactory is
             _campaignGoalAmount,
             _campaignDuration,
             address(defiManager),
-            address(platformAdmin)
+            address(platformAdmin),
+            address(campaignEventCollector)
         );
 
         address campaignAddress = address(newCampaign);
+
+        campaignEventCollector.authorizeCampaignFromFactory(campaignAddress);
 
         bytes32 campaignId = newCampaign.campaignId();
         emit FactoryOperation(
