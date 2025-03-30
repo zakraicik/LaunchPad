@@ -179,7 +179,7 @@ export async function deployPlatformFixture () {
 
   campaignEventCollector = await ethers.deployContract(
     'CampaignEventCollector',
-    [platformAdmin, deployer.address],
+    [await platformAdmin.getAddress(), deployer.address],
     {
       maxFeePerGas,
       maxPriorityFeePerGas,
