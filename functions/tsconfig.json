@@ -1,6 +1,6 @@
 {
   "compilerOptions": {
-    "target": "es2018",
+    "target": "ES2020",
     "module": "commonjs",
     "outDir": "lib",
     "sourceMap": true,
@@ -8,8 +8,7 @@
     "esModuleInterop": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
-    "isolatedModules": true,
-    "types": ["jest", "node"]
+    "isolatedModules": true
   },
   "include": ["src/**/*", "test/**/*"]
 }
