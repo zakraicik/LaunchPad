@@ -1,8 +1,8 @@
 {
-  "PlatformAdmin": "0xdcEc6C4B54c9f734cE3683dC1Da16e10EF1964e7",
-  "TokenRegistry": "0xdeA919A91eDD4aF84d61401b7CE04669C1Dd0D95",
-  "FeeManager": "0x63321e9812B8E7Efc3B8826217cb37F0CEb33bCa",
-  "DefiIntegrationManager": "0xE046a546705768d1992d9ba7232F016a5eae3d84",
-  "CampaignEventCollector": "0xfFcD3A43F0c69006d383EB685af9e7672425154e",
-  "CampaignContractFactory": "0xed5E21fe6817CE819620d239551a90B15a16558a"
+  "PlatformAdmin": "0x6A0b31C882C9Fc6ad2C7139DDAd48a5b048E8702",
+  "TokenRegistry": "0xb15Ead3931e51339a523a989e46c896F5AbF8193",
+  "FeeManager": "0xC2c0ead337D8A343576E538Eb84bAF050dA683e0",
+  "DefiIntegrationManager": "0xc2dAbC63b26cA5071a9cA24061Bb8d74Bcd4C0a0",
+  "CampaignEventCollector": "0x372Dd247648a5533faF0e84C53C7f0091E5f2B52",
+  "CampaignContractFactory": "0xEbeD765196BDD09B01e94b89384609dC19F19018"
 }

@@ -24,6 +24,10 @@ contract CampaignContractFactory is
     using FactoryLibrary for *;
 
     //Operation and error codes
+    uint8 private constant STATUS_CREATED = 0;
+    uint8 private constant STATUS_ACTIVE = 1;
+    uint8 private constant REASON_CAMPAIGN_CREATED = 0;
+
     uint8 private constant OP_CAMPAIGN_CREATED = 1;
     uint8 private constant ERR_CAMPAIGN_CONSTRUCTOR_VALIDATION_FAILED = 1;
     uint8 private constant ERR_INVALID_ADDRESS = 2;
@@ -135,6 +139,14 @@ contract CampaignContractFactory is
             campaignAddress,
             msg.sender,
             campaignId
+        );
+
+        campaignEventCollector.emitCampaignStatusChangedFromFactory(
+            STATUS_CREATED,
+            STATUS_ACTIVE,
+            REASON_CAMPAIGN_CREATED,
+            campaignId,
+            campaignAddress
         );
 
         return campaignAddress;

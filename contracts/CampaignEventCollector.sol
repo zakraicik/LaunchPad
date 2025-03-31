@@ -332,4 +332,48 @@ contract CampaignEventCollector is Ownable, PlatformAdminAccessControl {
             msg.sender
         );
     }
+
+    /**
+     * @notice Emits a CampaignStatusChanged event from a factory
+     * @dev Only callable by authorized factories
+     * @param oldStatus Previous status
+     * @param newStatus New status
+     * @param reason Reason code for the status change
+     * @param campaignId Unique identifier of the campaign
+     * @param campaignAddress Address of the campaign contract
+     */
+    function emitCampaignStatusChangedFromFactory(
+        uint8 oldStatus,
+        uint8 newStatus,
+        uint8 reason,
+        bytes32 campaignId,
+        address campaignAddress
+    ) external {
+        if (!authorizedFactories[msg.sender])
+            revert CampaignEventCollectorError(
+                ERR_FACTORY_NOT_AUTHORIZED,
+                msg.sender
+            );
+
+        // Validate campaign address
+        if (campaignAddress == address(0))
+            revert CampaignEventCollectorError(
+                ERR_ZERO_ADDRESS,
+                campaignAddress
+            );
+
+        if (!authorizedCampaigns[campaignAddress])
+            revert CampaignEventCollectorError(
+                ERR_CAMPAIGN_DOES_NOT_EXIST,
+                campaignAddress
+            );
+
+        emit CampaignStatusChanged(
+            oldStatus,
+            newStatus,
+            reason,
+            campaignId,
+            campaignAddress
+        );
+    }
 }

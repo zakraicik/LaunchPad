@@ -12,6 +12,9 @@ describe('CampaignContractFactory', function () {
   const OP_CAMPAIGN_CREATED = 1
   const ERR_CAMPAIGN_CONSTRUCTOR_VALIDATION_FAILED = 1
   const ERR_INVALID_ADDRESS = 2
+  const STATUS_CREATED = 0
+  const STATUS_ACTIVE = 1
+  const REASON_CAMPAIGN_CREATED = 0
 
   describe('Deployment', function () {
     it('Should correctly deploy campaignContractFactory', async function () {
@@ -106,14 +109,24 @@ describe('CampaignContractFactory', function () {
 
   describe('Deploying new campaigns', function () {
     it('Should allow new campaigns to be deployed with ERC20 token', async function () {
-      const { campaignContractFactory, creator1, usdc, tokenRegistry } =
-        await loadFixture(deployPlatformFixture)
+      const {
+        campaignContractFactory,
+        creator1,
+        usdc,
+        tokenRegistry,
+        campaignEventCollector,
+        deployer
+      } = await loadFixture(deployPlatformFixture)
 
       const usdcAddress = await usdc.getAddress()
       const campaignGoalAmount = ethers.parseUnits('500', await usdc.decimals()) // Use proper units
       const campaignDuration = 30
 
       expect(await tokenRegistry.isTokenSupported(usdcAddress)).to.be.true
+
+      // Setup event monitoring for CampaignStatusChanged
+      const statusChangedFilter =
+        campaignEventCollector.filters.CampaignStatusChanged()
 
       const tx = await campaignContractFactory
         .connect(creator1)
@@ -146,6 +159,24 @@ describe('CampaignContractFactory', function () {
       expect(parsedEvent.args[0]).to.equal(OP_CAMPAIGN_CREATED)
 
       const campaignAddress = parsedEvent.args[1]
+      const campaignId = parsedEvent.args[3]
+
+      // Check for CampaignStatusChanged event
+      const statusChangedEvents = await campaignEventCollector.queryFilter(
+        statusChangedFilter,
+        receipt.blockNumber,
+        receipt.blockNumber
+      )
+
+      const campaignStatusEvent = statusChangedEvents.find(
+        event => event.args[3] === campaignId
+      )
+
+      expect(campaignStatusEvent).to.not.be.undefined
+      expect(campaignStatusEvent.args[0]).to.equal(STATUS_CREATED) // oldStatus
+      expect(campaignStatusEvent.args[1]).to.equal(STATUS_ACTIVE) // newStatus
+      expect(campaignStatusEvent.args[2]).to.equal(REASON_CAMPAIGN_CREATED) // reason
+      expect(campaignStatusEvent.args[4]).to.equal(campaignAddress) // campaignAddress
 
       const Campaign = await ethers.getContractFactory('Campaign')
       const campaign = Campaign.attach(campaignAddress) as unknown as Campaign
@@ -158,6 +189,7 @@ describe('CampaignContractFactory', function () {
       expect(await campaign.campaignGoalAmount()).to.equal(campaignGoalAmount)
       expect(await campaign.campaignDuration()).to.equal(campaignDuration)
       expect(await campaign.isCampaignActive()).to.be.true
+      expect(await campaign.campaignStatus()).to.equal(STATUS_ACTIVE)
     })
 
     it('Should revert on unsupported campaign token', async function () {

@@ -1,3 +1,5 @@
+//npx hardhat run scripts/deploy.ts --network baseSepolia
+
 import { ethers } from 'hardhat'
 import { writeFileSync } from 'fs'
 
