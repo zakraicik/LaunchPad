@@ -1,4 +1,8 @@
-// Event processor for TokenRegistry events
+/**
+ * Event processor for TokenRegistry events
+ * @module tokenRegistryProcessor
+ */
+
 import {logger} from "firebase-functions";
 import {onDocumentCreated} from "firebase-functions/v2/firestore";
 import {getFirestore} from "firebase-admin/firestore";
@@ -7,47 +11,81 @@ import {ethers} from "ethers";
 // Initialize Firebase
 const db = getFirestore();
 
-// Define types for event logs and operation data
+/**
+ * Interface representing an event log from the blockchain
+ * @interface EventLog
+ */
 interface EventLog {
+  /** Array of event topics (indexed parameters) */
   topics: string[]
+  /** Raw event data (non-indexed parameters) */
   data: string
+  /** Block information containing number and timestamp */
   block?: {
     number?: number
     timestamp?: number
   }
+  /** Transaction information containing hash */
   transaction?: {
     hash?: string
   }
+  /** Account information containing address */
   account?: {
     address?: string
   }
 }
 
+/**
+ * Interface representing processed token event data
+ * @interface TokenEventData
+ */
 interface TokenEventData {
+  /** Type of the event */
   eventType: string
+  /** ID of the raw event document */
   rawEventId: string
+  /** Timestamp when the event was created */
   createdAt: Date
+  /** Block number where the event occurred */
   blockNumber: number | null
+  /** Block timestamp when the event occurred */
   blockTimestamp: Date | null
+  /** Hash of the transaction containing the event */
   transactionHash: string | null
+  /** Address of the contract that emitted the event */
   contractAddress: string | null
+  /** Operation details including code and name */
   operation: {
     code: number
     name: string
   }
+  /** Token address involved in the event */
   token: string
+  /** Raw value from the event */
   value: string
+  /** Human-readable formatted value */
   formattedValue: string
+  /** Number of decimal places for the token */
   decimals: number
 }
 
+/**
+ * Interface representing token data stored in Firestore
+ * @interface TokenData
+ */
 interface TokenData {
+  /** Token contract address */
   address: string
+  /** Whether the token is currently supported */
   isSupported: boolean
+  /** Minimum contribution amount in raw units */
   minimumContribution?: string
-  formattedMinimumContribution?: string
+
+  /** Number of decimal places for the token */
   decimals?: number
+  /** Last update timestamp */
   lastUpdated: Date
+  /** Last operation performed on the token */
   lastOperation: string
 }
 
@@ -71,6 +109,10 @@ const OPERATION_TYPES: Record<number, string> = {
 /**
  * Firebase function that triggers when a new document is created in the rawEvents collection
  * Parses TokenRegistry events and stores them in the tokenEvents collection
+ *
+ * @function processTokenRegistryEvents
+ * @param {Object} event - The Firebase event object containing the new document
+ * @returns {Promise<void>} A promise that resolves when processing is complete
  */
 export const processTokenRegistryEvents = onDocumentCreated(
   "rawEvents/{docId}",
@@ -128,9 +170,12 @@ export const processTokenRegistryEvents = onDocumentCreated(
 );
 
 /**
- * Process a TokenRegistryOperation event log
- * @param log The log object from the webhook
- * @param rawEventId The ID of the raw event document
+ * Process a TokenRegistryOperation event log and store it in Firestore
+ *
+ * @function processTokenRegistryOperation
+ * @param {EventLog} log - The log object from the webhook
+ * @param {string} rawEventId - The ID of the raw event document
+ * @return {Promise<void>} A promise that resolves when processing is complete
  */
 async function processTokenRegistryOperation(
   log: EventLog,
@@ -183,11 +228,7 @@ async function processTokenRegistryOperation(
       },
       token: normalizedTokenAddress,
       value: value.toString(),
-      // Format value according to decimals for certain operations
-      formattedValue:
-        opType === 1 || opType === 5 ?
-          ethers.formatUnits(value, decimals) :
-          "0",
+      formattedValue: value.toString(), // Store raw value, formatting will be done on frontend
       decimals,
     };
 
@@ -214,10 +255,13 @@ async function processTokenRegistryOperation(
 
 /**
  * Updates or creates a token record in the tokens collection based on operation type
- * @param opType The operation type code
- * @param tokenAddress The token address
- * @param value The value (e.g., minimum contribution amount)
- * @param decimals The token decimals
+ *
+ * @function updateTokenRecordByOpType
+ * @param {number} opType - The operation type code (1-5)
+ * @param {string} tokenAddress - The token contract address
+ * @param {string} value - The value (e.g., minimum contribution amount)
+ * @param {number} decimals - The token decimals
+ * @return {Promise<void>} A promise that resolves when the update is complete
  */
 async function updateTokenRecordByOpType(
   opType: number,
@@ -249,7 +293,6 @@ async function updateTokenRecordByOpType(
       const tokenAddedData: TokenData = {
         address: tokenAddress,
         minimumContribution: value,
-        formattedMinimumContribution: ethers.formatUnits(value, decimals),
         decimals,
         isSupported: true,
         lastUpdated: new Date(),
@@ -310,7 +353,6 @@ async function updateTokenRecordByOpType(
       if (tokenExists) {
         const updateData: Partial<TokenData> = {
           minimumContribution: value,
-          formattedMinimumContribution: ethers.formatUnits(value, decimals),
           lastUpdated: new Date(),
           lastOperation: "MIN_CONTRIBUTION_UPDATED",
         };
@@ -333,9 +375,3 @@ async function updateTokenRecordByOpType(
     logger.error(`Error updating token record by operation type: ${error}`);
   }
 }
-
-// Expose private functions for testing
-export const __test__ = {
-  updateTokenRecordByOpType,
-  processTokenRegistryOperation,
-};
