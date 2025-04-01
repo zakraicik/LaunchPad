@@ -333,3 +333,9 @@ async function updateTokenRecordByOpType (
     logger.error(`Error updating token record by operation type: ${error}`)
   }
 }
+
+// Expose private functions for testing
+export const __test__ = {
+  updateTokenRecordByOpType,
+  processTokenRegistryOperation
+}
