@@ -3,8 +3,8 @@ initializeApp();
 
 export * from "./alchemyWebhook";
 export * from "./tokenRegistryProcessor";
-// export * from "./platformAdminProcessor";
-// export * from "./feeManagerProcessor";
-// export * from "./defiIntegrationManagerProcessor";
-// export * from "./CampaignFactoryProcessor";
-// export * from "./CampaignEventProcessor";
+export * from "./platformAdminProcessor";
+export * from "./feeManagerProcessor";
+export * from "./defiIntegrationManagerProcessor";
+export * from "./CampaignFactoryProcessor";
+export * from "./CampaignEventProcessor";
