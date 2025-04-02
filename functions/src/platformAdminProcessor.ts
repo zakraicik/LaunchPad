@@ -4,13 +4,13 @@
  * @module platformAdminProcessor
  */
 
-import {logger} from "firebase-functions";
-import {onDocumentCreated} from "firebase-functions/v2/firestore";
-import {getFirestore} from "firebase-admin/firestore";
-import {ethers} from "ethers";
+import { logger } from 'firebase-functions'
+import { onDocumentCreated } from 'firebase-functions/v2/firestore'
+import admin from 'firebase-admin'
+import { ethers } from 'ethers'
 
 // Initialize Firebase
-const db = getFirestore();
+const db = admin.firestore()
 
 /**
  * Represents a raw event log from the blockchain
@@ -84,21 +84,21 @@ interface AdminData {
 }
 
 // Event signature and interface for PlatformAdminOperation
-const eventSignature = "PlatformAdminOperation(uint8,address,uint256,uint256)";
+const eventSignature = 'PlatformAdminOperation(uint8,address,uint256,uint256)'
 
 // Event signature hash for PlatformAdminOperation
 const PLATFORM_ADMIN_OP_SIGNATURE = ethers.keccak256(
   ethers.toUtf8Bytes(eventSignature)
-);
+)
 
 /**
  * Mapping of operation codes to their human-readable names
  * @constant {Record<number, string>}
  */
 const OPERATION_TYPES: Record<number, string> = {
-  1: "ADMIN_ADDED",
-  2: "ADMIN_REMOVED",
-};
+  1: 'ADMIN_ADDED',
+  2: 'ADMIN_REMOVED'
+}
 
 /**
  * Firebase function that triggers when a new document is created in the rawEvents collection.
@@ -108,29 +108,29 @@ const OPERATION_TYPES: Record<number, string> = {
  * @returns {Promise<void>}
  */
 export const processPlatformAdminEvents = onDocumentCreated(
-  "rawEvents/{docId}",
-  async (event) => {
+  'rawEvents/{docId}',
+  async event => {
     try {
       // Get the raw event data
-      const rawEvent = event.data?.data();
+      const rawEvent = event.data?.data()
       if (!rawEvent || !rawEvent.data) {
-        logger.warn("No data found in raw event");
-        return;
+        logger.warn('No data found in raw event')
+        return
       }
 
-      const rawEventId = event.params.docId;
+      const rawEventId = event.params.docId
       if (!rawEventId) {
-        logger.warn("No document ID found in event params");
-        return;
+        logger.warn('No document ID found in event params')
+        return
       }
 
-      logger.info(`Processing raw event with ID: ${rawEventId}`);
+      logger.info(`Processing raw event with ID: ${rawEventId}`)
 
       // Extract logs from the webhook data
-      const logs = rawEvent.data?.event?.data?.logs;
+      const logs = rawEvent.data?.event?.data?.logs
       if (!logs || !Array.isArray(logs)) {
-        logger.info("No logs found in event data");
-        return;
+        logger.info('No logs found in event data')
+        return
       }
 
       // Process each log
@@ -141,26 +141,26 @@ export const processPlatformAdminEvents = onDocumentCreated(
           !Array.isArray(log.topics) ||
           log.topics.length === 0
         ) {
-          logger.debug("Skipping log with no topics");
-          continue;
+          logger.debug('Skipping log with no topics')
+          continue
         }
 
-        const eventSignature = log.topics[0];
+        const eventSignature = log.topics[0]
         if (!eventSignature) {
-          logger.debug("Skipping log with no event signature");
-          continue;
+          logger.debug('Skipping log with no event signature')
+          continue
         }
 
         // Check if this is a PlatformAdminOperation event
         if (eventSignature === PLATFORM_ADMIN_OP_SIGNATURE) {
-          await processPlatformAdminOperation(log as EventLog, rawEventId);
+          await processPlatformAdminOperation(log as EventLog, rawEventId)
         }
       }
     } catch (error) {
-      logger.error("Error processing platform admin event:", error);
+      logger.error('Error processing platform admin event:', error)
     }
   }
-);
+)
 
 /**
  * Process a PlatformAdminOperation event log and store it in Firestore
@@ -170,74 +170,74 @@ export const processPlatformAdminEvents = onDocumentCreated(
  * @param {string} rawEventId - The ID of the raw event document
  * @return {Promise<void>}
  */
-async function processPlatformAdminOperation(
+async function processPlatformAdminOperation (
   log: EventLog,
   rawEventId: string
 ) {
   try {
     if (!log || !log.topics || !log.data) {
-      logger.error("Invalid log data for PlatformAdminOperation");
-      return;
+      logger.error('Invalid log data for PlatformAdminOperation')
+      return
     }
 
     // Extract the admin address from topics since it's indexed
     // The admin address is in the second topic (index 1)
     const adminAddress =
-      log.topics.length > 1 ?
-        ethers.dataSlice(log.topics[1], 12) : // Convert bytes32 to address
-        undefined;
+      log.topics.length > 1
+        ? ethers.dataSlice(log.topics[1], 12) // Convert bytes32 to address
+        : undefined
 
     if (!adminAddress) {
-      logger.error("Missing admin address in PlatformAdminOperation");
-      return;
+      logger.error('Missing admin address in PlatformAdminOperation')
+      return
     }
 
     // Admin address needs to be properly formatted with checksum
-    const normalizedAdminAddress = ethers.getAddress(adminAddress).toLowerCase();
+    const normalizedAdminAddress = ethers.getAddress(adminAddress).toLowerCase()
     // Extract data from the non-indexed parameters
     // The data field contains all non-indexed parameters packed together
     const decodedData = ethers.AbiCoder.defaultAbiCoder().decode(
-      ["uint8", "uint256", "uint256"], // opType, oldValue, newValue
+      ['uint8', 'uint256', 'uint256'], // opType, oldValue, newValue
       log.data
-    );
+    )
 
-    const opType = Number(decodedData[0]);
-    const oldValue = decodedData[1];
-    const newValue = decodedData[2];
+    const opType = Number(decodedData[0])
+    const oldValue = decodedData[1]
+    const newValue = decodedData[2]
 
     // Format the data
     const adminEvent: PlatformAdminEventData = {
-      eventType: "PlatformAdminOperation",
+      eventType: 'PlatformAdminOperation',
       rawEventId,
       createdAt: new Date(),
       blockNumber: log.block?.number || null,
-      blockTimestamp: log.block?.timestamp ?
-        new Date(log.block.timestamp * 1000) :
-        null,
+      blockTimestamp: log.block?.timestamp
+        ? new Date(log.block.timestamp * 1000)
+        : null,
       transactionHash: log.transaction?.hash || null,
       contractAddress: log.account?.address || null,
       operation: {
         code: opType,
-        name: OPERATION_TYPES[opType] || "UNKNOWN",
+        name: OPERATION_TYPES[opType] || 'UNKNOWN'
       },
       admin: normalizedAdminAddress,
       oldValue: oldValue.toString(),
-      newValue: newValue.toString(),
-    };
-
-    // Store the admin event
-    const docRef = await db.collection("adminEvents").add(adminEvent);
-    if (!docRef) {
-      logger.error("Failed to create document in adminEvents collection");
-      return;
+      newValue: newValue.toString()
     }
 
-    logger.info(`Admin event stored with ID: ${docRef.id}`);
+    // Store the admin event
+    const docRef = await db.collection('adminEvents').add(adminEvent)
+    if (!docRef) {
+      logger.error('Failed to create document in adminEvents collection')
+      return
+    }
+
+    logger.info(`Admin event stored with ID: ${docRef.id}`)
 
     // Update admin record based on operation type
-    await updateAdminRecordByOpType(opType, normalizedAdminAddress);
+    await updateAdminRecordByOpType(opType, normalizedAdminAddress)
   } catch (error) {
-    logger.error(`Error processing PlatformAdminOperation: ${error}`);
+    logger.error(`Error processing PlatformAdminOperation: ${error}`)
   }
 }
 
@@ -248,64 +248,64 @@ async function processPlatformAdminOperation(
  * @param {string} adminAddress - The admin's Ethereum address
  * @return {Promise<void>}
  */
-async function updateAdminRecordByOpType(opType: number, adminAddress: string) {
+async function updateAdminRecordByOpType (opType: number, adminAddress: string) {
   try {
     if (!adminAddress) {
-      logger.error("Invalid admin address for updateAdminRecordByOpType");
-      return;
+      logger.error('Invalid admin address for updateAdminRecordByOpType')
+      return
     }
 
     // Reference to the admin document
-    const adminRef = db.collection("admins").doc(adminAddress);
+    const adminRef = db.collection('admins').doc(adminAddress)
     if (!adminRef) {
-      logger.error("Failed to create reference to admin document");
-      return;
+      logger.error('Failed to create reference to admin document')
+      return
     }
 
     // Check if the admin document exists
-    const adminDoc = await adminRef.get();
-    const adminExists = adminDoc.exists;
+    const adminDoc = await adminRef.get()
+    const adminExists = adminDoc.exists
 
     // Handle different operation types
-    let adminAddedData: AdminData;
-    let adminRemovedData: Partial<AdminData>;
+    let adminAddedData: AdminData
+    let adminRemovedData: Partial<AdminData>
 
     switch (opType) {
-    case 1: // ADMIN_ADDED
-      // Create or update admin record
-      adminAddedData = {
-        address: adminAddress,
-        isActive: true,
-        lastUpdated: new Date(),
-        lastOperation: "ADMIN_ADDED",
-      };
-
-      await adminRef.set(adminAddedData, {merge: true});
-      logger.info(`Admin record created/updated for ${adminAddress}`);
-      break;
-
-    case 2: // ADMIN_REMOVED
-      if (adminExists) {
-        // Update the admin record to mark as inactive
-        adminRemovedData = {
-          isActive: false,
+      case 1: // ADMIN_ADDED
+        // Create or update admin record
+        adminAddedData = {
+          address: adminAddress,
+          isActive: true,
           lastUpdated: new Date(),
-          lastOperation: "ADMIN_REMOVED",
-        };
+          lastOperation: 'ADMIN_ADDED'
+        }
 
-        await adminRef.update(adminRemovedData);
-        logger.info(`Admin marked as inactive for ${adminAddress}`);
-      } else {
-        logger.warn(`Attempted to remove non-existent admin: ${adminAddress}`);
-      }
-      break;
+        await adminRef.set(adminAddedData, { merge: true })
+        logger.info(`Admin record created/updated for ${adminAddress}`)
+        break
 
-    default:
-      logger.warn(
-        `Unknown operation type: ${opType} for admin ${adminAddress}`
-      );
+      case 2: // ADMIN_REMOVED
+        if (adminExists) {
+          // Update the admin record to mark as inactive
+          adminRemovedData = {
+            isActive: false,
+            lastUpdated: new Date(),
+            lastOperation: 'ADMIN_REMOVED'
+          }
+
+          await adminRef.update(adminRemovedData)
+          logger.info(`Admin marked as inactive for ${adminAddress}`)
+        } else {
+          logger.warn(`Attempted to remove non-existent admin: ${adminAddress}`)
+        }
+        break
+
+      default:
+        logger.warn(
+          `Unknown operation type: ${opType} for admin ${adminAddress}`
+        )
     }
   } catch (error) {
-    logger.error(`Error updating admin record by operation type: ${error}`);
+    logger.error(`Error updating admin record by operation type: ${error}`)
   }
 }

@@ -5,11 +5,10 @@
 
 import {logger} from "firebase-functions";
 import {onDocumentCreated} from "firebase-functions/v2/firestore";
-import {getFirestore} from "firebase-admin/firestore";
+import admin from "firebase-admin";
 import {ethers} from "ethers";
 
-// Initialize Firebase
-const db = getFirestore();
+const db = admin.firestore();
 
 /**
  * Interface representing an event log from the blockchain
@@ -92,7 +91,7 @@ const eventSignature = "TokenRegistryOperation(uint8,address,uint256,uint8)";
 
 // Event signature hash for TokenRegistryOperation
 const TOKEN_REGISTRY_OP_SIGNATURE = ethers.keccak256(
-  ethers.toUtf8Bytes(eventSignature)
+  ethers.toUtf8Bytes(eventSignature),
 );
 
 // Operation types mapping
@@ -163,7 +162,7 @@ export const processTokenRegistryEvents = onDocumentCreated(
     } catch (error) {
       logger.error("Error processing token registry event:", error);
     }
-  }
+  },
 );
 
 /**
@@ -175,7 +174,7 @@ export const processTokenRegistryEvents = onDocumentCreated(
  */
 async function processTokenRegistryOperation(
   log: EventLog,
-  rawEventId: string
+  rawEventId: string,
 ) {
   try {
     if (!log || !log.topics || !log.data) {
@@ -200,7 +199,7 @@ async function processTokenRegistryOperation(
     // The data field contains all non-indexed parameters packed together
     const decodedData = ethers.AbiCoder.defaultAbiCoder().decode(
       ["uint8", "uint256", "uint8"], // opType, value, decimals
-      log.data
+      log.data,
     );
 
     const opType = Number(decodedData[0]);
@@ -241,7 +240,7 @@ async function processTokenRegistryOperation(
       opType,
       normalizedTokenAddress,
       value.toString(),
-      decimals
+      decimals,
     );
   } catch (error) {
     logger.error(`Error processing TokenRegistryOperation: ${error}`);
@@ -261,7 +260,7 @@ async function updateTokenRecordByOpType(
   opType: number,
   tokenAddress: string,
   value: string,
-  decimals: number
+  decimals: number,
 ) {
   try {
     if (!tokenAddress) {
@@ -317,7 +316,7 @@ async function updateTokenRecordByOpType(
         logger.info(`Token support disabled for ${tokenAddress}`);
       } else {
         logger.warn(
-          `Attempted to disable support for non-existent token: ${tokenAddress}`
+          `Attempted to disable support for non-existent token: ${tokenAddress}`,
         );
       }
       break;
@@ -335,7 +334,7 @@ async function updateTokenRecordByOpType(
         // This case should not happen due to on-chain verification,
         // but we handle it defensively
         logger.warn(
-          `Attempted to enable support for non-existent token: ${tokenAddress}`
+          `Attempted to enable support for non-existent token: ${tokenAddress}`,
         );
       }
       break;
@@ -351,14 +350,14 @@ async function updateTokenRecordByOpType(
         logger.info(`Minimum contribution updated for ${tokenAddress}`);
       } else {
         logger.warn(
-          `Attempted to update minimum contribution for non-existent token: ${tokenAddress}`
+          `Attempted to update minimum contribution for non-existent token: ${tokenAddress}`,
         );
       }
       break;
 
     default:
       logger.warn(
-        `Unknown operation type: ${opType} for token ${tokenAddress}`
+        `Unknown operation type: ${opType} for token ${tokenAddress}`,
       );
     }
   } catch (error) {
