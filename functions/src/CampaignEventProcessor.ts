@@ -1,4 +1,8 @@
-// Event processor for CampaignEventCollector events
+/**
+ * Event processor for CampaignEventCollector events
+ * This module processes blockchain events emitted by the CampaignEventCollector contract and stores them in appropriate Firestore collections.
+ */
+
 import {logger} from "firebase-functions";
 import {onDocumentCreated} from "firebase-functions/v2/firestore";
 import {getFirestore} from "firebase-admin/firestore";
@@ -7,92 +11,175 @@ import {ethers} from "ethers";
 // Initialize Firebase
 const db = getFirestore();
 
-// Define types for event logs and operation data
+/**
+ * Interface representing a raw event log from the blockchain
+ * @interface EventLog
+ */
 interface EventLog {
+  /** Array of event topics (indexed parameters) */
   topics: string[]
+  /** Raw event data (non-indexed parameters) */
   data: string
+  /** Block information */
   block?: {
+    /** Block number */
     number?: number
+    /** Block timestamp */
     timestamp?: number
   }
+  /** Transaction information */
   transaction?: {
+    /** Transaction hash */
     hash?: string
   }
+  /** Account information */
   account?: {
+    /** Contract address */
     address?: string
   }
 }
 
-// Base interface for all campaign events
+/**
+ * Base interface for all campaign events
+ * Contains common fields shared across all campaign event types
+ * @interface CampaignEventBase
+ */
 interface CampaignEventBase {
+  /** Type of the event */
   eventType: string
+  /** ID of the raw event document */
   rawEventId: string
+  /** When the event was processed */
   createdAt: Date
+  /** Block number where the event occurred */
   blockNumber: number | null
+  /** Timestamp of the block */
   blockTimestamp: Date | null
+  /** Hash of the transaction */
   transactionHash: string | null
+  /** Address of the contract that emitted the event */
   contractAddress: string | null
+  /** Unique identifier of the campaign */
   campaignId: string
+  /** Address of the campaign contract */
   campaignAddress: string
 }
 
-// Contribution event data
+/**
+ * Interface for Contribution event data
+ * @interface ContributionEventData
+ * @extends {CampaignEventBase}
+ */
 interface ContributionEventData extends CampaignEventBase {
+  /** Address of the contributor */
   contributor: string
+  /** Amount contributed (in wei) */
   amount: string
-  formattedAmount: string // For human-readable display (depends on token decimals)
+  /** Human-readable formatted amount */
+  formattedAmount: string
 }
 
-// Refund issued event data
+/**
+ * Interface for RefundIssued event data
+ * @interface RefundIssuedEventData
+ * @extends {CampaignEventBase}
+ */
 interface RefundIssuedEventData extends CampaignEventBase {
+  /** Address of the contributor receiving the refund */
   contributor: string
+  /** Amount refunded (in wei) */
   amount: string
+  /** Human-readable formatted amount */
   formattedAmount: string
 }
 
-// Funds claimed event data
+/**
+ * Interface for FundsClaimed event data
+ * @interface FundsClaimedEventData
+ * @extends {CampaignEventBase}
+ */
 interface FundsClaimedEventData extends CampaignEventBase {
+  /** Address that initiated the claim */
   initiator: string
+  /** Amount claimed (in wei) */
   amount: string
+  /** Human-readable formatted amount */
   formattedAmount: string
 }
 
-// Campaign status changed event data
+/**
+ * Interface for CampaignStatusChanged event data
+ * @interface CampaignStatusChangedEventData
+ * @extends {CampaignEventBase}
+ */
 interface CampaignStatusChangedEventData extends CampaignEventBase {
+  /** Previous status code */
   oldStatus: number
+  /** New status code */
   newStatus: number
+  /** Reason code for the status change */
   reason: number
 }
 
-// Admin override set event data
+/**
+ * Interface for AdminOverrideSet event data
+ * @interface AdminOverrideSetEventData
+ * @extends {CampaignEventBase}
+ */
 interface AdminOverrideSetEventData extends CampaignEventBase {
+  /** New override status */
   status: boolean
+  /** Address of the admin who set the override */
   admin: string
 }
 
-// Funds operation event data
+/**
+ * Interface for FundsOperation event data
+ * @interface FundsOperationEventData
+ * @extends {CampaignEventBase}
+ */
 interface FundsOperationEventData extends CampaignEventBase {
+  /** Address of the token involved in the operation */
   token: string
+  /** Amount involved in the operation (in wei) */
   amount: string
+  /** Human-readable formatted amount */
   formattedAmount: string
+  /** Type of funds operation */
   opType: number
+  /** Address that initiated the operation */
   initiator: string
 }
 
-// Campaign event collector operation event data
+/**
+ * Interface for CampaignEventCollector operation event data
+ * @interface EventCollectorOperationData
+ */
 interface EventCollectorOperationData {
+  /** Type of the event */
   eventType: string
+  /** ID of the raw event document */
   rawEventId: string
+  /** When the event was processed */
   createdAt: Date
+  /** Block number where the event occurred */
   blockNumber: number | null
+  /** Timestamp of the block */
   blockTimestamp: Date | null
+  /** Hash of the transaction */
   transactionHash: string | null
+  /** Address of the contract that emitted the event */
   contractAddress: string | null
+  /** Operation details */
   operation: {
+    /** Operation code */
     code: number
+    /** Human-readable operation name */
     name: string
   }
+  /** Address of the sender */
   sender: string
+  /** Target address of the operation */
   targetAddress: string
 }
 
@@ -173,6 +260,11 @@ const DEFAULT_TOKEN_DECIMALS = 18;
 /**
  * Firebase function that triggers when a new document is created in the rawEvents collection
  * Parses CampaignEventCollector events and stores them in appropriate collections
+ * @function processCampaignEvents
+ * @param {Object} event - The Firebase event object
+ * @param {Object} event.data - The document data
+ * @param {Object} event.params - The function parameters
+ * @param {string} event.params.docId - The document ID
  */
 export const processCampaignEvents = onDocumentCreated(
   "rawEvents/{docId}",
@@ -256,8 +348,10 @@ export const processCampaignEvents = onDocumentCreated(
 
 /**
  * Process a Contribution event log
- * @param log The log object from the webhook
- * @param rawEventId The ID of the raw event document
+ * @async
+ * @function processContributionEvent
+ * @param {EventLog} log - The log object from the webhook
+ * @param {string} rawEventId - The ID of the raw event document
  */
 async function processContributionEvent(log: EventLog, rawEventId: string) {
   try {
@@ -336,8 +430,10 @@ async function processContributionEvent(log: EventLog, rawEventId: string) {
 
 /**
  * Process a RefundIssued event log
- * @param log The log object from the webhook
- * @param rawEventId The ID of the raw event document
+ * @async
+ * @function processRefundIssuedEvent
+ * @param {EventLog} log - The log object from the webhook
+ * @param {string} rawEventId - The ID of the raw event document
  */
 async function processRefundIssuedEvent(log: EventLog, rawEventId: string) {
   try {
@@ -409,8 +505,10 @@ async function processRefundIssuedEvent(log: EventLog, rawEventId: string) {
 
 /**
  * Process a FundsClaimed event log
- * @param log The log object from the webhook
- * @param rawEventId The ID of the raw event document
+ * @async
+ * @function processFundsClaimedEvent
+ * @param {EventLog} log - The log object from the webhook
+ * @param {string} rawEventId - The ID of the raw event document
  */
 async function processFundsClaimedEvent(log: EventLog, rawEventId: string) {
   try {
@@ -482,8 +580,10 @@ async function processFundsClaimedEvent(log: EventLog, rawEventId: string) {
 
 /**
  * Process a CampaignStatusChanged event log
- * @param log The log object from the webhook
- * @param rawEventId The ID of the raw event document
+ * @async
+ * @function processCampaignStatusChangedEvent
+ * @param {EventLog} log - The log object from the webhook
+ * @param {string} rawEventId - The ID of the raw event document
  */
 async function processCampaignStatusChangedEvent(
   log: EventLog,
@@ -551,8 +651,10 @@ async function processCampaignStatusChangedEvent(
 
 /**
  * Process an AdminOverrideSet event log
- * @param log The log object from the webhook
- * @param rawEventId The ID of the raw event document
+ * @async
+ * @function processAdminOverrideSetEvent
+ * @param {EventLog} log - The log object from the webhook
+ * @param {string} rawEventId - The ID of the raw event document
  */
 async function processAdminOverrideSetEvent(log: EventLog, rawEventId: string) {
   try {
@@ -626,8 +728,10 @@ async function processAdminOverrideSetEvent(log: EventLog, rawEventId: string) {
 
 /**
  * Process a FundsOperation event log
- * @param log The log object from the webhook
- * @param rawEventId The ID of the raw event document
+ * @async
+ * @function processFundsOperationEvent
+ * @param {EventLog} log - The log object from the webhook
+ * @param {string} rawEventId - The ID of the raw event document
  */
 async function processFundsOperationEvent(log: EventLog, rawEventId: string) {
   try {
@@ -716,8 +820,10 @@ async function processFundsOperationEvent(log: EventLog, rawEventId: string) {
 
 /**
  * Process a CampaignEventCollectorOperation event log
- * @param log The log object from the webhook
- * @param rawEventId The ID of the raw event document
+ * @async
+ * @function processEventCollectorOperationEvent
+ * @param {EventLog} log - The log object from the webhook
+ * @param {string} rawEventId - The ID of the raw event document
  */
 async function processEventCollectorOperationEvent(
   log: EventLog,
@@ -805,9 +911,11 @@ async function processEventCollectorOperationEvent(
 
 /**
  * Update campaign contributions summary
- * @param campaignId The campaign ID
- * @param campaignAddress The campaign contract address
- * @param amount The contribution amount (string)
+ * @async
+ * @function updateCampaignContributions
+ * @param {string} campaignId - The campaign ID
+ * @param {string} campaignAddress - The campaign contract address
+ * @param {string} amount - The contribution amount (string)
  */
 async function updateCampaignContributions(
   campaignId: string,
@@ -853,9 +961,11 @@ async function updateCampaignContributions(
 
 /**
  * Update campaign refunds summary
- * @param campaignId The campaign ID
- * @param campaignAddress The campaign contract address
- * @param amount The refund amount (string)
+ * @async
+ * @function updateCampaignRefunds
+ * @param {string} campaignId - The campaign ID
+ * @param {string} campaignAddress - The campaign contract address
+ * @param {string} amount - The refund amount (string)
  */
 async function updateCampaignRefunds(
   campaignId: string,
@@ -901,9 +1011,11 @@ async function updateCampaignRefunds(
 
 /**
  * Update campaign claims summary
- * @param campaignId The campaign ID
- * @param campaignAddress The campaign contract address
- * @param amount The claimed amount (string)
+ * @async
+ * @function updateCampaignClaims
+ * @param {string} campaignId - The campaign ID
+ * @param {string} campaignAddress - The campaign contract address
+ * @param {string} amount - The claimed amount (string)
  */
 async function updateCampaignClaims(
   campaignId: string,
@@ -949,10 +1061,12 @@ async function updateCampaignClaims(
 
 /**
  * Update campaign status
- * @param campaignId The campaign ID
- * @param campaignAddress The campaign contract address
- * @param status The new status code
- * @param reason The reason code for status change
+ * @async
+ * @function updateCampaignStatus
+ * @param {string} campaignId - The campaign ID
+ * @param {string} campaignAddress - The campaign contract address
+ * @param {number} status - The new status code
+ * @param {number} reason - The reason code for status change
  */
 async function updateCampaignStatus(
   campaignId: string,
@@ -1006,10 +1120,12 @@ async function updateCampaignStatus(
 
 /**
  * Update campaign admin override status
- * @param campaignId The campaign ID
- * @param campaignAddress The campaign contract address
- * @param status The admin override status
- * @param admin The admin address who set the override
+ * @async
+ * @function updateCampaignAdminOverride
+ * @param {string} campaignId - The campaign ID
+ * @param {string} campaignAddress - The campaign contract address
+ * @param {boolean} status - The admin override status
+ * @param {string} admin - The admin address who set the override
  */
 async function updateCampaignAdminOverride(
   campaignId: string,
@@ -1058,11 +1174,13 @@ async function updateCampaignAdminOverride(
 
 /**
  * Update campaign funds based on operation type
- * @param campaignId The campaign ID
- * @param campaignAddress The campaign contract address
- * @param token The token address
- * @param amount The amount (string)
- * @param opType The operation type
+ * @async
+ * @function updateCampaignFunds
+ * @param {string} campaignId - The campaign ID
+ * @param {string} campaignAddress - The campaign contract address
+ * @param {string} token - The token address
+ * @param {string} amount - The amount (string)
+ * @param {number} opType - The operation type
  */
 async function updateCampaignFunds(
   campaignId: string,
@@ -1141,8 +1259,10 @@ async function updateCampaignFunds(
 
 /**
  * Update factory authorization status
- * @param factoryAddress The factory contract address
- * @param isAuthorized Whether the factory is authorized
+ * @async
+ * @function updateFactoryAuthorization
+ * @param {string} factoryAddress - The factory contract address
+ * @param {boolean} isAuthorized - Whether the factory is authorized
  */
 async function updateFactoryAuthorization(
   factoryAddress: string,
@@ -1179,9 +1299,11 @@ async function updateFactoryAuthorization(
 
 /**
  * Update campaign authorization status
- * @param campaignAddress The campaign contract address
- * @param isAuthorized Whether the campaign is authorized
- * @param factoryAddress The factory that authorized the campaign (if applicable)
+ * @async
+ * @function updateCampaignAuthorization
+ * @param {string} campaignAddress - The campaign contract address
+ * @param {boolean} isAuthorized - Whether the campaign is authorized
+ * @param {string} [factoryAddress=""] - The factory that authorized the campaign
  */
 async function updateCampaignAuthorization(
   campaignAddress: string,

@@ -1,4 +1,9 @@
-// Event processor for PlatformAdmin events
+/**
+ * Event processor for
+ * PlatformAdmin events
+ * @module platformAdminProcessor
+ */
+
 import {logger} from "firebase-functions";
 import {onDocumentCreated} from "firebase-functions/v2/firestore";
 import {getFirestore} from "firebase-admin/firestore";
@@ -7,43 +12,74 @@ import {ethers} from "ethers";
 // Initialize Firebase
 const db = getFirestore();
 
-// Define types for event logs and operation data
+/**
+ * Represents a raw event log from the blockchain
+ * @interface EventLog
+ */
 interface EventLog {
+  /** Array of event topics, where the first topic is the event signature */
   topics: string[]
+  /** Packed event data containing non-indexed parameters */
   data: string
+  /** Block information containing number and timestamp */
   block?: {
     number?: number
     timestamp?: number
   }
+  /** Transaction information containing hash */
   transaction?: {
     hash?: string
   }
+  /** Account information containing contract address */
   account?: {
     address?: string
   }
 }
 
+/**
+ * Represents processed platform admin event data
+ * @interface PlatformAdminEventData
+ */
 interface PlatformAdminEventData {
+  /** Type of the event */
   eventType: string
+  /** ID of the raw event document */
   rawEventId: string
+  /** Timestamp when the event was processed */
   createdAt: Date
+  /** Block number where the event occurred */
   blockNumber: number | null
+  /** Block timestamp when the event occurred */
   blockTimestamp: Date | null
+  /** Hash of the transaction containing the event */
   transactionHash: string | null
+  /** Address of the contract that emitted the event */
   contractAddress: string | null
+  /** Operation details including code and name */
   operation: {
     code: number
     name: string
   }
+  /** Address of the admin involved in the operation */
   admin: string
+  /** Previous value before the operation */
   oldValue: string
+  /** New value after the operation */
   newValue: string
 }
 
+/**
+ * Represents admin data stored in Firestore
+ * @interface AdminData
+ */
 interface AdminData {
+  /** Admin's Ethereum address */
   address: string
+  /** Whether the admin is currently active */
   isActive: boolean
+  /** Timestamp of the last update */
   lastUpdated: Date
+  /** Name of the last operation performed */
   lastOperation: string
 }
 
@@ -55,15 +91,21 @@ const PLATFORM_ADMIN_OP_SIGNATURE = ethers.keccak256(
   ethers.toUtf8Bytes(eventSignature)
 );
 
-// Operation types mapping
+/**
+ * Mapping of operation codes to their human-readable names
+ * @constant {Record<number, string>}
+ */
 const OPERATION_TYPES: Record<number, string> = {
   1: "ADMIN_ADDED",
   2: "ADMIN_REMOVED",
 };
 
 /**
- * Firebase function that triggers when a new document is created in the rawEvents collection
- * Parses PlatformAdmin events and stores them in the adminEvents collection
+ * Firebase function that triggers when a new document is created in the rawEvents collection.
+ * Parses PlatformAdmin events and stores them in the adminEvents collection.
+ * @function processPlatformAdminEvents
+ * @param {Object} event - The Firebase event object containing the new document
+ * @returns {Promise<void>}
  */
 export const processPlatformAdminEvents = onDocumentCreated(
   "rawEvents/{docId}",
@@ -121,9 +163,12 @@ export const processPlatformAdminEvents = onDocumentCreated(
 );
 
 /**
- * Process a PlatformAdminOperation event log
- * @param log The log object from the webhook
- * @param rawEventId The ID of the raw event document
+ * Process a PlatformAdminOperation event log and store it in Firestore
+ *
+ * @function processPlatformAdminOperation
+ * @param {EventLog} log - The log object from the webhook
+ * @param {string} rawEventId - The ID of the raw event document
+ * @return {Promise<void>}
  */
 async function processPlatformAdminOperation(
   log: EventLog,
@@ -149,7 +194,6 @@ async function processPlatformAdminOperation(
 
     // Admin address needs to be properly formatted with checksum
     const normalizedAdminAddress = ethers.getAddress(adminAddress).toLowerCase();
-
     // Extract data from the non-indexed parameters
     // The data field contains all non-indexed parameters packed together
     const decodedData = ethers.AbiCoder.defaultAbiCoder().decode(
@@ -199,8 +243,10 @@ async function processPlatformAdminOperation(
 
 /**
  * Updates or creates an admin record in the admins collection based on operation type
- * @param opType The operation type code
- * @param adminAddress The admin address
+ * @function updateAdminRecordByOpType
+ * @param {number} opType - The operation type code (1 for ADD, 2 for REMOVE)
+ * @param {string} adminAddress - The admin's Ethereum address
+ * @return {Promise<void>}
  */
 async function updateAdminRecordByOpType(opType: number, adminAddress: string) {
   try {
@@ -221,10 +267,13 @@ async function updateAdminRecordByOpType(opType: number, adminAddress: string) {
     const adminExists = adminDoc.exists;
 
     // Handle different operation types
+    let adminAddedData: AdminData;
+    let adminRemovedData: Partial<AdminData>;
+
     switch (opType) {
     case 1: // ADMIN_ADDED
       // Create or update admin record
-      const adminAddedData: AdminData = {
+      adminAddedData = {
         address: adminAddress,
         isActive: true,
         lastUpdated: new Date(),
@@ -238,7 +287,7 @@ async function updateAdminRecordByOpType(opType: number, adminAddress: string) {
     case 2: // ADMIN_REMOVED
       if (adminExists) {
         // Update the admin record to mark as inactive
-        const adminRemovedData: Partial<AdminData> = {
+        adminRemovedData = {
           isActive: false,
           lastUpdated: new Date(),
           lastOperation: "ADMIN_REMOVED",

@@ -1,3 +1,9 @@
+/**
+ * @fileoverview Event processor for
+ * FeeManager events that handles parsing and storing
+ * fee-related events from the blockchain.
+ */
+
 // Event processor for FeeManager events
 import {logger} from "firebase-functions";
 import {onDocumentCreated} from "firebase-functions/v2/firestore";
@@ -7,44 +13,82 @@ import {ethers} from "ethers";
 // Initialize Firebase
 const db = getFirestore();
 
-// Define types for event logs and operation data
+/**
+ * @interface EventLog
+ * @description Represents a blockchain event log with its associated metadata
+ */
 interface EventLog {
+  /** Array of event topics (indexed parameters) */
   topics: string[]
+  /** Raw event data containing non-indexed parameters */
   data: string
+  /** Block information */
   block?: {
+    /** Block number */
     number?: number
+    /** Block timestamp in Unix seconds */
     timestamp?: number
   }
+  /** Transaction information */
   transaction?: {
+    /** Transaction hash */
     hash?: string
   }
+  /** Account information */
   account?: {
+    /** Contract address that emitted the event */
     address?: string
   }
 }
 
+/**
+ * @interface FeeManagerEventData
+ * @description Represents processed FeeManager event data ready for storage
+ */
 interface FeeManagerEventData {
+  /** Type of the event */
   eventType: string
+  /** ID of the raw event document */
   rawEventId: string
+  /** When the event was processed */
   createdAt: Date
+  /** Block number where the event occurred */
   blockNumber: number | null
+  /** Block timestamp when the event occurred */
   blockTimestamp: Date | null
+  /** Hash of the transaction containing the event */
   transactionHash: string | null
+  /** Address of the contract that emitted the event */
   contractAddress: string | null
+  /** Operation details */
   operation: {
+    /** Numeric operation code */
     code: number
+    /** Human-readable operation name */
     name: string
   }
+  /** Primary address related to the operation */
   relatedAddress: string
+  /** Secondary address related to the operation */
   secondaryAddress: string
+  /** Primary value related to the operation */
   primaryValue: string
+  /** Secondary value related to the operation */
   secondaryValue: string
 }
 
+/**
+ * @interface FeeConfigData
+ * @description Represents the current fee configuration state
+ */
 interface FeeConfigData {
+  /** Address of the platform treasury */
   treasuryAddress: string
+  /** Platform fee share in basis points (e.g., 100 = 1%) */
   platformFeeShare: number
+  /** When the configuration was last updated */
   lastUpdated: Date
+  /** Last operation that modified the configuration */
   lastOperation: string
 }
 
@@ -57,15 +101,24 @@ const FEE_MANAGER_OP_SIGNATURE = ethers.keccak256(
   ethers.toUtf8Bytes(eventSignature)
 );
 
-// Operation types mapping
+/**
+ * @constant OPERATION_TYPES
+ * @description Mapping of operation codes to their human-readable names
+ */
 const OPERATION_TYPES: Record<number, string> = {
   1: "TREASURY_UPDATED",
   2: "SHARE_UPDATED",
 };
 
 /**
- * Firebase function that triggers when a new document is created in the rawEvents collection
- * Parses FeeManager events and stores them in the feeEvents collection
+ * @function processFeeManagerEvents
+ * @description Firebase function that triggers when a new document is created in the rawEvents collection.
+ * Parses FeeManager events and stores them in the feeEvents collection.
+ *
+ * @param {Object} event - The Firebase event object containing the new document data
+ * @param {Object} event.data - The document data
+ * @param {Object} event.params - The function parameters
+ * @param {string} event.params.docId - The ID of the new document
  */
 export const processFeeManagerEvents = onDocumentCreated(
   "rawEvents/{docId}",
@@ -123,9 +176,10 @@ export const processFeeManagerEvents = onDocumentCreated(
 );
 
 /**
- * Process a FeeManagerOperation event log
- * @param log The log object from the webhook
- * @param rawEventId The ID of the raw event document
+ * @function processFeeManagerOperation
+ * @description Processes a FeeManagerOperation event log and stores it in the database. Also updates the fee configuration based on the operation type.
+ * @param {EventLog} log - The event log from the blockchain
+ * @param {string} rawEventId - The ID of the raw event document
  */
 async function processFeeManagerOperation(log: EventLog, rawEventId: string) {
   try {
@@ -215,12 +269,14 @@ async function processFeeManagerOperation(log: EventLog, rawEventId: string) {
 }
 
 /**
- * Updates the fee configuration in the feeConfig collection based on operation type
- * @param opType The operation type code
- * @param relatedAddress The primary address (e.g., old treasury)
- * @param secondaryAddress The secondary address (e.g., new treasury)
- * @param primaryValue The primary value (e.g., old fee share)
- * @param secondaryValue The secondary value (e.g., new fee share)
+ * @function updateFeeConfigByOpType
+ * @description Updates the fee configuration in the feeConfig collection based on the operation type.
+ * Handles different operation types (TREASURY_UPDATED, SHARE_UPDATED) and updates the configuration accordingly.
+ * @param {number} opType - The operation type code
+ * @param {string} relatedAddress - The primary address (e.g., old treasury)
+ * @param {string} secondaryAddress - The secondary address (e.g., new treasury)
+ * @param {string} primaryValue - The primary value (e.g., old fee share)
+ * @param {string} secondaryValue - The secondary value (e.g., new fee share)
  */
 async function updateFeeConfigByOpType(
   opType: number,

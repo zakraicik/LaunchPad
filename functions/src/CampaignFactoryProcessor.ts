@@ -7,7 +7,19 @@ import {ethers} from "ethers";
 // Initialize Firebase
 const db = getFirestore();
 
-// Define types for event logs and operation data
+/**
+ * Interface representing a raw event log from the blockchain
+ * @interface EventLog
+ * @property {string[]} topics - Array of event topics (indexed parameters)
+ * @property {string} data - Raw event data (non-indexed parameters)
+ * @property {Object} [block] - Block information
+ * @property {number} [block.number] - Block number
+ * @property {number} [block.timestamp] - Block timestamp
+ * @property {Object} [transaction] - Transaction information
+ * @property {string} [transaction.hash] - Transaction hash
+ * @property {Object} [account] - Account information
+ * @property {string} [account.address] - Contract address
+ */
 interface EventLog {
   topics: string[]
   data: string
@@ -23,6 +35,23 @@ interface EventLog {
   }
 }
 
+/**
+ * Interface representing processed factory operation event data
+ * @interface FactoryOperationEventData
+ * @property {string} eventType - Type of event (FactoryOperation)
+ * @property {string} rawEventId - ID of the raw event document
+ * @property {Date} createdAt - When the event was processed
+ * @property {number|null} blockNumber - Block number where event occurred
+ * @property {Date|null} blockTimestamp - Block timestamp
+ * @property {string|null} transactionHash - Transaction hash
+ * @property {string|null} contractAddress - Contract address that emitted the event
+ * @property {Object} operation - Operation details
+ * @property {number} operation.code - Operation code
+ * @property {string} operation.name - Human-readable operation name
+ * @property {string} campaignAddress - Address of the campaign contract
+ * @property {string} creator - Address of the campaign creator
+ * @property {string} campaignId - Unique identifier of the campaign
+ */
 interface FactoryOperationEventData {
   eventType: string
   rawEventId: string
@@ -40,6 +69,17 @@ interface FactoryOperationEventData {
   campaignId: string
 }
 
+/**
+ * Interface representing campaign data stored in Firestore
+ * @interface CampaignData
+ * @property {string} campaignId - Unique identifier of the campaign
+ * @property {string} campaignAddress - Address of the campaign contract
+ * @property {string} creator - Address of the campaign creator
+ * @property {Date} createdAt - When the campaign was created
+ * @property {string} status - Current status of the campaign
+ * @property {number|null} blockNumber - Block number where campaign was created
+ * @property {string|null} transactionHash - Transaction hash of campaign creation
+ */
 interface CampaignData {
   campaignId: string
   campaignAddress: string
@@ -50,22 +90,31 @@ interface CampaignData {
   transactionHash: string | null
 }
 
-// Event signature for FactoryOperation
+/** Event signature for FactoryOperation event */
 const factoryOpSignature = "FactoryOperation(uint8,address,address,bytes32)";
 
-// Event signature hash for FactoryOperation
+/** Event signature hash for FactoryOperation event */
 const FACTORY_OP_SIGNATURE = ethers.keccak256(
   ethers.toUtf8Bytes(factoryOpSignature)
 );
 
-// Operation types mapping
+/**
+ * Mapping of operation codes to human-readable names
+ * @constant {Record<number, string>}
+ */
 const OPERATION_TYPES: Record<number, string> = {
   1: "CAMPAIGN_CREATED",
 };
 
 /**
- * Firebase function that triggers when a new document is created in the rawEvents collection
- * Parses CampaignContractFactory events and stores them in the factoryEvents collection
+ * Firebase function that triggers when a new document is created in the rawEvents collection.
+ * Parses CampaignContractFactory events and stores them in the factoryEvents collection.
+ *
+ * @function processCampaignFactoryEvents
+ * @param {Object} event - The Firebase event object
+ * @param {Object} event.data - The document data
+ * @param {Object} event.params - The function parameters
+ * @param {string} event.params.docId - The document ID
  */
 export const processCampaignFactoryEvents = onDocumentCreated(
   "rawEvents/{docId}",
@@ -123,9 +172,12 @@ export const processCampaignFactoryEvents = onDocumentCreated(
 );
 
 /**
- * Process a FactoryOperation event log
- * @param log The log object from the webhook
- * @param rawEventId The ID of the raw event document
+ * Process a FactoryOperation event log and store it in Firestore
+ *
+ * @async
+ * @function processFactoryOperation
+ * @param {EventLog} log - The log object from the webhook
+ * @param {string} rawEventId - The ID of the raw event document
  */
 async function processFactoryOperation(log: EventLog, rawEventId: string) {
   try {
@@ -220,12 +272,15 @@ async function processFactoryOperation(log: EventLog, rawEventId: string) {
 
 /**
  * Stores new campaign data in the campaigns collection
- * @param campaignId Unique identifier of the campaign
- * @param campaignAddress Address of the campaign contract
- * @param creator Address of the campaign creator
- * @param blockNumber Block number where the campaign was created
- * @param transactionHash Transaction hash of the campaign creation
- * @param timestamp Timestamp when the campaign was created
+ *
+ * @async
+ * @function storeCampaignData
+ * @param {string} campaignId - Unique identifier of the campaign
+ * @param {string} campaignAddress - Address of the campaign contract
+ * @param {string} creator - Address of the campaign creator
+ * @param {number|null} blockNumber - Block number where the campaign was created
+ * @param {string|null} transactionHash - Transaction hash of the campaign creation
+ * @param {Date} timestamp - Timestamp when the campaign was created
  */
 async function storeCampaignData(
   campaignId: string,
