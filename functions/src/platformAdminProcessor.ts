@@ -13,26 +13,57 @@ import {ethers} from "ethers";
 const db = admin.firestore();
 
 /**
- * Represents a raw event log from the blockchain
+ * Interface representing an event log from the blockchain
  * @interface EventLog
  */
 interface EventLog {
-  /** Array of event topics, where the first topic is the event signature */
-  topics: string[]
-  /** Packed event data containing non-indexed parameters */
+  /** Raw event data (non-indexed parameters) */
   data: string
-  /** Block information containing number and timestamp */
+  /** Array of event topics (indexed parameters) */
+  topics: string[]
+  /** Log index in the block */
+  index?: number
+  /** Account information containing address */
+  account?: {
+    address?: string
+  }
+  /** Transaction information containing hash and other details */
+  transaction?: {
+    hash?: string
+    // Other transaction fields omitted for brevity
+  }
+}
+
+/**
+ * Interface representing Alchemy webhook response structure
+ * @interface AlchemyWebhookResponse
+ */
+interface AlchemyWebhookResponse {
+  webhookId: string
+  id: string
+  createdAt: string
+  type: string
+  event: {
+    data: {
+      block: {
+        hash: string
+        number: number
+        timestamp: number
+        logs: EventLog[]
+      }
+    }
+    sequenceNumber: string
+    network: string
+  }
+}
+
+/**
+ * Enhanced EventLog interface with block information
+ */
+interface EnhancedEventLog extends EventLog {
   block?: {
     number?: number
     timestamp?: number
-  }
-  /** Transaction information containing hash */
-  transaction?: {
-    hash?: string
-  }
-  /** Account information containing contract address */
-  account?: {
-    address?: string
   }
 }
 
@@ -113,7 +144,7 @@ export const processPlatformAdminEvents = onDocumentCreated(
     try {
       // Get the raw event data
       const rawEvent = event.data?.data();
-      if (!rawEvent || !rawEvent.data) {
+      if (!rawEvent) {
         logger.warn("No data found in raw event");
         return;
       }
@@ -126,21 +157,30 @@ export const processPlatformAdminEvents = onDocumentCreated(
 
       logger.info(`Processing raw event with ID: ${rawEventId}`);
 
-      // Extract logs from the webhook data
-      const logs = rawEvent.data?.event?.data?.logs;
-      if (!logs || !Array.isArray(logs)) {
-        logger.info("No logs found in event data");
+      // Parse the webhook data
+      if (!rawEvent.data) {
+        logger.warn("No data found in raw event");
         return;
       }
 
+      const webhookData = rawEvent.data as AlchemyWebhookResponse;
+
+      // Check for required data
+      if (!webhookData?.event?.data?.block?.logs) {
+        logger.warn("Invalid Alchemy webhook structure - missing logs");
+        return;
+      }
+
+      // Process logs from the Alchemy webhook
+      const logs = webhookData.event.data.block.logs;
+      const blockNumber = webhookData.event.data.block.number;
+      const blockTimestamp = webhookData.event.data.block.timestamp;
+
+      logger.info(`Found ${logs.length} logs to process from Alchemy webhook`);
+
       // Process each log
       for (const log of logs) {
-        if (
-          !log ||
-          !log.topics ||
-          !Array.isArray(log.topics) ||
-          log.topics.length === 0
-        ) {
+        if (!log?.topics?.length) {
           logger.debug("Skipping log with no topics");
           continue;
         }
@@ -153,7 +193,15 @@ export const processPlatformAdminEvents = onDocumentCreated(
 
         // Check if this is a PlatformAdminOperation event
         if (eventSignature === PLATFORM_ADMIN_OP_SIGNATURE) {
-          await processPlatformAdminOperation(log as EventLog, rawEventId);
+          const enhancedLog: EnhancedEventLog = {
+            ...log,
+            block: {
+              number: blockNumber,
+              timestamp: blockTimestamp,
+            },
+          };
+
+          await processPlatformAdminOperation(enhancedLog, rawEventId);
         }
       }
     } catch (error) {
@@ -166,12 +214,12 @@ export const processPlatformAdminEvents = onDocumentCreated(
  * Process a PlatformAdminOperation event log and store it in Firestore
  *
  * @function processPlatformAdminOperation
- * @param {EventLog} log - The log object from the webhook
+ * @param {EnhancedEventLog} log - The log object from the webhook
  * @param {string} rawEventId - The ID of the raw event document
  * @return {Promise<void>}
  */
 async function processPlatformAdminOperation(
-  log: EventLog,
+  log: EnhancedEventLog,
   rawEventId: string,
 ) {
   try {

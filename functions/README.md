@@ -20,8 +20,8 @@
 | **DefiIntegrationManager**  | ConfigUpdated                   | OP_CONFIG_UPDATED (3)           |              |                                |
 | **FeeManager**              | FeeManagerOperation             | OP_TREASURY_UPDATED (1)         |              |                                |
 | **FeeManager**              | FeeManagerOperation             | OP_SHARE_UPDATED (2)            |              |                                |
-| **PlatformAdmin**           | PlatformAdminOperation          | OP_ADMIN_ADDED (1)              |              |                                |
-| **PlatformAdmin**           | PlatformAdminOperation          | OP_ADMIN_REMOVED (2)            |              |                                |
+| **PlatformAdmin**           | PlatformAdminOperation          | OP_ADMIN_ADDED (1)              | ✅           | add-platform-admin.ts          |
+| **PlatformAdmin**           | PlatformAdminOperation          | OP_ADMIN_REMOVED (2)            | ✅           | remove-platform-admin.ts       |
 | **TokenRegistry**           | TokenRegistryOperation          | OP_TOKEN_ADDED (1)              | ✅           | add-token.ts                   |
 | **TokenRegistry**           | TokenRegistryOperation          | OP_TOKEN_REMOVED (2)            | ✅           | remove-token.ts                |
 | **TokenRegistry**           | TokenRegistryOperation          | OP_TOKEN_SUPPORT_DISABLED (3)   | ✅           | disable-token-support.ts       |

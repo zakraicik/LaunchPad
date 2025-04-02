@@ -11,6 +11,6 @@
     "isolatedModules": true
   },
 
-  "include": ["src/**/*", "examples/**/*", "test/**/*"],
-  "exclude": ["node_modules", "test/**/*", "coverage/**/*"]
+  "include": ["src/**/*", "examples/**/*", "emulator-files/**/*"],
+  "exclude": ["node_modules", "emulator-files/**/*", "coverage/**/*"]
 }
