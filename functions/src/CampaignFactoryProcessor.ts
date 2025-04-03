@@ -3,37 +3,14 @@ import {logger} from "firebase-functions";
 import {onDocumentCreated} from "firebase-functions/v2/firestore";
 import admin from "firebase-admin";
 import {ethers} from "ethers";
+import {
+  AlchemyWebhookResponse,
+  EnhancedEventLog,
+  createEnhancedEventLog,
+} from "./shared-types";
 
 // Initialize Firebase
 const db = admin.firestore();
-
-/**
- * Interface representing a raw event log from the blockchain
- * @interface EventLog
- * @property {string[]} topics - Array of event topics (indexed parameters)
- * @property {string} data - Raw event data (non-indexed parameters)
- * @property {Object} [block] - Block information
- * @property {number} [block.number] - Block number
- * @property {number} [block.timestamp] - Block timestamp
- * @property {Object} [transaction] - Transaction information
- * @property {string} [transaction.hash] - Transaction hash
- * @property {Object} [account] - Account information
- * @property {string} [account.address] - Contract address
- */
-interface EventLog {
-  topics: string[]
-  data: string
-  block?: {
-    number?: number
-    timestamp?: number
-  }
-  transaction?: {
-    hash?: string
-  }
-  account?: {
-    address?: string
-  }
-}
 
 /**
  * Interface representing processed factory operation event data
@@ -122,7 +99,7 @@ export const processCampaignFactoryEvents = onDocumentCreated(
     try {
       // Get the raw event data
       const rawEvent = event.data?.data();
-      if (!rawEvent || !rawEvent.data) {
+      if (!rawEvent) {
         logger.warn("No data found in raw event");
         return;
       }
@@ -135,21 +112,30 @@ export const processCampaignFactoryEvents = onDocumentCreated(
 
       logger.info(`Processing raw event with ID: ${rawEventId}`);
 
-      // Extract logs from the webhook data
-      const logs = rawEvent.data?.event?.data?.logs;
-      if (!logs || !Array.isArray(logs)) {
-        logger.info("No logs found in event data");
+      // Parse the webhook data
+      if (!rawEvent.data) {
+        logger.warn("No data found in raw event");
         return;
       }
 
+      const webhookData = rawEvent.data as AlchemyWebhookResponse;
+
+      // Check for required data
+      if (!webhookData?.event?.data?.block?.logs) {
+        logger.warn("Invalid Alchemy webhook structure - missing logs");
+        return;
+      }
+
+      // Process logs from the Alchemy webhook
+      const logs = webhookData.event.data.block.logs;
+      const blockNumber = webhookData.event.data.block.number;
+      const blockTimestamp = webhookData.event.data.block.timestamp;
+
+      logger.info(`Found ${logs.length} logs to process from Alchemy webhook`);
+
       // Process each log
       for (const log of logs) {
-        if (
-          !log ||
-          !log.topics ||
-          !Array.isArray(log.topics) ||
-          log.topics.length === 0
-        ) {
+        if (!log?.topics?.length) {
           logger.debug("Skipping log with no topics");
           continue;
         }
@@ -162,7 +148,14 @@ export const processCampaignFactoryEvents = onDocumentCreated(
 
         // Check if this is a FactoryOperation event
         if (eventSignature === FACTORY_OP_SIGNATURE) {
-          await processFactoryOperation(log as EventLog, rawEventId);
+          // Use the shared utility function to create the enhanced log
+          const enhancedLog = createEnhancedEventLog(
+            log,
+            blockNumber,
+            blockTimestamp,
+          );
+
+          await processFactoryOperation(enhancedLog, rawEventId);
         }
       }
     } catch (error) {
@@ -176,10 +169,13 @@ export const processCampaignFactoryEvents = onDocumentCreated(
  *
  * @async
  * @function processFactoryOperation
- * @param {EventLog} log - The log object from the webhook
+ * @param {EnhancedEventLog} log - The log object from the webhook
  * @param {string} rawEventId - The ID of the raw event document
  */
-async function processFactoryOperation(log: EventLog, rawEventId: string) {
+async function processFactoryOperation(
+  log: EnhancedEventLog,
+  rawEventId: string,
+) {
   try {
     if (!log || !log.topics || !log.data) {
       logger.error("Invalid log data for FactoryOperation");

@@ -1,43 +1,22 @@
 /**
  * Event processor for CampaignEventCollector events
- * This module processes blockchain events emitted by the CampaignEventCollector contract and stores them in appropriate Firestore collections.
+ * This module processes blockchain events emitted by the CampaignEventCollector contract
+ * and stores them in appropriate Firestore collections.
+ * @module campaignEventProcessor
  */
 
 import {logger} from "firebase-functions";
 import {onDocumentCreated} from "firebase-functions/v2/firestore";
 import admin from "firebase-admin";
 import {ethers} from "ethers";
+import {
+  AlchemyWebhookResponse,
+  EnhancedEventLog,
+  createEnhancedEventLog,
+} from "./shared-types";
 
 // Initialize Firebase
 const db = admin.firestore();
-
-/**
- * Interface representing a raw event log from the blockchain
- * @interface EventLog
- */
-interface EventLog {
-  /** Array of event topics (indexed parameters) */
-  topics: string[]
-  /** Raw event data (non-indexed parameters) */
-  data: string
-  /** Block information */
-  block?: {
-    /** Block number */
-    number?: number
-    /** Block timestamp */
-    timestamp?: number
-  }
-  /** Transaction information */
-  transaction?: {
-    /** Transaction hash */
-    hash?: string
-  }
-  /** Account information */
-  account?: {
-    /** Contract address */
-    address?: string
-  }
-}
 
 /**
  * Base interface for all campaign events
@@ -227,7 +206,7 @@ const EVENT_COLLECTOR_OPERATION_TYPES: Record<number, string> = {
   4: "CAMPAIGN_DEAUTHORIZED",
 };
 
-// Status codes mapping (assuming these values, replace with actual ones from your contract)
+// Status codes mapping
 const CAMPAIGN_STATUS_TYPES: Record<number, string> = {
   0: "DRAFT",
   1: "PENDING_APPROVAL",
@@ -237,7 +216,7 @@ const CAMPAIGN_STATUS_TYPES: Record<number, string> = {
   5: "CANCELLED",
 };
 
-// Status change reason codes (assuming these values, replace with actual ones from your contract)
+// Status change reason codes
 const STATUS_CHANGE_REASONS: Record<number, string> = {
   0: "NONE",
   1: "GOAL_REACHED",
@@ -246,7 +225,7 @@ const STATUS_CHANGE_REASONS: Record<number, string> = {
   4: "ADMIN_DECISION",
 };
 
-// Funds operation types (assuming these values, replace with actual ones from your contract)
+// Funds operation types
 const FUNDS_OPERATION_TYPES: Record<number, string> = {
   1: "DEPOSIT",
   2: "WITHDRAWAL",
@@ -272,7 +251,7 @@ export const processCampaignEvents = onDocumentCreated(
     try {
       // Get the raw event data
       const rawEvent = event.data?.data();
-      if (!rawEvent || !rawEvent.data) {
+      if (!rawEvent) {
         logger.warn("No data found in raw event");
         return;
       }
@@ -285,21 +264,30 @@ export const processCampaignEvents = onDocumentCreated(
 
       logger.info(`Processing raw event with ID: ${rawEventId}`);
 
-      // Extract logs from the webhook data
-      const logs = rawEvent.data?.event?.data?.logs;
-      if (!logs || !Array.isArray(logs)) {
-        logger.info("No logs found in event data");
+      // Parse the webhook data
+      if (!rawEvent.data) {
+        logger.warn("No data found in raw event");
         return;
       }
 
+      const webhookData = rawEvent.data as AlchemyWebhookResponse;
+
+      // Check for required data
+      if (!webhookData?.event?.data?.block?.logs) {
+        logger.warn("Invalid Alchemy webhook structure - missing logs");
+        return;
+      }
+
+      // Process logs from the Alchemy webhook
+      const logs = webhookData.event.data.block.logs;
+      const blockNumber = webhookData.event.data.block.number;
+      const blockTimestamp = webhookData.event.data.block.timestamp;
+
+      logger.info(`Found ${logs.length} logs to process from Alchemy webhook`);
+
       // Process each log
       for (const log of logs) {
-        if (
-          !log ||
-          !log.topics ||
-          !Array.isArray(log.topics) ||
-          log.topics.length === 0
-        ) {
+        if (!log?.topics?.length) {
           logger.debug("Skipping log with no topics");
           continue;
         }
@@ -310,31 +298,35 @@ export const processCampaignEvents = onDocumentCreated(
           continue;
         }
 
+        // Use the shared utility function to create the enhanced log
+        const enhancedLog = createEnhancedEventLog(
+          log,
+          blockNumber,
+          blockTimestamp,
+        );
+
         // Check which event type this is and process accordingly
         switch (eventSignature) {
         case CONTRIBUTION_SIGNATURE_HASH:
-          await processContributionEvent(log as EventLog, rawEventId);
+          await processContributionEvent(enhancedLog, rawEventId);
           break;
         case REFUND_ISSUED_SIGNATURE_HASH:
-          await processRefundIssuedEvent(log as EventLog, rawEventId);
+          await processRefundIssuedEvent(enhancedLog, rawEventId);
           break;
         case FUNDS_CLAIMED_SIGNATURE_HASH:
-          await processFundsClaimedEvent(log as EventLog, rawEventId);
+          await processFundsClaimedEvent(enhancedLog, rawEventId);
           break;
         case CAMPAIGN_STATUS_CHANGED_SIGNATURE_HASH:
-          await processCampaignStatusChangedEvent(log as EventLog, rawEventId);
+          await processCampaignStatusChangedEvent(enhancedLog, rawEventId);
           break;
         case ADMIN_OVERRIDE_SET_SIGNATURE_HASH:
-          await processAdminOverrideSetEvent(log as EventLog, rawEventId);
+          await processAdminOverrideSetEvent(enhancedLog, rawEventId);
           break;
         case FUNDS_OPERATION_SIGNATURE_HASH:
-          await processFundsOperationEvent(log as EventLog, rawEventId);
+          await processFundsOperationEvent(enhancedLog, rawEventId);
           break;
         case EVENT_COLLECTOR_OPERATION_SIGNATURE_HASH:
-          await processEventCollectorOperationEvent(
-              log as EventLog,
-              rawEventId,
-          );
+          await processEventCollectorOperationEvent(enhancedLog, rawEventId);
           break;
         default:
           logger.debug(`Unknown event signature: ${eventSignature}`);
@@ -350,10 +342,13 @@ export const processCampaignEvents = onDocumentCreated(
  * Process a Contribution event log
  * @async
  * @function processContributionEvent
- * @param {EventLog} log - The log object from the webhook
+ * @param {EnhancedEventLog} log - The enhanced log object
  * @param {string} rawEventId - The ID of the raw event document
  */
-async function processContributionEvent(log: EventLog, rawEventId: string) {
+async function processContributionEvent(
+  log: EnhancedEventLog,
+  rawEventId: string,
+) {
   try {
     if (!log || !log.topics || !log.data) {
       logger.error("Invalid log data for Contribution event");
@@ -390,7 +385,6 @@ async function processContributionEvent(log: EventLog, rawEventId: string) {
     const amount = decodedData[0];
 
     // Format the amount (assumes default token decimals for now)
-    // In a production environment, you would look up the token's decimals
     const formattedAmount = ethers.formatUnits(amount, DEFAULT_TOKEN_DECIMALS);
 
     // Create the event data object
@@ -432,10 +426,13 @@ async function processContributionEvent(log: EventLog, rawEventId: string) {
  * Process a RefundIssued event log
  * @async
  * @function processRefundIssuedEvent
- * @param {EventLog} log - The log object from the webhook
+ * @param {EnhancedEventLog} log - The enhanced log object
  * @param {string} rawEventId - The ID of the raw event document
  */
-async function processRefundIssuedEvent(log: EventLog, rawEventId: string) {
+async function processRefundIssuedEvent(
+  log: EnhancedEventLog,
+  rawEventId: string,
+) {
   try {
     if (!log || !log.topics || !log.data) {
       logger.error("Invalid log data for RefundIssued event");
@@ -507,10 +504,13 @@ async function processRefundIssuedEvent(log: EventLog, rawEventId: string) {
  * Process a FundsClaimed event log
  * @async
  * @function processFundsClaimedEvent
- * @param {EventLog} log - The log object from the webhook
+ * @param {EnhancedEventLog} log - The enhanced log object
  * @param {string} rawEventId - The ID of the raw event document
  */
-async function processFundsClaimedEvent(log: EventLog, rawEventId: string) {
+async function processFundsClaimedEvent(
+  log: EnhancedEventLog,
+  rawEventId: string,
+) {
   try {
     if (!log || !log.topics || !log.data) {
       logger.error("Invalid log data for FundsClaimed event");
@@ -582,11 +582,11 @@ async function processFundsClaimedEvent(log: EventLog, rawEventId: string) {
  * Process a CampaignStatusChanged event log
  * @async
  * @function processCampaignStatusChangedEvent
- * @param {EventLog} log - The log object from the webhook
+ * @param {EnhancedEventLog} log - The enhanced log object
  * @param {string} rawEventId - The ID of the raw event document
  */
 async function processCampaignStatusChangedEvent(
-  log: EventLog,
+  log: EnhancedEventLog,
   rawEventId: string,
 ) {
   try {
@@ -653,10 +653,13 @@ async function processCampaignStatusChangedEvent(
  * Process an AdminOverrideSet event log
  * @async
  * @function processAdminOverrideSetEvent
- * @param {EventLog} log - The log object from the webhook
+ * @param {EnhancedEventLog} log - The enhanced log object
  * @param {string} rawEventId - The ID of the raw event document
  */
-async function processAdminOverrideSetEvent(log: EventLog, rawEventId: string) {
+async function processAdminOverrideSetEvent(
+  log: EnhancedEventLog,
+  rawEventId: string,
+) {
   try {
     if (!log || !log.topics || !log.data) {
       logger.error("Invalid log data for AdminOverrideSet event");
@@ -730,10 +733,13 @@ async function processAdminOverrideSetEvent(log: EventLog, rawEventId: string) {
  * Process a FundsOperation event log
  * @async
  * @function processFundsOperationEvent
- * @param {EventLog} log - The log object from the webhook
+ * @param {EnhancedEventLog} log - The enhanced log object
  * @param {string} rawEventId - The ID of the raw event document
  */
-async function processFundsOperationEvent(log: EventLog, rawEventId: string) {
+async function processFundsOperationEvent(
+  log: EnhancedEventLog,
+  rawEventId: string,
+) {
   try {
     if (!log || !log.topics || !log.data) {
       logger.error("Invalid log data for FundsOperation event");
@@ -822,11 +828,11 @@ async function processFundsOperationEvent(log: EventLog, rawEventId: string) {
  * Process a CampaignEventCollectorOperation event log
  * @async
  * @function processEventCollectorOperationEvent
- * @param {EventLog} log - The log object from the webhook
+ * @param {EnhancedEventLog} log - The enhanced log object
  * @param {string} rawEventId - The ID of the raw event document
  */
 async function processEventCollectorOperationEvent(
-  log: EventLog,
+  log: EnhancedEventLog,
   rawEventId: string,
 ) {
   try {
