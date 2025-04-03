@@ -1,6 +1,6 @@
 # DeFi Crowdfunding Platform Events Table
 
-| Contract                    | Event Name                      | Operation                       | Triggered ✅ | Example file                   |
+| Contract                    | Event Name                      | Operation Code                  | Triggered ✅ | Example file                   |
 | --------------------------- | ------------------------------- | ------------------------------- | ------------ | ------------------------------ |
 | **Campaign**                | _No direct events_              | N/A                             |              |                                |
 | **CampaignContractFactory** | FactoryOperation                | OP_CAMPAIGN_CREATED (1)         |              |                                |
@@ -17,7 +17,7 @@
 | **CampaignEventCollector**  | FundsOperation                  | OP_CLAIM_FUNDS (2)              |              |                                |
 | **DefiIntegrationManager**  | DefiOperation                   | OP_DEPOSITED (1)                |              |                                |
 | **DefiIntegrationManager**  | DefiOperation                   | OP_WITHDRAWN (2)                |              |                                |
-| **DefiIntegrationManager**  | ConfigUpdated                   | OP_CONFIG_UPDATED (3)           |              |                                |
+| **DefiIntegrationManager**  | ConfigUpdated                   | OP_CONFIG_UPDATED (3)           | ✅           | set-aave-pool.ts               |
 | **FeeManager**              | FeeManagerOperation             | OP_TREASURY_UPDATED (1)         | ✅           | update-treasury.ts             |
 | **FeeManager**              | FeeManagerOperation             | OP_SHARE_UPDATED (2)            | ✅           | update-fee-share.ts            |
 | **PlatformAdmin**           | PlatformAdminOperation          | OP_ADMIN_ADDED (1)              | ✅           | add-platform-admin.ts          |
@@ -50,7 +50,9 @@
 
 - `OP_DEPOSITED = 1`: Tokens deposited to yield protocol
 - `OP_WITHDRAWN = 2`: Tokens withdrawn from yield protocol
-- `OP_CONFIG_UPDATED = 3`: Configuration updated
+- `OP_TOKEN_REGISTRY_UPDATED = 3`: Token registry updated
+- `OP_FEE_MANAGER_UPDATED = 4`: Fee manager updated
+- `OP_AAVE_POOL_UPDATED = 5`: Aave pool updated
 
 ### FeeManager
 

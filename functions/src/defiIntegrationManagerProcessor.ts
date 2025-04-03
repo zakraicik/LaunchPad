@@ -64,7 +64,9 @@ interface DefiOperationEventData {
  * @property {Date|null} blockTimestamp - Block timestamp
  * @property {string|null} transactionHash - Transaction hash
  * @property {string|null} contractAddress - Contract address
- * @property {number} configType - Type of configuration updated
+ * @property {Object} operation - Operation details
+ * @property {number} operation.code - Configuration type code
+ * @property {string} operation.name - Configuration type name
  * @property {string} oldAddress - Previous address
  * @property {string} newAddress - New address
  */
@@ -76,7 +78,10 @@ interface ConfigUpdateEventData {
   blockTimestamp: Date | null
   transactionHash: string | null
   contractAddress: string | null
-  configType: number
+  operation: {
+    code: number
+    name: string
+  }
   oldAddress: string
   newAddress: string
 }
@@ -339,11 +344,11 @@ async function processConfigUpdated(log: EnhancedEventLog, rawEventId: string) {
     // The data field contains all parameters
     // since none are indexed in ConfigUpdated
     const decodedData = ethers.AbiCoder.defaultAbiCoder().decode(
-      ["uint8", "address", "address"], // configType, oldAddress, newAddress
+      ["uint8", "address", "address"], // opType, oldAddress, newAddress
       log.data,
     );
 
-    const configType = Number(decodedData[0]);
+    const opType = Number(decodedData[0]);
     const oldAddress = decodedData[1];
     const newAddress = decodedData[2];
 
@@ -362,7 +367,10 @@ async function processConfigUpdated(log: EnhancedEventLog, rawEventId: string) {
         null,
       transactionHash: log.transaction?.hash || null,
       contractAddress: log.account?.address || null,
-      configType,
+      operation: {
+        code: opType,
+        name: OPERATION_TYPES[opType] || "UNKNOWN",
+      },
       oldAddress: normalizedOldAddress,
       newAddress: normalizedNewAddress,
     };
@@ -378,7 +386,7 @@ async function processConfigUpdated(log: EnhancedEventLog, rawEventId: string) {
 
     // Update defi configuration
     await updateDefiConfiguration(
-      configType,
+      opType,
       normalizedOldAddress,
       normalizedNewAddress,
     );
@@ -470,12 +478,12 @@ async function updateCampaignYieldData(
  * Updates the DeFi configuration in the defiConfig collection
  * @async
  * @function updateDefiConfiguration
- * @param {number} configType - The type of configuration being updated
+ * @param {number} opType - The operation type code
  * @param {string} oldAddress - The previous address
  * @param {string} newAddress - The new address
  */
 async function updateDefiConfiguration(
-  configType: number,
+  opType: number,
   oldAddress: string,
   newAddress: string,
 ) {
@@ -500,8 +508,8 @@ async function updateDefiConfiguration(
         lastOperation: "",
       };
 
-    // Update based on the specific config type code
-    switch (configType) {
+    // Update based on the operation code
+    switch (opType) {
     case 3: // OP_TOKEN_REGISTRY_UPDATED
       configData.tokenRegistryAddress = newAddress;
       configData.lastOperation = "TOKEN_REGISTRY_UPDATED";
@@ -518,7 +526,7 @@ async function updateDefiConfiguration(
       break;
 
     default:
-      logger.warn(`Unknown config type: ${configType}`);
+      logger.warn(`Unknown operation type: ${opType}`);
       configData.lastOperation = "UNKNOWN_CONFIG_UPDATED";
       return;
     }
