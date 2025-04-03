@@ -209,20 +209,15 @@ const EVENT_COLLECTOR_OPERATION_TYPES: Record<number, string> = {
 // Status codes mapping
 const CAMPAIGN_STATUS_TYPES: Record<number, string> = {
   0: "DRAFT",
-  1: "PENDING_APPROVAL",
-  2: "ACTIVE",
-  3: "COMPLETED",
-  4: "FAILED",
-  5: "CANCELLED",
+  1: "ACTIVE",
+  2: "COMPLETE",
 };
 
 // Status change reason codes
 const STATUS_CHANGE_REASONS: Record<number, string> = {
-  0: "NONE",
+  0: "CREATED",
   1: "GOAL_REACHED",
   2: "DEADLINE_PASSED",
-  3: "MANUAL_CANCEL",
-  4: "ADMIN_DECISION",
 };
 
 // Funds operation types
