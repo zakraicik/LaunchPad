@@ -9,7 +9,9 @@ import { deployPlatformFixture } from './fixture'
 describe('DefiIntegrationManager', function () {
   const OP_DEPOSITED = 1
   const OP_WITHDRAWN = 2
-  const OP_CONFIG_UPDATED = 3
+  const OP_TOKEN_REGISTRY_UPDATED = 3
+  const OP_FEE_MANAGER_UPDATED = 4
+  const OP_AAVE_POOL_UPDATED = 5
 
   // Error codes
   const ERR_ZERO_AMOUNT = 1
@@ -1299,7 +1301,7 @@ describe('DefiIntegrationManager', function () {
         )
           .to.emit(defiIntegrationManager, 'ConfigUpdated')
           .withArgs(
-            OP_CONFIG_UPDATED,
+            OP_TOKEN_REGISTRY_UPDATED,
             tokenRegistryBefore,
             tokenRegistryNewAddress
           )
@@ -1337,7 +1339,7 @@ describe('DefiIntegrationManager', function () {
         )
           .to.emit(defiIntegrationManager, 'ConfigUpdated')
           .withArgs(
-            OP_CONFIG_UPDATED,
+            OP_TOKEN_REGISTRY_UPDATED,
             tokenRegistryBefore,
             tokenRegistryNewAddress
           )
@@ -1422,7 +1424,11 @@ describe('DefiIntegrationManager', function () {
 
         await expect(defiIntegrationManager.setFeeManager(feeManagerNewAddress))
           .to.emit(defiIntegrationManager, 'ConfigUpdated')
-          .withArgs(OP_CONFIG_UPDATED, feeManagerBefore, feeManagerNewAddress)
+          .withArgs(
+            OP_FEE_MANAGER_UPDATED,
+            feeManagerBefore,
+            feeManagerNewAddress
+          )
 
         expect(await defiIntegrationManager.feeManager()).to.equal(
           feeManagerNewAddress
@@ -1457,7 +1463,11 @@ describe('DefiIntegrationManager', function () {
             .setFeeManager(feeManagerNewAddress)
         )
           .to.emit(defiIntegrationManager, 'ConfigUpdated')
-          .withArgs(OP_CONFIG_UPDATED, feeManagerBefore, feeManagerNewAddress)
+          .withArgs(
+            OP_FEE_MANAGER_UPDATED,
+            feeManagerBefore,
+            feeManagerNewAddress
+          )
 
         expect(await defiIntegrationManager.feeManager()).to.equal(
           feeManagerNewAddress
@@ -1533,7 +1543,7 @@ describe('DefiIntegrationManager', function () {
 
         await expect(defiIntegrationManager.setAavePool(mockAavePoolAddress))
           .to.emit(defiIntegrationManager, 'ConfigUpdated')
-          .withArgs(OP_CONFIG_UPDATED, aavePoolBefore, mockAavePoolAddress)
+          .withArgs(OP_AAVE_POOL_UPDATED, aavePoolBefore, mockAavePoolAddress)
 
         expect(await defiIntegrationManager.aavePool()).to.equal(
           mockAavePoolAddress
@@ -1565,7 +1575,7 @@ describe('DefiIntegrationManager', function () {
             .setAavePool(mockAavePoolAddress)
         )
           .to.emit(defiIntegrationManager, 'ConfigUpdated')
-          .withArgs(OP_CONFIG_UPDATED, aavePoolBefore, mockAavePoolAddress)
+          .withArgs(OP_AAVE_POOL_UPDATED, aavePoolBefore, mockAavePoolAddress)
 
         expect(await defiIntegrationManager.aavePool()).to.equal(
           mockAavePoolAddress
