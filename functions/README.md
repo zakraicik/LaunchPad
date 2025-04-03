@@ -3,15 +3,15 @@
 | Contract                    | Event Name                      | Operation Code                  | Triggered ✅ | Example file                   |
 | --------------------------- | ------------------------------- | ------------------------------- | ------------ | ------------------------------ |
 | **Campaign**                | _No direct events_              | N/A                             |              |                                |
-| **CampaignContractFactory** | FactoryOperation                | OP_CAMPAIGN_CREATED (1)         |              |                                |
-| **CampaignEventCollector**  | CampaignEventCollectorOperation | OP_FACTORY_AUTHORIZED (1)       |              |                                |
+| **CampaignContractFactory** | FactoryOperation                | OP_CAMPAIGN_CREATED (1)         | ✅           | deploy-campaign.ts             |
+| **CampaignEventCollector**  | CampaignEventCollectorOperation | OP_FACTORY_AUTHORIZED (1)       | ✅           | deploy-campaign.ts             |
 | **CampaignEventCollector**  | CampaignEventCollectorOperation | OP_FACTORY_DEAUTHORIZED (2)     |              |                                |
-| **CampaignEventCollector**  | CampaignEventCollectorOperation | OP_CAMPAIGN_AUTHORIZED (3)      |              |                                |
+| **CampaignEventCollector**  | CampaignEventCollectorOperation | OP_CAMPAIGN_AUTHORIZED (3)      | ✅           | deploy-campaign.ts             |
 | **CampaignEventCollector**  | CampaignEventCollectorOperation | OP_CAMPAIGN_DEAUTHORIZED (4)    |              |                                |
 | **CampaignEventCollector**  | Contribution                    | N/A                             |              |                                |
 | **CampaignEventCollector**  | RefundIssued                    | N/A                             |              |                                |
 | **CampaignEventCollector**  | FundsClaimed                    | N/A                             |              |                                |
-| **CampaignEventCollector**  | CampaignStatusChanged           | N/A                             |              |                                |
+| **CampaignEventCollector**  | CampaignStatusChanged           | N/A                             |              | deploy-campaign.ts             |
 | **CampaignEventCollector**  | AdminOverrideSet                | N/A                             |              |                                |
 | **CampaignEventCollector**  | FundsOperation                  | OP_DEPOSIT (1)                  |              |                                |
 | **CampaignEventCollector**  | FundsOperation                  | OP_CLAIM_FUNDS (2)              |              |                                |
