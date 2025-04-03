@@ -28,7 +28,9 @@ contract DefiIntegrationManager is
     // Status and operation constants (packed into single bytes)
     uint8 private constant OP_DEPOSITED = 1;
     uint8 private constant OP_WITHDRAWN = 2;
-    uint8 private constant OP_CONFIG_UPDATED = 3;
+    uint8 private constant OP_TOKEN_REGISTRY_UPDATED = 3;
+    uint8 private constant OP_FEE_MANAGER_UPDATED = 4;
+    uint8 private constant OP_AAVE_POOL_UPDATED = 5;
 
     // Error codes
     uint8 private constant ERR_ZERO_AMOUNT = 1;
@@ -160,7 +162,11 @@ contract DefiIntegrationManager is
         address oldRegistry = address(tokenRegistry);
         tokenRegistry = ITokenRegistry(_tokenRegistry);
 
-        emit ConfigUpdated(OP_CONFIG_UPDATED, oldRegistry, _tokenRegistry);
+        emit ConfigUpdated(
+            OP_TOKEN_REGISTRY_UPDATED,
+            oldRegistry,
+            _tokenRegistry
+        );
     }
 
     /**
@@ -176,7 +182,7 @@ contract DefiIntegrationManager is
         address oldFeeManager = address(feeManager);
         feeManager = IFeeManager(_feeManager);
 
-        emit ConfigUpdated(OP_CONFIG_UPDATED, oldFeeManager, _feeManager);
+        emit ConfigUpdated(OP_FEE_MANAGER_UPDATED, oldFeeManager, _feeManager);
     }
 
     /**
@@ -192,7 +198,7 @@ contract DefiIntegrationManager is
         address oldAavePool = address(aavePool);
         aavePool = IAavePool(_aavePool);
 
-        emit ConfigUpdated(OP_CONFIG_UPDATED, oldAavePool, _aavePool);
+        emit ConfigUpdated(OP_AAVE_POOL_UPDATED, oldAavePool, _aavePool);
     }
 
     /**

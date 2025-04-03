@@ -55,7 +55,6 @@ contract PlatformAdmin is Ownable, ReentrancyGuard {
      */
     constructor(address _owner) Ownable(_owner) {
         platformAdmins[_owner] = true;
-        emit PlatformAdminOperation(OP_ADMIN_ADDED, _owner, 0, 0);
     }
 
     /**
