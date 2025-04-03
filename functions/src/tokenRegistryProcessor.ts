@@ -7,53 +7,13 @@ import {logger} from "firebase-functions";
 import {onDocumentCreated} from "firebase-functions/v2/firestore";
 import admin from "firebase-admin";
 import {ethers} from "ethers";
+import {
+  AlchemyWebhookResponse,
+  EnhancedEventLog,
+  createEnhancedEventLog,
+} from "./shared-types";
 
 const db = admin.firestore();
-
-/**
- * Interface representing an event log from the blockchain
- * @interface EventLog
- */
-interface EventLog {
-  /** Raw event data (non-indexed parameters) */
-  data: string
-  /** Array of event topics (indexed parameters) */
-  topics: string[]
-  /** Log index in the block */
-  index?: number
-  /** Account information containing address */
-  account?: {
-    address?: string
-  }
-  /** Transaction information containing hash and other details */
-  transaction?: {
-    hash?: string
-    // Other transaction fields omitted for brevity
-  }
-}
-
-/**
- * Interface representing Alchemy webhook response structure
- * @interface AlchemyWebhookResponse
- */
-interface AlchemyWebhookResponse {
-  webhookId: string
-  id: string
-  createdAt: string
-  type: string
-  event: {
-    data: {
-      block: {
-        hash: string
-        number: number
-        timestamp: number
-        logs: EventLog[]
-      }
-    }
-    sequenceNumber: string
-    network: string
-  }
-}
 
 /**
  * Interface representing processed token event data
@@ -141,7 +101,6 @@ export const processTokenRegistryEvents = onDocumentCreated(
         return;
       }
 
-      console.log("hello");
       const rawEventId = event.params.docId;
       if (!rawEventId) {
         logger.warn("No document ID found in event params");
@@ -186,13 +145,12 @@ export const processTokenRegistryEvents = onDocumentCreated(
 
         // Check if this is a TokenRegistryOperation event
         if (eventSignature === TOKEN_REGISTRY_OP_SIGNATURE) {
-          const enhancedLog: EnhancedEventLog = {
-            ...log,
-            block: {
-              number: blockNumber,
-              timestamp: blockTimestamp,
-            },
-          };
+          // Use the shared utility function to create the enhanced log
+          const enhancedLog = createEnhancedEventLog(
+            log,
+            blockNumber,
+            blockTimestamp,
+          );
 
           await processTokenRegistryOperation(enhancedLog, rawEventId);
         }
@@ -202,16 +160,6 @@ export const processTokenRegistryEvents = onDocumentCreated(
     }
   },
 );
-
-/**
- * Enhanced EventLog interface with block information
- */
-interface EnhancedEventLog extends EventLog {
-  block?: {
-    number?: number
-    timestamp?: number
-  }
-}
 
 /**
  * Process a TokenRegistryOperation event log and store it in Firestore

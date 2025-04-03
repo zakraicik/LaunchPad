@@ -18,8 +18,8 @@
 | **DefiIntegrationManager**  | DefiOperation                   | OP_DEPOSITED (1)                |              |                                |
 | **DefiIntegrationManager**  | DefiOperation                   | OP_WITHDRAWN (2)                |              |                                |
 | **DefiIntegrationManager**  | ConfigUpdated                   | OP_CONFIG_UPDATED (3)           |              |                                |
-| **FeeManager**              | FeeManagerOperation             | OP_TREASURY_UPDATED (1)         |              |                                |
-| **FeeManager**              | FeeManagerOperation             | OP_SHARE_UPDATED (2)            |              |                                |
+| **FeeManager**              | FeeManagerOperation             | OP_TREASURY_UPDATED (1)         | ✅           | update-treasury.ts             |
+| **FeeManager**              | FeeManagerOperation             | OP_SHARE_UPDATED (2)            | ✅           | update-fee-share.ts            |
 | **PlatformAdmin**           | PlatformAdminOperation          | OP_ADMIN_ADDED (1)              | ✅           | add-platform-admin.ts          |
 | **PlatformAdmin**           | PlatformAdminOperation          | OP_ADMIN_REMOVED (2)            | ✅           | remove-platform-admin.ts       |
 | **TokenRegistry**           | TokenRegistryOperation          | OP_TOKEN_ADDED (1)              | ✅           | add-token.ts                   |

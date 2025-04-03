@@ -9,37 +9,14 @@ import {logger} from "firebase-functions";
 import {onDocumentCreated} from "firebase-functions/v2/firestore";
 import admin from "firebase-admin";
 import {ethers} from "ethers";
+import {
+  AlchemyWebhookResponse,
+  EnhancedEventLog,
+  createEnhancedEventLog,
+} from "./shared-types";
 
 // Initialize Firebase
 const db = admin.firestore();
-
-/**
- * @interface EventLog
- * @description Represents a blockchain event log with its associated metadata
- */
-interface EventLog {
-  /** Array of event topics (indexed parameters) */
-  topics: string[]
-  /** Raw event data containing non-indexed parameters */
-  data: string
-  /** Block information */
-  block?: {
-    /** Block number */
-    number?: number
-    /** Block timestamp in Unix seconds */
-    timestamp?: number
-  }
-  /** Transaction information */
-  transaction?: {
-    /** Transaction hash */
-    hash?: string
-  }
-  /** Account information */
-  account?: {
-    /** Contract address that emitted the event */
-    address?: string
-  }
-}
 
 /**
  * @interface FeeManagerEventData
@@ -126,7 +103,7 @@ export const processFeeManagerEvents = onDocumentCreated(
     try {
       // Get the raw event data
       const rawEvent = event.data?.data();
-      if (!rawEvent || !rawEvent.data) {
+      if (!rawEvent) {
         logger.warn("No data found in raw event");
         return;
       }
@@ -139,21 +116,30 @@ export const processFeeManagerEvents = onDocumentCreated(
 
       logger.info(`Processing raw event with ID: ${rawEventId}`);
 
-      // Extract logs from the webhook data
-      const logs = rawEvent.data?.event?.data?.logs;
-      if (!logs || !Array.isArray(logs)) {
-        logger.info("No logs found in event data");
+      // Parse the webhook data
+      if (!rawEvent.data) {
+        logger.warn("No data found in raw event");
         return;
       }
 
+      const webhookData = rawEvent.data as AlchemyWebhookResponse;
+
+      // Check for required data
+      if (!webhookData?.event?.data?.block?.logs) {
+        logger.warn("Invalid Alchemy webhook structure - missing logs");
+        return;
+      }
+
+      // Process logs from the Alchemy webhook
+      const logs = webhookData.event.data.block.logs;
+      const blockNumber = webhookData.event.data.block.number;
+      const blockTimestamp = webhookData.event.data.block.timestamp;
+
+      logger.info(`Found ${logs.length} logs to process from Alchemy webhook`);
+
       // Process each log
       for (const log of logs) {
-        if (
-          !log ||
-          !log.topics ||
-          !Array.isArray(log.topics) ||
-          log.topics.length === 0
-        ) {
+        if (!log?.topics?.length) {
           logger.debug("Skipping log with no topics");
           continue;
         }
@@ -166,7 +152,14 @@ export const processFeeManagerEvents = onDocumentCreated(
 
         // Check if this is a FeeManagerOperation event
         if (eventSignature === FEE_MANAGER_OP_SIGNATURE) {
-          await processFeeManagerOperation(log as EventLog, rawEventId);
+          // Use the shared utility function to create the enhanced log
+          const enhancedLog = createEnhancedEventLog(
+            log,
+            blockNumber,
+            blockTimestamp,
+          );
+
+          await processFeeManagerOperation(enhancedLog, rawEventId);
         }
       }
     } catch (error) {
@@ -178,10 +171,13 @@ export const processFeeManagerEvents = onDocumentCreated(
 /**
  * @function processFeeManagerOperation
  * @description Processes a FeeManagerOperation event log and stores it in the database. Also updates the fee configuration based on the operation type.
- * @param {EventLog} log - The event log from the blockchain
+ * @param {EnhancedEventLog} log - The event log from the blockchain
  * @param {string} rawEventId - The ID of the raw event document
  */
-async function processFeeManagerOperation(log: EventLog, rawEventId: string) {
+async function processFeeManagerOperation(
+  log: EnhancedEventLog,
+  rawEventId: string,
+) {
   try {
     if (!log || !log.topics || !log.data) {
       logger.error("Invalid log data for FeeManagerOperation");

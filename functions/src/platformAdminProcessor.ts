@@ -8,64 +8,14 @@ import {logger} from "firebase-functions";
 import {onDocumentCreated} from "firebase-functions/v2/firestore";
 import admin from "firebase-admin";
 import {ethers} from "ethers";
+import {
+  AlchemyWebhookResponse,
+  EnhancedEventLog,
+  createEnhancedEventLog,
+} from "./shared-types";
 
 // Initialize Firebase
 const db = admin.firestore();
-
-/**
- * Interface representing an event log from the blockchain
- * @interface EventLog
- */
-interface EventLog {
-  /** Raw event data (non-indexed parameters) */
-  data: string
-  /** Array of event topics (indexed parameters) */
-  topics: string[]
-  /** Log index in the block */
-  index?: number
-  /** Account information containing address */
-  account?: {
-    address?: string
-  }
-  /** Transaction information containing hash and other details */
-  transaction?: {
-    hash?: string
-    // Other transaction fields omitted for brevity
-  }
-}
-
-/**
- * Interface representing Alchemy webhook response structure
- * @interface AlchemyWebhookResponse
- */
-interface AlchemyWebhookResponse {
-  webhookId: string
-  id: string
-  createdAt: string
-  type: string
-  event: {
-    data: {
-      block: {
-        hash: string
-        number: number
-        timestamp: number
-        logs: EventLog[]
-      }
-    }
-    sequenceNumber: string
-    network: string
-  }
-}
-
-/**
- * Enhanced EventLog interface with block information
- */
-interface EnhancedEventLog extends EventLog {
-  block?: {
-    number?: number
-    timestamp?: number
-  }
-}
 
 /**
  * Represents processed platform admin event data
@@ -193,13 +143,12 @@ export const processPlatformAdminEvents = onDocumentCreated(
 
         // Check if this is a PlatformAdminOperation event
         if (eventSignature === PLATFORM_ADMIN_OP_SIGNATURE) {
-          const enhancedLog: EnhancedEventLog = {
-            ...log,
-            block: {
-              number: blockNumber,
-              timestamp: blockTimestamp,
-            },
-          };
+          // Use the shared utility function to create the enhanced log
+          const enhancedLog = createEnhancedEventLog(
+            log,
+            blockNumber,
+            blockTimestamp,
+          );
 
           await processPlatformAdminOperation(enhancedLog, rawEventId);
         }
