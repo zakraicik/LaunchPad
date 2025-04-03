@@ -138,7 +138,9 @@ const CONFIG_UPDATED_SIGNATURE = ethers.keccak256(
 const OPERATION_TYPES: Record<number, string> = {
   1: "DEPOSITED",
   2: "WITHDRAWN",
-  3: "CONFIG_UPDATED",
+  3: "TOKEN_REGISTRY_UPDATED",
+  4: "FEE_MANAGER_UPDATED",
+  5: "AAVE_POOL_UPDATED",
 };
 
 /**
@@ -498,53 +500,33 @@ async function updateDefiConfiguration(
         lastOperation: "",
       };
 
-    // Update based on config type (3 is OP_CONFIG_UPDATED)
-    if (configType === 3) {
-      // Determine which contract address was updated based on old address
-      if (
-        configData.aavePoolAddress.toLowerCase() === oldAddress.toLowerCase()
-      ) {
-        configData.aavePoolAddress = newAddress;
-        configData.lastOperation = "AAVE_POOL_UPDATED";
-      } else if (
-        configData.tokenRegistryAddress.toLowerCase() ===
-        oldAddress.toLowerCase()
-      ) {
-        configData.tokenRegistryAddress = newAddress;
-        configData.lastOperation = "TOKEN_REGISTRY_UPDATED";
-      } else if (
-        configData.feeManagerAddress.toLowerCase() === oldAddress.toLowerCase()
-      ) {
-        configData.feeManagerAddress = newAddress;
-        configData.lastOperation = "FEE_MANAGER_UPDATED";
-      } else {
-        // If we can't determine which field to update, set all if they're empty
-        if (!configData.aavePoolAddress) {
-          configData.aavePoolAddress = newAddress;
-          configData.lastOperation = "AAVE_POOL_SET";
-        } else if (!configData.tokenRegistryAddress) {
-          configData.tokenRegistryAddress = newAddress;
-          configData.lastOperation = "TOKEN_REGISTRY_SET";
-        } else if (!configData.feeManagerAddress) {
-          configData.feeManagerAddress = newAddress;
-          configData.lastOperation = "FEE_MANAGER_SET";
-        } else {
-          configData.lastOperation = "UNKNOWN_CONFIG_UPDATED";
-          logger.warn(
-            "Could not determine which" +
-              `config was updated: old=${oldAddress}, ` +
-              `new=${newAddress}`,
-          );
-        }
-      }
+    // Update based on the specific config type code
+    switch (configType) {
+    case 3: // OP_TOKEN_REGISTRY_UPDATED
+      configData.tokenRegistryAddress = newAddress;
+      configData.lastOperation = "TOKEN_REGISTRY_UPDATED";
+      break;
 
-      configData.lastUpdated = new Date();
+    case 4: // OP_FEE_MANAGER_UPDATED
+      configData.feeManagerAddress = newAddress;
+      configData.lastOperation = "FEE_MANAGER_UPDATED";
+      break;
 
-      await configRef.set(configData, {merge: true});
-      logger.info(`DeFi configuration updated: ${configData.lastOperation}`);
-    } else {
-      logger.warn(`Unexpected configType: ${configType}`);
+    case 5: // OP_AAVE_POOL_UPDATED
+      configData.aavePoolAddress = newAddress;
+      configData.lastOperation = "AAVE_POOL_UPDATED";
+      break;
+
+    default:
+      logger.warn(`Unknown config type: ${configType}`);
+      configData.lastOperation = "UNKNOWN_CONFIG_UPDATED";
+      return;
     }
+
+    configData.lastUpdated = new Date();
+
+    await configRef.set(configData, {merge: true});
+    logger.info(`DeFi configuration updated: ${configData.lastOperation}`);
   } catch (error) {
     logger.error(`Error updating defi configuration: ${error}`);
   }
