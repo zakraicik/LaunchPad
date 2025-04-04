@@ -24,7 +24,7 @@ async function main () {
     deployedAddresses.TokenRegistry
   )) as TokenRegistry
 
-  const usdcAddress = '0x5deac602762362fe5f135fa5904351916053cf70'
+  const usdcAddress = '0x0f2559677a6cf88b48bbfadde1757d4f302c8e23'
   const minimumContributionInWholeTokens = 1
 
   try {
