@@ -859,10 +859,10 @@ async function processEventCollectorOperationEvent (
         await updateFactoryAuthorization(targetAddress, false)
         break
       case 3: // CAMPAIGN_AUTHORIZED
-        await updateCampaignAuthorization(targetAddress, true, sender)
+        await updateCampaignAuthorization(sender, true, targetAddress)
         break
       case 4: // CAMPAIGN_DEAUTHORIZED
-        await updateCampaignAuthorization(targetAddress, false, sender)
+        await updateCampaignAuthorization(sender, false, targetAddress)
         break
       default:
         logger.warn(`Unknown operation type: ${opType}`)

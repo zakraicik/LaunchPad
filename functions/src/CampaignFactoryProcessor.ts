@@ -321,8 +321,11 @@ async function storeCampaignData(
     logger.debug(`Storing campaign data: ${JSON.stringify(campaignData)}`);
 
     // Store in campaigns collection using campaignId as document ID
-    // This makes it easy to reference and update campaign data later
-    await db.collection("campaigns").doc(campaignId).set(campaignData);
+    // Use merge: true to preserve any existing data
+    await db
+      .collection("campaigns")
+      .doc(campaignId)
+      .set(campaignData, {merge: true});
     logger.info(`Campaign data stored with ID: ${campaignId}`);
   } catch (error) {
     logger.error(`Error storing campaign data: ${error}`, {
