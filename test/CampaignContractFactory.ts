@@ -12,6 +12,9 @@ describe('CampaignContractFactory', function () {
   const OP_CAMPAIGN_CREATED = 1
   const ERR_CAMPAIGN_CONSTRUCTOR_VALIDATION_FAILED = 1
   const ERR_INVALID_ADDRESS = 2
+  const STATUS_CREATED = 0
+  const STATUS_ACTIVE = 1
+  const REASON_CAMPAIGN_CREATED = 0
 
   describe('Deployment', function () {
     it('Should correctly deploy campaignContractFactory', async function () {
@@ -23,11 +26,17 @@ describe('CampaignContractFactory', function () {
     })
 
     it('Should correctly set the initial state', async function () {
-      const { campaignContractFactory, defiIntegrationManager, platformAdmin } =
-        await loadFixture(deployPlatformFixture)
+      const {
+        campaignContractFactory,
+        defiIntegrationManager,
+        platformAdmin,
+        campaignEventCollector
+      } = await loadFixture(deployPlatformFixture)
 
       const defiManagerAddress = await defiIntegrationManager.getAddress()
       const platformAdminAddress = await platformAdmin.getAddress()
+      const campaignEventCollectorAddress =
+        await campaignEventCollector.getAddress()
 
       expect(await campaignContractFactory.defiManager()).to.equal(
         defiManagerAddress
@@ -35,17 +44,21 @@ describe('CampaignContractFactory', function () {
       expect(await campaignContractFactory.platformAdmin()).to.equal(
         platformAdminAddress
       )
+
+      expect(await campaignContractFactory.campaignEventCollector()).to.equal(
+        campaignEventCollectorAddress
+      )
     })
 
     it('Should revert if an invalid defiManager address is passed to the constructor', async function () {
-      const { platformAdmin, deployer } = await loadFixture(
-        deployPlatformFixture
-      )
+      const { platformAdmin, deployer, campaignEventCollector } =
+        await loadFixture(deployPlatformFixture)
 
       await expect(
         ethers.deployContract('CampaignContractFactory', [
           ethers.ZeroAddress,
           await platformAdmin.getAddress(),
+          await campaignEventCollector.getAddress(),
           deployer.address
         ])
       )
@@ -57,13 +70,31 @@ describe('CampaignContractFactory', function () {
     })
 
     it('Should revert if an invalid platformAdmin address is passed to the constructor', async function () {
-      const { defiIntegrationManager, deployer } = await loadFixture(
-        deployPlatformFixture
-      )
+      const { defiIntegrationManager, deployer, campaignEventCollector } =
+        await loadFixture(deployPlatformFixture)
 
       await expect(
         ethers.deployContract('CampaignContractFactory', [
           await defiIntegrationManager.getAddress(),
+          ethers.ZeroAddress,
+          await campaignEventCollector.getAddress(),
+          deployer.address
+        ])
+      )
+        .to.be.revertedWithCustomError(
+          await ethers.getContractFactory('CampaignContractFactory'),
+          'FactoryError'
+        )
+        .withArgs(ERR_INVALID_ADDRESS, ethers.ZeroAddress, 0)
+    })
+    it('Should revert if an invalid eventCollector address is passed to the constructor', async function () {
+      const { defiIntegrationManager, deployer, platformAdmin } =
+        await loadFixture(deployPlatformFixture)
+
+      await expect(
+        ethers.deployContract('CampaignContractFactory', [
+          await defiIntegrationManager.getAddress(),
+          await platformAdmin.getAddress(),
           ethers.ZeroAddress,
           deployer.address
         ])
@@ -78,14 +109,24 @@ describe('CampaignContractFactory', function () {
 
   describe('Deploying new campaigns', function () {
     it('Should allow new campaigns to be deployed with ERC20 token', async function () {
-      const { campaignContractFactory, creator1, usdc, tokenRegistry } =
-        await loadFixture(deployPlatformFixture)
+      const {
+        campaignContractFactory,
+        creator1,
+        usdc,
+        tokenRegistry,
+        campaignEventCollector,
+        deployer
+      } = await loadFixture(deployPlatformFixture)
 
       const usdcAddress = await usdc.getAddress()
       const campaignGoalAmount = ethers.parseUnits('500', await usdc.decimals()) // Use proper units
       const campaignDuration = 30
 
       expect(await tokenRegistry.isTokenSupported(usdcAddress)).to.be.true
+
+      // Setup event monitoring for CampaignStatusChanged
+      const statusChangedFilter =
+        campaignEventCollector.filters.CampaignStatusChanged()
 
       const tx = await campaignContractFactory
         .connect(creator1)
@@ -118,6 +159,24 @@ describe('CampaignContractFactory', function () {
       expect(parsedEvent.args[0]).to.equal(OP_CAMPAIGN_CREATED)
 
       const campaignAddress = parsedEvent.args[1]
+      const campaignId = parsedEvent.args[3]
+
+      // Check for CampaignStatusChanged event
+      const statusChangedEvents = await campaignEventCollector.queryFilter(
+        statusChangedFilter,
+        receipt.blockNumber,
+        receipt.blockNumber
+      )
+
+      const campaignStatusEvent = statusChangedEvents.find(
+        event => event.args[3] === campaignId
+      )
+
+      expect(campaignStatusEvent).to.not.be.undefined
+      expect(campaignStatusEvent.args[0]).to.equal(STATUS_CREATED) // oldStatus
+      expect(campaignStatusEvent.args[1]).to.equal(STATUS_ACTIVE) // newStatus
+      expect(campaignStatusEvent.args[2]).to.equal(REASON_CAMPAIGN_CREATED) // reason
+      expect(campaignStatusEvent.args[4]).to.equal(campaignAddress) // campaignAddress
 
       const Campaign = await ethers.getContractFactory('Campaign')
       const campaign = Campaign.attach(campaignAddress) as unknown as Campaign
@@ -130,6 +189,7 @@ describe('CampaignContractFactory', function () {
       expect(await campaign.campaignGoalAmount()).to.equal(campaignGoalAmount)
       expect(await campaign.campaignDuration()).to.equal(campaignDuration)
       expect(await campaign.isCampaignActive()).to.be.true
+      expect(await campaign.campaignStatus()).to.equal(STATUS_ACTIVE)
     })
 
     it('Should revert on unsupported campaign token', async function () {
@@ -343,6 +403,43 @@ describe('CampaignContractFactory', function () {
         gasUsed1,
         (gasUsed1 * 2n) / 100n // Allow 2% variation
       )
+    })
+
+    it('Should authorize new campaign in the EventCollector when deployed', async function () {
+      const {
+        campaignContractFactory,
+        creator1,
+        usdc,
+        campaignEventCollector
+      } = await loadFixture(deployPlatformFixture)
+
+      const usdcAddress = await usdc.getAddress()
+      const campaignGoalAmount = ethers.parseUnits('500', await usdc.decimals())
+      const campaignDuration = 30
+
+      // Deploy a new campaign
+      const tx = await campaignContractFactory
+        .connect(creator1)
+        .deploy(usdcAddress, campaignGoalAmount, campaignDuration)
+
+      const receipt = await tx.wait()
+
+      // Extract the campaign address from the event
+      const event = receipt.logs.find(log => {
+        try {
+          const parsed = campaignContractFactory.interface.parseLog(log)
+          return parsed && parsed.name === 'FactoryOperation'
+        } catch {
+          return false
+        }
+      })
+
+      const parsedEvent = campaignContractFactory.interface.parseLog(event)
+      const campaignAddress = parsedEvent.args[1]
+
+      // Verify the campaign is authorized in the EventCollector
+      expect(await campaignEventCollector.authorizedCampaigns(campaignAddress))
+        .to.be.true
     })
   })
 })

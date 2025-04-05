@@ -8,6 +8,7 @@ import {
   DefiIntegrationManager,
   CampaignContractFactory,
   Campaign,
+  CampaignEventCollector,
   IERC20Metadata
 } from '../typechain-types'
 
@@ -32,6 +33,7 @@ let tokenRegistry: TokenRegistry
 let feeManager: FeeManager
 let defiIntegrationManager: DefiIntegrationManager
 let campaignContractFactory: CampaignContractFactory
+let campaignEventCollector: CampaignEventCollector
 
 export async function deployPlatformFixture () {
   // Impersonate the ETH whale
@@ -175,11 +177,24 @@ export async function deployPlatformFixture () {
 
   await defiIntegrationManager.waitForDeployment()
 
+  campaignEventCollector = await ethers.deployContract(
+    'CampaignEventCollector',
+    [await platformAdmin.getAddress(), deployer.address],
+    {
+      maxFeePerGas,
+      maxPriorityFeePerGas,
+      gasLimit: GAS_LIMIT
+    }
+  )
+
+  await campaignEventCollector.waitForDeployment()
+
   campaignContractFactory = await ethers.deployContract(
     'CampaignContractFactory',
     [
       await defiIntegrationManager.getAddress(),
       await platformAdmin.getAddress(),
+      await campaignEventCollector.getAddress(),
       deployer.address
     ],
     {
@@ -190,6 +205,10 @@ export async function deployPlatformFixture () {
   )
 
   await campaignContractFactory.waitForDeployment()
+
+  await campaignEventCollector.authorizeFactory(
+    await campaignContractFactory.getAddress()
+  )
 
   //Fund Contributors
   const usdcDecimals = await usdc.decimals()
@@ -285,6 +304,7 @@ export async function deployPlatformFixture () {
     AAVE_POOL_ADDRESS,
     otherAdmin,
     aavePool,
-    campaign
+    campaign,
+    campaignEventCollector
   }
 }

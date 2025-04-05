@@ -1,0 +1,16 @@
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "commonjs",
+    "outDir": "lib",
+    "sourceMap": true,
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "isolatedModules": true
+  },
+
+  "include": ["src/**/*", "examples/**/*", "emulator-files/**/*"],
+  "exclude": ["node_modules", "emulator-files/**/*", "coverage/**/*"]
+}

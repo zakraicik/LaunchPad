@@ -16,12 +16,14 @@
     "@aave/core-v3": "^1.19.3",
     "@nomicfoundation/hardhat-toolbox": "^5.0.0",
     "@openzeppelin/contracts": "^5.2.0",
+    "firebase-admin": "^13.2.0",
+    "firebase-tools": "^14.0.1",
     "hardhat": "^2.22.19",
-    "hardhat-gas-reporter": "^2.2.2",
     "ts-node": "^10.9.2",
     "typescript": "^5.8.2"
   },
   "dependencies": {
-    "dotenv": "^16.4.7"
+    "dotenv": "^16.4.7",
+    "firebase": "^11.5.0"
   }
 }

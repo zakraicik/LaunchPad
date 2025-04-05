@@ -29,7 +29,8 @@ describe('Base Mainnet Integration Tests', function () {
         feeManager,
         defiIntegrationManager,
         campaignContractFactory,
-        AAVE_POOL_ADDRESS
+        AAVE_POOL_ADDRESS,
+        campaignEventCollector
       } = await loadFixture(deployPlatformFixture)
 
       //PlatformAdmin
@@ -73,6 +74,10 @@ describe('Base Mainnet Integration Tests', function () {
       )
       expect(await campaignContractFactory.platformAdmin()).to.equal(
         await platformAdmin.getAddress()
+      )
+
+      expect(await campaignContractFactory.campaignEventCollector()).to.equal(
+        await campaignEventCollector.getAddress()
       )
     })
 
@@ -139,13 +144,16 @@ describe('Base Mainnet Integration Tests', function () {
         creator1,
         contributor1,
         defiIntegrationManager,
-        IERC20ABI
+        IERC20ABI,
+        campaignEventCollector
       } = await loadFixture(deployPlatformFixture)
 
+      // Setup campaign
       const usdcDecimals = await usdc.decimals()
       const CAMPAIGN_GOAL = ethers.parseUnits('500', usdcDecimals)
       const CAMPAIGN_DURATION = 60
 
+      // Deploy campaign
       const tx = await campaignContractFactory
         .connect(creator1)
         .deploy(await usdc.getAddress(), CAMPAIGN_GOAL, CAMPAIGN_DURATION)
@@ -153,6 +161,7 @@ describe('Base Mainnet Integration Tests', function () {
       const receipt = await tx.wait()
       if (!receipt) throw new Error('Transaction failed')
 
+      // Get campaign address from event
       const event = receipt.logs.find(log => {
         try {
           const parsed = campaignContractFactory.interface.parseLog(log)
@@ -161,7 +170,6 @@ describe('Base Mainnet Integration Tests', function () {
           return false
         }
       })
-
       if (!event) throw new Error('Event failed')
 
       const parsedEvent = campaignContractFactory.interface.parseLog(event)
@@ -169,11 +177,12 @@ describe('Base Mainnet Integration Tests', function () {
 
       const campaignAddress = parsedEvent.args[1]
 
+      // Attach to the campaign contract
       const Campaign = await ethers.getContractFactory('Campaign')
       const campaign = Campaign.attach(campaignAddress) as unknown as Campaign
 
+      // Make a contribution
       const contributionAmount = ethers.parseUnits('100', usdcDecimals)
-
       await usdc
         .connect(contributor1)
         .approve(campaignAddress, contributionAmount)
@@ -182,70 +191,55 @@ describe('Base Mainnet Integration Tests', function () {
         .connect(contributor1)
         .contribute(contributionAmount)
 
-      if (!contributeTx1) throw new Error('Transaction failed')
+      await contributeTx1.wait()
 
-      const contributeReceipt1 = await contributeTx1.wait()
-      if (!contributeReceipt1) throw new Error('Transaction failed')
-
-      const contributionEvent = contributeReceipt1.logs.find(log => {
-        try {
-          const parsed = campaign.interface.parseLog(log)
-          return parsed && parsed.name === 'Contribution'
-        } catch {
-          return false
-        }
-      })
-
-      if (!contributionEvent) throw new Error('Event failed')
-
-      const parsedContributionEvent =
-        campaign.interface.parseLog(contributionEvent)
-      if (!parsedContributionEvent) throw new Error('Event failed')
-
-      expect(parsedContributionEvent.args.contributor).to.equal(
-        contributor1.address
+      // Check Contribution event from event collector
+      const contributionEvents = await campaignEventCollector.queryFilter(
+        campaignEventCollector.filters.Contribution()
       )
-      expect(parsedContributionEvent.args.amount).to.equal(contributionAmount)
-      expect(parsedContributionEvent.args.campaignId).to.equal(
+      const contributionEvent =
+        contributionEvents[contributionEvents.length - 1]
+
+      expect(contributionEvent.args.contributor).to.equal(contributor1.address)
+      expect(contributionEvent.args.amount).to.equal(contributionAmount)
+      expect(contributionEvent.args.campaignId).to.equal(
         await campaign.campaignId()
       )
+      expect(contributionEvent.args.campaignAddress).to.equal(campaignAddress)
 
+      // Check FundsOperation event from event collector
+      const fundsOperationEvents = await campaignEventCollector.queryFilter(
+        campaignEventCollector.filters.FundsOperation()
+      )
+      const fundsOperationEvent =
+        fundsOperationEvents[fundsOperationEvents.length - 1]
+
+      expect(fundsOperationEvent.args.token).to.equal(
+        ethers.getAddress(await usdc.getAddress())
+      )
+      expect(fundsOperationEvent.args.amount).to.equal(contributionAmount)
+      expect(fundsOperationEvent.args.opType).to.equal(OP_DEPOSIT)
+      expect(fundsOperationEvent.args.initiator).to.equal(contributor1.address)
+      expect(fundsOperationEvent.args.campaignId).to.equal(
+        await campaign.campaignId()
+      )
+      expect(fundsOperationEvent.args.campaignAddress).to.equal(campaignAddress)
+
+      // Check campaign state changes
       expect(await campaign.isContributor(contributor1.address)).to.be.true
       expect(await campaign.contributorsCount()).to.equal(1)
 
-      const aaveDepositEvent = contributeReceipt1.logs.find(log => {
-        try {
-          const parsed = campaign.interface.parseLog(log)
-          return parsed && parsed.name === 'FundsOperation'
-        } catch {
-          return false
-        }
-      })
-
-      if (!aaveDepositEvent) throw new Error('Event failed')
-
-      const parsedAaveDepositEvent =
-        campaign.interface.parseLog(aaveDepositEvent)
-      if (!parsedAaveDepositEvent) throw new Error('Event failed')
-
-      expect(parsedAaveDepositEvent.args[0]).to.equal(
-        ethers.getAddress(await usdc.getAddress())
-      )
-      expect(parsedAaveDepositEvent.args[1]).to.equal(contributionAmount)
-      expect(parsedAaveDepositEvent.args[2]).to.equal(OP_DEPOSIT)
-      expect(parsedAaveDepositEvent.args[3]).to.equal(contributor1.address)
-
+      // Check Aave integration
       const aTokenAddress = await defiIntegrationManager.getATokenAddress(
         await usdc.getAddress()
       )
 
-      let aToken: IERC20Metadata
-
-      aToken = (await ethers.getContractAt(
+      let aToken = (await ethers.getContractAt(
         IERC20ABI,
         aTokenAddress
       )) as unknown as IERC20Metadata
 
+      // Verify funds were properly deposited to Aave
       expect(await aToken.balanceOf(campaignAddress)).to.be.closeTo(
         contributionAmount,
         10
@@ -376,7 +370,8 @@ describe('Base Mainnet Integration Tests', function () {
         contributor2,
         defiIntegrationManager,
         IERC20ABI,
-        feeManager
+        feeManager,
+        campaignEventCollector
       } = await loadFixture(deployPlatformFixture)
 
       const usdcDecimals = await usdc.decimals()
@@ -447,7 +442,7 @@ describe('Base Mainnet Integration Tests', function () {
 
       await network.provider.send('evm_increaseTime', [
         60 * 60 * 24 * (CAMPAIGN_DURATION + 1)
-      ]) // 30 days
+      ]) // Fast forward time
 
       await network.provider.send('evm_mine')
 
@@ -457,40 +452,54 @@ describe('Base Mainnet Integration Tests', function () {
         await usdc.getAddress()
       )
 
-      let aToken: IERC20Metadata
-
-      aToken = (await ethers.getContractAt(
+      let aToken = (await ethers.getContractAt(
         IERC20ABI,
         aTokenAddress
       )) as unknown as IERC20Metadata
 
       const aTokenBalance = await aToken.balanceOf(campaignAddress)
 
-      const claimFundsTx = await campaign.connect(creator1).claimFunds()
-      const claimFundsReceipt = await claimFundsTx.wait()
-      if (!claimFundsReceipt) throw new Error('Transaction failed')
+      // Clear previous events to make testing easier
+      await campaignEventCollector.queryFilter(
+        campaignEventCollector.filters.FundsOperation()
+      )
 
-      const claimFundsEvent = claimFundsReceipt.logs.find(log => {
-        try {
-          const parsed = campaign.interface.parseLog(log)
-          return parsed && parsed.name === 'FundsOperation'
-        } catch {
-          return false
-        }
-      })
+      // Claim funds
+      await campaign.connect(creator1).claimFunds()
 
-      if (!claimFundsEvent) throw new Error('Event failed')
+      // Check FundsOperation event from event collector
+      const fundsOperationEvents = await campaignEventCollector.queryFilter(
+        campaignEventCollector.filters.FundsOperation()
+      )
+      const fundsOperationEvent =
+        fundsOperationEvents[fundsOperationEvents.length - 1]
 
-      const parsedClaimFundsEvent = campaign.interface.parseLog(claimFundsEvent)
-      if (!parsedClaimFundsEvent) throw new Error('Event failed')
-
-      expect(parsedClaimFundsEvent.args[0]).to.equal(
+      expect(fundsOperationEvent.args.token).to.equal(
         ethers.getAddress(await usdc.getAddress())
       )
-      expect(parsedClaimFundsEvent.args[1]).to.be.closeTo(aTokenBalance, 10)
-      expect(parsedClaimFundsEvent.args[2]).to.equal(OP_CLAIM_FUNDS)
-      expect(parsedClaimFundsEvent.args[3]).to.equal(creator1.address)
+      expect(fundsOperationEvent.args.amount).to.be.closeTo(aTokenBalance, 10)
+      expect(fundsOperationEvent.args.opType).to.equal(OP_CLAIM_FUNDS)
+      expect(fundsOperationEvent.args.initiator).to.equal(creator1.address)
+      expect(fundsOperationEvent.args.campaignId).to.equal(
+        await campaign.campaignId()
+      )
+      expect(fundsOperationEvent.args.campaignAddress).to.equal(campaignAddress)
 
+      // Check FundsClaimed event
+      const fundsClaimedEvents = await campaignEventCollector.queryFilter(
+        campaignEventCollector.filters.FundsClaimed()
+      )
+      const fundsClaimedEvent =
+        fundsClaimedEvents[fundsClaimedEvents.length - 1]
+
+      expect(fundsClaimedEvent.args.initiator).to.equal(creator1.address)
+      expect(fundsClaimedEvent.args.amount).to.be.closeTo(aTokenBalance, 10)
+      expect(fundsClaimedEvent.args.campaignId).to.equal(
+        await campaign.campaignId()
+      )
+      expect(fundsClaimedEvent.args.campaignAddress).to.equal(campaignAddress)
+
+      // Verify balances
       expect(
         await defiIntegrationManager.aaveBalances(
           await usdc.getAddress(),
@@ -511,6 +520,7 @@ describe('Base Mainnet Integration Tests', function () {
         await usdc.balanceOf(await feeManager.platformTreasury())
       ).to.be.closeTo(platformShare, 10)
 
+      // Verify error cases
       await expect(campaign.connect(creator1).claimFunds())
         .to.be.revertedWithCustomError(campaign, 'CampaignError')
         .withArgs(
@@ -539,7 +549,8 @@ describe('Base Mainnet Integration Tests', function () {
         contributor2,
         defiIntegrationManager,
         IERC20ABI,
-        feeManager
+        feeManager,
+        campaignEventCollector
       } = await loadFixture(deployPlatformFixture)
 
       const usdcDecimals = await usdc.decimals()
@@ -610,7 +621,7 @@ describe('Base Mainnet Integration Tests', function () {
 
       await network.provider.send('evm_increaseTime', [
         60 * 60 * 24 * (CAMPAIGN_DURATION + 1)
-      ]) // 30 days
+      ]) // Fast forward time
 
       await network.provider.send('evm_mine')
 
@@ -620,40 +631,58 @@ describe('Base Mainnet Integration Tests', function () {
         await usdc.getAddress()
       )
 
-      let aToken: IERC20Metadata
-
-      aToken = (await ethers.getContractAt(
+      let aToken = (await ethers.getContractAt(
         IERC20ABI,
         aTokenAddress
       )) as unknown as IERC20Metadata
 
       const aTokenBalance = await aToken.balanceOf(campaignAddress)
 
-      const claimFundsTx = await campaign.connect(creator1).claimFunds()
-      const claimFundsReceipt = await claimFundsTx.wait()
-      if (!claimFundsReceipt) throw new Error('Transaction failed')
+      // Get event count before claim to identify new events
+      const initialFundsOpEvents = await campaignEventCollector.queryFilter(
+        campaignEventCollector.filters.FundsOperation()
+      )
+      const initialFundsClaimedEvents =
+        await campaignEventCollector.queryFilter(
+          campaignEventCollector.filters.FundsClaimed()
+        )
 
-      const claimFundsEvent = claimFundsReceipt.logs.find(log => {
-        try {
-          const parsed = campaign.interface.parseLog(log)
-          return parsed && parsed.name === 'FundsOperation'
-        } catch {
-          return false
-        }
-      })
+      // Claim funds
+      await campaign.connect(creator1).claimFunds()
 
-      if (!claimFundsEvent) throw new Error('Event failed')
+      // Check FundsOperation event from event collector
+      const fundsOperationEvents = await campaignEventCollector.queryFilter(
+        campaignEventCollector.filters.FundsOperation()
+      )
+      const fundsOperationEvent =
+        fundsOperationEvents[fundsOperationEvents.length - 1]
 
-      const parsedClaimFundsEvent = campaign.interface.parseLog(claimFundsEvent)
-      if (!parsedClaimFundsEvent) throw new Error('Event failed')
-
-      expect(parsedClaimFundsEvent.args[0]).to.equal(
+      expect(fundsOperationEvent.args.token).to.equal(
         ethers.getAddress(await usdc.getAddress())
       )
-      expect(parsedClaimFundsEvent.args[1]).to.be.closeTo(aTokenBalance, 10)
-      expect(parsedClaimFundsEvent.args[2]).to.equal(OP_CLAIM_FUNDS)
-      expect(parsedClaimFundsEvent.args[3]).to.equal(creator1.address)
+      expect(fundsOperationEvent.args.amount).to.be.closeTo(aTokenBalance, 10)
+      expect(fundsOperationEvent.args.opType).to.equal(OP_CLAIM_FUNDS)
+      expect(fundsOperationEvent.args.initiator).to.equal(creator1.address)
+      expect(fundsOperationEvent.args.campaignId).to.equal(
+        await campaign.campaignId()
+      )
+      expect(fundsOperationEvent.args.campaignAddress).to.equal(campaignAddress)
 
+      // Check FundsClaimed event
+      const fundsClaimedEvents = await campaignEventCollector.queryFilter(
+        campaignEventCollector.filters.FundsClaimed()
+      )
+      const fundsClaimedEvent =
+        fundsClaimedEvents[fundsClaimedEvents.length - 1]
+
+      expect(fundsClaimedEvent.args.initiator).to.equal(creator1.address)
+      expect(fundsClaimedEvent.args.amount).to.be.closeTo(aTokenBalance, 10)
+      expect(fundsClaimedEvent.args.campaignId).to.equal(
+        await campaign.campaignId()
+      )
+      expect(fundsClaimedEvent.args.campaignAddress).to.equal(campaignAddress)
+
+      // Verify balances
       expect(
         await defiIntegrationManager.aaveBalances(
           await usdc.getAddress(),
@@ -664,13 +693,12 @@ describe('Base Mainnet Integration Tests', function () {
       const forRefunds = await campaign.totalAmountRaised()
 
       expect(await usdc.balanceOf(creator1.address)).to.equal(0)
-
       expect(await usdc.balanceOf(campaignAddress)).to.equal(forRefunds)
-
       expect(
         await usdc.balanceOf(await feeManager.platformTreasury())
       ).to.be.closeTo(aTokenBalance - forRefunds, 10)
 
+      // Verify error case
       await expect(campaign.connect(creator1).claimFunds())
         .to.be.revertedWithCustomError(campaign, 'CampaignError')
         .withArgs(
@@ -690,7 +718,8 @@ describe('Base Mainnet Integration Tests', function () {
         contributor2,
         defiIntegrationManager,
         IERC20ABI,
-        feeManager
+        feeManager,
+        campaignEventCollector
       } = await loadFixture(deployPlatformFixture)
 
       const usdcDecimals = await usdc.decimals()
@@ -750,7 +779,7 @@ describe('Base Mainnet Integration Tests', function () {
 
       await network.provider.send('evm_increaseTime', [
         60 * 60 * 24 * (CAMPAIGN_DURATION + 1)
-      ]) // 30 days
+      ]) // Fast forward time
 
       await network.provider.send('evm_mine')
 
@@ -758,9 +787,7 @@ describe('Base Mainnet Integration Tests', function () {
         await usdc.getAddress()
       )
 
-      let aToken: IERC20Metadata
-
-      aToken = (await ethers.getContractAt(
+      let aToken = (await ethers.getContractAt(
         IERC20ABI,
         aTokenAddress
       )) as unknown as IERC20Metadata
@@ -790,69 +817,59 @@ describe('Base Mainnet Integration Tests', function () {
         contributor2.address
       )
 
-      const refund1Tx = await campaign.connect(contributor1).requestRefund()
-      const refund1Receipt = await refund1Tx.wait()
-      if (!refund1Receipt) throw new Error('Transaction failed')
+      // Clear previous events or get current count
+      const initialRefundEvents = await campaignEventCollector.queryFilter(
+        campaignEventCollector.filters.RefundIssued()
+      )
 
-      const refundEvent1 = refund1Receipt.logs.find(log => {
-        try {
-          const parsed = campaign.interface.parseLog(log)
-          return parsed && parsed.name === 'RefundIssued'
-        } catch {
-          return false
-        }
-      })
+      // Request first refund
+      await campaign.connect(contributor1).requestRefund()
 
-      if (!refundEvent1) throw new Error('RefundIssued event not found')
+      // Check RefundIssued event from event collector
+      const refundEvents1 = await campaignEventCollector.queryFilter(
+        campaignEventCollector.filters.RefundIssued()
+      )
+      const refundEvent1 = refundEvents1[refundEvents1.length - 1]
 
-      const parsedRefundEvent1 = campaign.interface.parseLog(refundEvent1)
-      if (!parsedRefundEvent1) throw new Error('RefundIssued event failed')
+      expect(refundEvent1.args.contributor).to.equal(contributor1.address)
+      expect(refundEvent1.args.amount).to.equal(contributor1Contribution)
+      expect(refundEvent1.args.campaignId).to.equal(await campaign.campaignId())
+      expect(refundEvent1.args.campaignAddress).to.equal(campaignAddress)
 
-      expect(parsedRefundEvent1.args[0]).to.equal(contributor1.address)
-      expect(parsedRefundEvent1.args[1]).to.equal(contributor1Contribution)
-      expect(parsedRefundEvent1.args[2]).to.equal(await campaign.campaignId())
-
+      // Verify state changes
       expect(await campaign.hasBeenRefunded(contributor1.address)).to.be.true
       expect(await usdc.balanceOf(contributor1.address)).to.be.closeTo(
         contributor1Contribution + originalContributor1USDCBalance,
         5
       )
-
       expect(await usdc.balanceOf(campaignAddress)).to.be.closeTo(
         forRefunds - contributor1Contribution,
         5
       )
 
-      const refund2Tx = await campaign.connect(contributor2).requestRefund()
-      const refund2Receipt = await refund2Tx.wait()
-      if (!refund2Receipt) throw new Error('Transaction failed')
+      // Request second refund
+      await campaign.connect(contributor2).requestRefund()
 
-      const refundEvent2 = refund2Receipt.logs.find(log => {
-        try {
-          const parsed = campaign.interface.parseLog(log)
-          return parsed && parsed.name === 'RefundIssued'
-        } catch {
-          return false
-        }
-      })
+      // Check RefundIssued event for second refund
+      const refundEvents2 = await campaignEventCollector.queryFilter(
+        campaignEventCollector.filters.RefundIssued()
+      )
+      const refundEvent2 = refundEvents2[refundEvents2.length - 1]
 
-      if (!refundEvent2) throw new Error('RefundIssued event not found')
+      expect(refundEvent2.args.contributor).to.equal(contributor2.address)
+      expect(refundEvent2.args.amount).to.equal(contributor2Contribution)
+      expect(refundEvent2.args.campaignId).to.equal(await campaign.campaignId())
+      expect(refundEvent2.args.campaignAddress).to.equal(campaignAddress)
 
-      const parsedRefundEvent2 = campaign.interface.parseLog(refundEvent2)
-      if (!parsedRefundEvent2) throw new Error('RefundIssued event failed')
-
-      expect(parsedRefundEvent2.args[0]).to.equal(contributor2.address)
-      expect(parsedRefundEvent2.args[1]).to.equal(contributor2Contribution)
-      expect(parsedRefundEvent1.args[2]).to.equal(await campaign.campaignId())
-
-      expect(await campaign.hasBeenRefunded(contributor1.address)).to.be.true
+      // Verify second refund state changes
+      expect(await campaign.hasBeenRefunded(contributor2.address)).to.be.true
       expect(await usdc.balanceOf(contributor2.address)).to.be.closeTo(
         contributor2Contribution + originalContributor2USDCBalance,
         5
       )
-
       expect(await usdc.balanceOf(campaignAddress)).to.equal(0)
 
+      // Verify error cases
       await expect(campaign.connect(contributor1).requestRefund())
         .to.be.revertedWithCustomError(campaign, 'CampaignError')
         .withArgs(
@@ -873,8 +890,13 @@ describe('Base Mainnet Integration Tests', function () {
     })
 
     it('Should emit status change event when campaign becomes successful', async function () {
-      const { usdc, campaignContractFactory, creator1, contributor1 } =
-        await loadFixture(deployPlatformFixture)
+      const {
+        usdc,
+        campaignContractFactory,
+        creator1,
+        contributor1,
+        campaignEventCollector
+      } = await loadFixture(deployPlatformFixture)
 
       const usdcDecimals = await usdc.decimals()
       const CAMPAIGN_GOAL = ethers.parseUnits('500', usdcDecimals)
@@ -886,8 +908,8 @@ describe('Base Mainnet Integration Tests', function () {
         .deploy(await usdc.getAddress(), CAMPAIGN_GOAL, CAMPAIGN_DURATION)
 
       const receipt = await tx.wait()
-
       if (!receipt) throw new Error('Transaction failed')
+
       const event = receipt.logs.find(log => {
         try {
           const parsed = campaignContractFactory.interface.parseLog(log)
@@ -900,54 +922,56 @@ describe('Base Mainnet Integration Tests', function () {
       if (!event) throw new Error('Event failed')
 
       const parsedEvent = campaignContractFactory.interface.parseLog(event)
-
       if (!parsedEvent) throw new Error('Event failed')
+
       const campaignAddress = parsedEvent.args[1]
 
       const Campaign = await ethers.getContractFactory('Campaign')
       const campaign = Campaign.attach(campaignAddress) as unknown as Campaign
 
+      // Get current event count to ensure we check only new events
+      const initialStatusEvents = await campaignEventCollector.queryFilter(
+        campaignEventCollector.filters.CampaignStatusChanged()
+      )
+
       // Contribute enough to reach goal
       await usdc.connect(contributor1).approve(campaignAddress, CAMPAIGN_GOAL)
 
       // This contribution should trigger the status change event
-      const contributeTx = await campaign
-        .connect(contributor1)
-        .contribute(CAMPAIGN_GOAL)
-      const contributeReceipt = await contributeTx.wait()
+      await campaign.connect(contributor1).contribute(CAMPAIGN_GOAL)
 
-      if (!contributeReceipt) throw new Error('Transaction failed')
+      // Check for the CampaignStatusChanged event in the event collector
+      const statusEvents = await campaignEventCollector.queryFilter(
+        campaignEventCollector.filters.CampaignStatusChanged()
+      )
 
-      // Look for the CampaignStatusChanged event
-      const statusChangeEvent = contributeReceipt.logs.find(log => {
-        try {
-          const parsed = campaign.interface.parseLog(log)
-          return parsed && parsed.name === 'CampaignStatusChanged'
-        } catch {
-          return false
-        }
-      })
+      // Should have one new event
+      expect(statusEvents.length).to.be.greaterThan(initialStatusEvents.length)
 
-      if (!statusChangeEvent) throw new Error('Event failed')
-
-      expect(statusChangeEvent).to.not.be.undefined
-      const parsedStatusEvent = campaign.interface.parseLog(statusChangeEvent)
-
-      if (!parsedStatusEvent) throw new Error('Event failed')
+      // Get the latest event
+      const statusChangeEvent = statusEvents[statusEvents.length - 1]
 
       // Check event arguments
-      expect(parsedStatusEvent.args[0]).to.equal(1) // STATUS_ACTIVE
-      expect(parsedStatusEvent.args[1]).to.equal(2) // STATUS_COMPLETE
-      expect(parsedStatusEvent.args[2]).to.equal(1) // REASON_GOAL_REACHED
-      expect(parsedStatusEvent.args[3]).to.equal(await campaign.campaignId())
+      expect(statusChangeEvent.args.oldStatus).to.equal(1) // STATUS_ACTIVE
+      expect(statusChangeEvent.args.newStatus).to.equal(2) // STATUS_COMPLETE
+      expect(statusChangeEvent.args.reason).to.equal(1) // REASON_GOAL_REACHED
+      expect(statusChangeEvent.args.campaignId).to.equal(
+        await campaign.campaignId()
+      )
+      expect(statusChangeEvent.args.campaignAddress).to.equal(campaignAddress)
 
-      // Status should be updated
+      // Status should be updated in the campaign contract
       expect(await campaign.campaignStatus()).to.equal(2) // STATUS_COMPLETE
     })
 
     it('Should emit status change event when campaign ends without reaching goal', async function () {
-      const { usdc, campaignContractFactory, creator1, contributor1 } =
-        await loadFixture(deployPlatformFixture)
+      const {
+        usdc,
+        campaignContractFactory,
+        creator1,
+        contributor1,
+        campaignEventCollector
+      } = await loadFixture(deployPlatformFixture)
 
       const usdcDecimals = await usdc.decimals()
       const CAMPAIGN_GOAL = ethers.parseUnits('500', usdcDecimals)
@@ -959,8 +983,8 @@ describe('Base Mainnet Integration Tests', function () {
         .deploy(await usdc.getAddress(), CAMPAIGN_GOAL, CAMPAIGN_DURATION)
 
       const receipt = await tx.wait()
-
       if (!receipt) throw new Error('Transaction failed')
+
       const event = receipt.logs.find(log => {
         try {
           const parsed = campaignContractFactory.interface.parseLog(log)
@@ -973,8 +997,8 @@ describe('Base Mainnet Integration Tests', function () {
       if (!event) throw new Error('Event failed')
 
       const parsedEvent = campaignContractFactory.interface.parseLog(event)
-
       if (!parsedEvent) throw new Error('Event failed')
+
       const campaignAddress = parsedEvent.args[1]
 
       const Campaign = await ethers.getContractFactory('Campaign')
@@ -991,34 +1015,33 @@ describe('Base Mainnet Integration Tests', function () {
       ])
       await network.provider.send('evm_mine')
 
+      // Get current event count to ensure we check only new events
+      const initialStatusEvents = await campaignEventCollector.queryFilter(
+        campaignEventCollector.filters.CampaignStatusChanged()
+      )
+
       // Call claimFunds which should trigger status check
-      const claimTx = await campaign.connect(creator1).claimFunds()
-      const claimReceipt = await claimTx.wait()
+      await campaign.connect(creator1).claimFunds()
 
-      if (!claimReceipt) throw new Error('Transaction failed')
+      // Check for the CampaignStatusChanged event in the event collector
+      const statusEvents = await campaignEventCollector.queryFilter(
+        campaignEventCollector.filters.CampaignStatusChanged()
+      )
 
-      // Look for the CampaignStatusChanged event
-      const statusChangeEvent = claimReceipt.logs.find(log => {
-        try {
-          const parsed = campaign.interface.parseLog(log)
-          return parsed && parsed.name === 'CampaignStatusChanged'
-        } catch {
-          return false
-        }
-      })
+      // Should have one new event
+      expect(statusEvents.length).to.be.greaterThan(initialStatusEvents.length)
 
-      if (!statusChangeEvent) throw new Error('Event failed')
-
-      expect(statusChangeEvent).to.not.be.undefined
-      const parsedStatusEvent = campaign.interface.parseLog(statusChangeEvent)
-
-      if (!parsedStatusEvent) throw new Error('Event failed')
+      // Get the most recent event
+      const statusChangeEvent = statusEvents[statusEvents.length - 1]
 
       // Check event arguments
-      expect(parsedStatusEvent.args[0]).to.equal(1) // STATUS_ACTIVE
-      expect(parsedStatusEvent.args[1]).to.equal(2) // STATUS_COMPLETE
-      expect(parsedStatusEvent.args[2]).to.equal(2) // REASON_DEADLINE_PASSED
-      expect(parsedStatusEvent.args[3]).to.equal(await campaign.campaignId())
+      expect(statusChangeEvent.args.oldStatus).to.equal(1) // STATUS_ACTIVE
+      expect(statusChangeEvent.args.newStatus).to.equal(2) // STATUS_COMPLETE
+      expect(statusChangeEvent.args.reason).to.equal(2) // REASON_DEADLINE_PASSED
+      expect(statusChangeEvent.args.campaignId).to.equal(
+        await campaign.campaignId()
+      )
+      expect(statusChangeEvent.args.campaignAddress).to.equal(campaignAddress)
 
       // Status should be updated
       expect(await campaign.campaignStatus()).to.equal(2) // STATUS_COMPLETE
