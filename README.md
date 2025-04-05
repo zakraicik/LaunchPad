@@ -4,14 +4,17 @@ A decentralized fundraising solution that allows campaign creators to raise fund
 
 ## Overview
 
-This platform enables individuals to create fundraising campaigns for their projects with specific goals and duration. Funds contributed to campaigns are automatically deposited into DeFi yield-generating protocols (Aave), earning interest while the campaign is active. The platform takes a configurable fee from successful campaigns, while preserving security and transparency through a robust access control system and comprehensive event-driven state tracking.
+This platform enables individuals to create fundraising campaigns for their projects with specific goals and duration. Funds contributed to campaigns are automatically deposited into DeFi yield-generating protocols (Aave), earning interest while the campaign is active.
+
+**Fee-Free Campaigns:** Unlike traditional crowdfunding platforms that charge creators 3-5% of all funds raised, our platform uses DeFi yield to cover operational costs. When your campaign raises its target amount (e.g., 1000 USDC), the full amount goes to you. The platform only takes a portion of the additional yield generated during the campaign period, creating a true win-win scenario for creators and contributors while preserving security and transparency through a robust access control system and comprehensive event-driven state tracking.
 
 ## Key Features
 
 - **Create time-bound fundraising campaigns** with specific fundraising goals
+- **Zero platform fees on raised funds** - creators receive 100% of their target amount
 - **Automatic DeFi integration** to generate yield on contributed funds
 - **Multiple token support** with configurable minimum contribution amounts
-- **Fee sharing system** between platform and campaign creators
+- **Yield sharing model** that benefits both platform and campaign creators
 - **Role-based access control** with platform admin privileges
 - **Refund functionality** for unsuccessful campaigns
 - **Event-driven state tracking** for reliable off-chain indexing and status monitoring
@@ -49,7 +52,7 @@ This platform enables individuals to create fundraising campaigns for their proj
 7. After the campaign ends:
    - If successful (goal reached): Campaign creator can claim funds
    - If unsuccessful: Contributors can request refunds
-8. Platform takes a configurable percentage fee from all funds processed
+8. Platform takes only a portion of the generated yield, not the principal raised amount
 
 ## Technical Details
 
@@ -81,9 +84,11 @@ This platform enables individuals to create fundraising campaigns for their proj
 
 ### Fee Structure
 
-- Platform takes a configurable fee (default 1%, maximum 5%)
-- Fees are calculated and distributed by the FeeManager contract
-- Treasury address can be updated by platform administrators
+- **Zero Fees on Principal**: The creators receive 100% of the campaign target amount
+- **Yield-Based Revenue Model**: Platform only takes a portion of the DeFi yield generated during the campaign
+- **Smart Fee Distribution**: The FeeManager contract automatically calculates and distributes yield between creators and platform
+- **Configurable Parameters**: Treasury address and yield share ratios can be adjusted by platform administrators
+- **Sustainable Economics**: This model aligns platform incentives with campaign success - we only earn when your funds generate returns
 
 ### Token Support
 
