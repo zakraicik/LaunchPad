@@ -16,9 +16,9 @@ async function main () {
   const deployedAddresses = require('../deployed-addresses.json')
 
   // Campaign parameters
-  const tokenAddress = '0x0f2559677a6cf88b48bbfadde1757d4f302c8e23'
-  const fundingGoal = 1000
-  const durationDays = 30
+  const tokenAddress = '0x036cbd53842c5426634e7929541ec2318f3dcf7e' //USDC
+  const fundingGoal = 2
+  const durationDays = 1
 
   try {
     // Connect to the token contract

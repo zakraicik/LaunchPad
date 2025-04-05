@@ -1,32 +1,33 @@
 # DeFi Crowdfunding Platform Events Table
 
-| Contract                    | Event Name                      | Operation Code                  | Triggered ✅ | Example file                   |
-| --------------------------- | ------------------------------- | ------------------------------- | ------------ | ------------------------------ |
-| **Campaign**                | _No direct events_              | N/A                             |              |                                |
-| **CampaignContractFactory** | FactoryOperation                | OP_CAMPAIGN_CREATED (1)         | ✅           | deploy-campaign.ts             |
-| **CampaignEventCollector**  | CampaignEventCollectorOperation | OP_FACTORY_AUTHORIZED (1)       | ✅           | deploy-campaign.ts             |
-| **CampaignEventCollector**  | CampaignEventCollectorOperation | OP_FACTORY_DEAUTHORIZED (2)     |              |                                |
-| **CampaignEventCollector**  | CampaignEventCollectorOperation | OP_CAMPAIGN_AUTHORIZED (3)      | ✅           | deploy-campaign.ts             |
-| **CampaignEventCollector**  | CampaignEventCollectorOperation | OP_CAMPAIGN_DEAUTHORIZED (4)    |              |                                |
-| **CampaignEventCollector**  | Contribution                    | N/A                             |              |                                |
-| **CampaignEventCollector**  | RefundIssued                    | N/A                             |              |                                |
-| **CampaignEventCollector**  | FundsClaimed                    | N/A                             |              |                                |
-| **CampaignEventCollector**  | CampaignStatusChanged           | N/A                             |              | deploy-campaign.ts             |
-| **CampaignEventCollector**  | AdminOverrideSet                | N/A                             |              |                                |
-| **CampaignEventCollector**  | FundsOperation                  | OP_DEPOSIT (1)                  |              |                                |
-| **CampaignEventCollector**  | FundsOperation                  | OP_CLAIM_FUNDS (2)              |              |                                |
-| **DefiIntegrationManager**  | DefiOperation                   | OP_DEPOSITED (1)                |              |                                |
-| **DefiIntegrationManager**  | DefiOperation                   | OP_WITHDRAWN (2)                |              |                                |
-| **DefiIntegrationManager**  | ConfigUpdated                   | OP_CONFIG_UPDATED (3)           | ✅           | set-aave-pool.ts               |
-| **FeeManager**              | FeeManagerOperation             | OP_TREASURY_UPDATED (1)         | ✅           | update-treasury.ts             |
-| **FeeManager**              | FeeManagerOperation             | OP_SHARE_UPDATED (2)            | ✅           | update-fee-share.ts            |
-| **PlatformAdmin**           | PlatformAdminOperation          | OP_ADMIN_ADDED (1)              | ✅           | add-platform-admin.ts          |
-| **PlatformAdmin**           | PlatformAdminOperation          | OP_ADMIN_REMOVED (2)            | ✅           | remove-platform-admin.ts       |
-| **TokenRegistry**           | TokenRegistryOperation          | OP_TOKEN_ADDED (1)              | ✅           | add-token.ts                   |
-| **TokenRegistry**           | TokenRegistryOperation          | OP_TOKEN_REMOVED (2)            | ✅           | remove-token.ts                |
-| **TokenRegistry**           | TokenRegistryOperation          | OP_TOKEN_SUPPORT_DISABLED (3)   | ✅           | disable-token-support.ts       |
-| **TokenRegistry**           | TokenRegistryOperation          | OP_TOKEN_SUPPORT_ENABLED (4)    | ✅           | enable-token-support.ts        |
-| **TokenRegistry**           | TokenRegistryOperation          | OP_MIN_CONTRIBUTION_UPDATED (5) | ✅           | change-minimum-contribution.ts |
+| Contract                    | Event Name                      | Operation Code               | Triggered ✅                 | Example file                    |
+| --------------------------- | ------------------------------- | ---------------------------- | ---------------------------- | ------------------------------- |
+| **Campaign**                | _No direct events_              | N/A                          |                              |                                 |
+| **CampaignContractFactory** | FactoryOperation                | OP_CAMPAIGN_CREATED (1)      | ✅                           | deploy-campaign.ts              |
+| **CampaignEventCollector**  | CampaignEventCollectorOperation | OP_FACTORY_AUTHORIZED (1)    | ✅                           | authorize-campaign-factory.ts   |
+| **CampaignEventCollector**  | CampaignEventCollectorOperation | OP_FACTORY_DEAUTHORIZED (2)  | ✅                           | deauthorize-campaign-factory.ts |
+| **CampaignEventCollector**  | CampaignEventCollectorOperation | OP_CAMPAIGN_AUTHORIZED (3)   | ✅                           | deploy-campaign.ts              |
+| **CampaignEventCollector**  | CampaignEventCollectorOperation | OP_CAMPAIGN_DEAUTHORIZED (4) | ✅                           | deauthorize-campaign.ts         |
+| **CampaignEventCollector**  | Contribution                    | N/A                          | No AAVE reserves on test net |
+| **CampaignEventCollector**  | RefundIssued                    | N/A                          | No AAVE reserves on test net |
+| **CampaignEventCollector**  | FundsClaimed                    | N/A                          | No AAVE reserves on test net |
+| **CampaignEventCollector**  | CampaignStatusChanged           | N/A                          | ✅                           | deploy-campaign.ts              |
+| **CampaignEventCollector**  | AdminOverrideSet                | N/A                          | ✅                           | enable-admin-override.ts        |
+| **CampaignEventCollector**  | FundsOperation                  | OP_DEPOSIT (1)               | No AAVE reserves on test net |
+| **CampaignEventCollector**  | FundsOperation                  | OP_CLAIM_FUNDS (2)           | No AAVE reserves on test net |
+| **DefiIntegrationManager**  | DefiOperation                   | OP_DEPOSITED (1)             | No AAVE reserves on test net |
+| **DefiIntegrationManager**  | DefiOperation                   | OP_WITHDRAWN (2)             | No AAVE reserves on test net |
+
+| **DefiIntegrationManager** | ConfigUpdated | OP_CONFIG_UPDATED (3) | ✅ | set-aave-pool.ts |
+| **FeeManager** | FeeManagerOperation | OP_TREASURY_UPDATED (1) | ✅ | update-treasury.ts |
+| **FeeManager** | FeeManagerOperation | OP_SHARE_UPDATED (2) | ✅ | update-fee-share.ts |
+| **PlatformAdmin** | PlatformAdminOperation | OP_ADMIN_ADDED (1) | ✅ | add-platform-admin.ts |
+| **PlatformAdmin** | PlatformAdminOperation | OP_ADMIN_REMOVED (2) | ✅ | remove-platform-admin.ts |
+| **TokenRegistry** | TokenRegistryOperation | OP_TOKEN_ADDED (1) | ✅ | add-token.ts |
+| **TokenRegistry** | TokenRegistryOperation | OP_TOKEN_REMOVED (2) | ✅ | remove-token.ts |
+| **TokenRegistry** | TokenRegistryOperation | OP_TOKEN_SUPPORT_DISABLED (3) | ✅ | disable-token-support.ts |
+| **TokenRegistry** | TokenRegistryOperation | OP_TOKEN_SUPPORT_ENABLED (4) | ✅ | enable-token-support.ts |
+| **TokenRegistry** | TokenRegistryOperation | OP_MIN_CONTRIBUTION_UPDATED (5) | ✅ | change-minimum-contribution.ts |
 
 ## Operation Type Codes
 
