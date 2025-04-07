@@ -17,7 +17,7 @@ This platform enables individuals to create fundraising campaigns for their proj
 - **Yield sharing model** that benefits both platform and campaign creators
 - **Role-based access control** with platform admin privileges
 - **Refund functionality** for unsuccessful campaigns
-- **Event-driven state tracking** for reliable off-chain indexing and status monitoring
+- **Event-driven state tracking** for reliable off-chain indexing and status monitoring powered by Alchemy
 - **Comprehensive campaign lifecycle management** with explicit status transitions
 - **Centralized event collection** for better tracking and analytics
 
