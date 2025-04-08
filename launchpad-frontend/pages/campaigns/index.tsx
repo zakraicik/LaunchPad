@@ -1,7 +1,12 @@
 import { useState } from 'react'
-import { MagnifyingGlassIcon, FunnelIcon } from '@heroicons/react/24/outline'
+import {
+  MagnifyingGlassIcon,
+  FunnelIcon,
+  RocketLaunchIcon
+} from '@heroicons/react/24/outline'
 import CampaignCard from '../../components/campaigns/CampaignCard'
 import CampaignFilters from '../../components/campaigns/CampaignFilters'
+import CreateCampaignModal from '../../components/campaigns/CreateCampaignModal'
 
 interface Campaign {
   id: number
@@ -164,6 +169,7 @@ export default function CampaignsDiscovery () {
   const [selectedCategory, setSelectedCategory] = useState('all')
   const [sortBy, setSortBy] = useState('newest')
   const [showFilters, setShowFilters] = useState(false)
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
 
   const handleCategoryChange = (category: string) => {
     setSelectedCategory(category)
@@ -199,13 +205,16 @@ export default function CampaignsDiscovery () {
 
   return (
     <div className='min-h-screen bg-gray-50 py-8'>
-      <div className='container mx-auto px-4'>
-        {/* Header */}
-        <div className='mb-8'>
-          <h1 className='text-3xl font-bold mb-2'>Discover Campaigns</h1>
-          <p className='text-gray-600'>
-            Find and support campaigns that align with your values
-          </p>
+      <div className='container mx-auto px-4 py-8'>
+        <div className='flex justify-between items-center mb-8'>
+          <h1 className='text-3xl font-bold'>Discover Campaigns</h1>
+          <button
+            onClick={() => setIsCreateModalOpen(true)}
+            className='inline-flex items-center px-4 py-2 bg-green-600 text-white hover:bg-green-700 rounded-lg font-medium transition-colors'
+          >
+            <RocketLaunchIcon className='w-5 h-5 mr-2' />
+            Create Campaign
+          </button>
         </div>
 
         {/* Search and Filter Bar */}
@@ -259,6 +268,12 @@ export default function CampaignsDiscovery () {
             </p>
           </div>
         )}
+
+        {/* Create Campaign Modal */}
+        <CreateCampaignModal
+          isOpen={isCreateModalOpen}
+          onClose={() => setIsCreateModalOpen(false)}
+        />
       </div>
     </div>
   )

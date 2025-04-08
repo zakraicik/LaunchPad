@@ -3,8 +3,13 @@ import CampaignCategories from '../components/home/CampaignCategories'
 import Statistics from '../components/home/Statistics'
 import HowItWorks from '../components/home/HowItWorks'
 import Link from 'next/link'
+import { RocketLaunchIcon } from '@heroicons/react/24/outline'
+import { useState } from 'react'
+import CreateCampaignModal from '../components/campaigns/CreateCampaignModal'
 
 export default function Home () {
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
+
   return (
     <main className='min-h-screen bg-white'>
       {/* Hero Section */}
@@ -18,12 +23,21 @@ export default function Home () {
               Support meaningful causes while generating sustainable yields.
               Your contribution keeps on giving.
             </p>
-            <Link
-              href='/campaigns'
-              className='inline-flex items-center px-6 py-3 bg-blue-600 text-white hover:bg-blue-700 rounded-lg font-medium transition-colors'
-            >
-              Discover Campaigns
-            </Link>
+            <div className='flex justify-center gap-4'>
+              <Link
+                href='/campaigns'
+                className='inline-flex items-center px-6 py-3 bg-blue-600 text-white hover:bg-blue-700 rounded-lg font-medium transition-colors'
+              >
+                Discover Campaigns
+              </Link>
+              <button
+                onClick={() => setIsCreateModalOpen(true)}
+                className='inline-flex items-center px-6 py-3 bg-green-600 text-white hover:bg-green-700 rounded-lg font-medium transition-colors'
+              >
+                <RocketLaunchIcon className='w-5 h-5 mr-2' />
+                Create Campaign
+              </button>
+            </div>
           </div>
         </div>
       </section>
@@ -39,6 +53,12 @@ export default function Home () {
 
       {/* How It Works */}
       <HowItWorks />
+
+      {/* Create Campaign Modal */}
+      <CreateCampaignModal
+        isOpen={isCreateModalOpen}
+        onClose={() => setIsCreateModalOpen(false)}
+      />
     </main>
   )
 }
