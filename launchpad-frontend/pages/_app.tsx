@@ -7,6 +7,7 @@ import { config } from '../config/web3'
 import '../styles/globals.css'
 import Layout from '../components/Layout'
 import { useState } from 'react'
+import { Toaster } from 'react-hot-toast'
 
 export default function App ({ Component, pageProps }: AppProps) {
   const [queryClient] = useState(() => new QueryClient())
@@ -15,6 +16,7 @@ export default function App ({ Component, pageProps }: AppProps) {
     <WagmiProvider config={config}>
       <QueryClientProvider client={queryClient}>
         <RainbowKitProvider>
+          <Toaster position='top-right' />
           <Layout>
             <Component {...pageProps} />
           </Layout>

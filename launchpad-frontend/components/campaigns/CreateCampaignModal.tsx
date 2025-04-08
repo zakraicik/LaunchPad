@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { XMarkIcon } from '@heroicons/react/24/outline'
 import TokenSelector from '../TokenSelector'
+import { useCampaignFactory } from '../../hooks/useCampaignFactory'
+import { toast } from 'react-hot-toast'
 
 interface CreateCampaignModalProps {
   isOpen: boolean
@@ -15,14 +17,53 @@ export default function CreateCampaignModal ({
   const [description, setDescription] = useState('')
   const [targetAmount, setTargetAmount] = useState('')
   const [selectedToken, setSelectedToken] = useState('')
+  const [duration, setDuration] = useState('')
+  const [imagePreview, setImagePreview] = useState<string | null>(null)
+  const { createCampaign, isLoading, error } = useCampaignFactory()
 
   if (!isOpen) return null
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) {
+      const reader = new FileReader()
+      reader.onloadend = () => {
+        setImagePreview(reader.result as string)
+      }
+      reader.readAsDataURL(file)
+    }
+  }
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    // TODO: Implement campaign creation logic
-    console.log({ title, description, targetAmount, selectedToken })
-    onClose()
+
+    if (!selectedToken) {
+      toast.error('Please select a token')
+      return
+    }
+
+    const toastId = toast.loading('Creating campaign...')
+
+    try {
+      const txHash = await createCampaign(
+        title,
+        description,
+        targetAmount,
+        selectedToken,
+        duration
+      )
+
+      toast.success('Campaign created successfully!', {
+        id: toastId
+      })
+      console.log('Transaction hash:', txHash)
+      onClose()
+    } catch (err) {
+      console.error('Error creating campaign:', err)
+      toast.error(error || 'Failed to create campaign', {
+        id: toastId
+      })
+    }
   }
 
   return (
@@ -33,6 +74,7 @@ export default function CreateCampaignModal ({
           <button
             onClick={onClose}
             className='text-gray-500 hover:text-gray-700'
+            disabled={isLoading}
           >
             <XMarkIcon className='h-6 w-6' />
           </button>
@@ -53,6 +95,7 @@ export default function CreateCampaignModal ({
               onChange={e => setTitle(e.target.value)}
               className='mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500'
               required
+              disabled={isLoading}
             />
           </div>
 
@@ -70,6 +113,7 @@ export default function CreateCampaignModal ({
               rows={4}
               className='mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500'
               required
+              disabled={isLoading}
             />
           </div>
 
@@ -88,12 +132,101 @@ export default function CreateCampaignModal ({
                 onChange={e => setTargetAmount(e.target.value)}
                 className='block w-full rounded-l-md border-gray-300 focus:border-blue-500 focus:ring-blue-500'
                 required
+                disabled={isLoading}
               />
               <TokenSelector
                 selectedToken={selectedToken}
                 onTokenSelect={setSelectedToken}
                 className='rounded-r-md'
+                disabled={isLoading}
               />
+            </div>
+          </div>
+
+          <div>
+            <label
+              htmlFor='duration'
+              className='block text-sm font-medium text-gray-700'
+            >
+              Campaign Duration (days)
+            </label>
+            <input
+              type='number'
+              id='duration'
+              value={duration}
+              onChange={e => setDuration(e.target.value)}
+              min='1'
+              className='mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500'
+              required
+              disabled={isLoading}
+            />
+          </div>
+
+          <div>
+            <label
+              htmlFor='image'
+              className='block text-sm font-medium text-gray-700'
+            >
+              Campaign Image
+            </label>
+            <div className='mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-md'>
+              <div className='space-y-1 text-center'>
+                {imagePreview ? (
+                  <div className='relative'>
+                    <img
+                      src={imagePreview}
+                      alt='Preview'
+                      className='max-h-48 mx-auto rounded-md'
+                    />
+                    <button
+                      type='button'
+                      onClick={() => setImagePreview(null)}
+                      className='absolute top-0 right-0 p-1 bg-red-500 text-white rounded-full'
+                      disabled={isLoading}
+                    >
+                      <XMarkIcon className='h-4 w-4' />
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    <svg
+                      className='mx-auto h-12 w-12 text-gray-400'
+                      stroke='currentColor'
+                      fill='none'
+                      viewBox='0 0 48 48'
+                      aria-hidden='true'
+                    >
+                      <path
+                        d='M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02'
+                        strokeWidth={2}
+                        strokeLinecap='round'
+                        strokeLinejoin='round'
+                      />
+                    </svg>
+                    <div className='flex text-sm text-gray-600'>
+                      <label
+                        htmlFor='image-upload'
+                        className='relative cursor-pointer bg-white rounded-md font-medium text-blue-600 hover:text-blue-500 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-blue-500'
+                      >
+                        <span>Upload an image</span>
+                        <input
+                          id='image-upload'
+                          name='image-upload'
+                          type='file'
+                          className='sr-only'
+                          accept='image/*'
+                          onChange={handleImageChange}
+                          disabled={isLoading}
+                        />
+                      </label>
+                      <p className='pl-1'>or drag and drop</p>
+                    </div>
+                    <p className='text-xs text-gray-500'>
+                      PNG, JPG, GIF up to 10MB
+                    </p>
+                  </>
+                )}
+              </div>
             </div>
           </div>
 
@@ -102,14 +235,16 @@ export default function CreateCampaignModal ({
               type='button'
               onClick={onClose}
               className='px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50'
+              disabled={isLoading}
             >
               Cancel
             </button>
             <button
               type='submit'
-              className='px-4 py-2 bg-green-600 text-white rounded-md text-sm font-medium hover:bg-green-700'
+              className='px-4 py-2 bg-green-600 text-white rounded-md text-sm font-medium hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed'
+              disabled={isLoading}
             >
-              Create Campaign
+              {isLoading ? 'Creating...' : 'Create Campaign'}
             </button>
           </div>
         </form>
