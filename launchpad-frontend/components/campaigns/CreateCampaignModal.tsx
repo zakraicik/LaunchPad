@@ -3,6 +3,8 @@ import { XMarkIcon } from '@heroicons/react/24/outline'
 import TokenSelector from '../TokenSelector'
 import { useCampaignFactory } from '../../hooks/useCampaignFactory'
 import { toast } from 'react-hot-toast'
+import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage'
+import { db } from '../../utils/firebase'
 
 interface CreateCampaignModalProps {
   isOpen: boolean
@@ -18,6 +20,7 @@ export default function CreateCampaignModal ({
   const [targetAmount, setTargetAmount] = useState('')
   const [selectedToken, setSelectedToken] = useState('')
   const [duration, setDuration] = useState('')
+  const [imageFile, setImageFile] = useState<File | null>(null)
   const [imagePreview, setImagePreview] = useState<string | null>(null)
   const { createCampaign, isLoading, error } = useCampaignFactory()
 
@@ -26,12 +29,20 @@ export default function CreateCampaignModal ({
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (file) {
+      setImageFile(file)
       const reader = new FileReader()
       reader.onloadend = () => {
         setImagePreview(reader.result as string)
       }
       reader.readAsDataURL(file)
     }
+  }
+
+  const uploadImage = async (file: File): Promise<string> => {
+    const storage = getStorage()
+    const storageRef = ref(storage, `campaigns/${Date.now()}_${file.name}`)
+    await uploadBytes(storageRef, file)
+    return getDownloadURL(storageRef)
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -45,18 +56,27 @@ export default function CreateCampaignModal ({
     const toastId = toast.loading('Creating campaign...')
 
     try {
-      const txHash = await createCampaign(
+      let imageUrl: string | undefined
+      if (imageFile) {
+        toast.loading('Uploading image...', { id: toastId })
+        imageUrl = await uploadImage(imageFile)
+      }
+
+      toast.loading('Creating campaign...', { id: toastId })
+      const result = await createCampaign(
         title,
         description,
         targetAmount,
         selectedToken,
-        duration
+        duration,
+        imageUrl
       )
 
       toast.success('Campaign created successfully!', {
         id: toastId
       })
-      console.log('Transaction hash:', txHash)
+      console.log('Transaction hash:', result.txHash)
+      console.log('Campaign ID:', result.campaignId)
       onClose()
     } catch (err) {
       console.error('Error creating campaign:', err)
