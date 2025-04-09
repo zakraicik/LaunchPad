@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/router'
 import { useAccount } from 'wagmi'
 import CustomConnectButton from './ConnectButton'
+import AuthStatus from './auth/AuthStatus'
 import {
   WalletIcon,
   PlusCircleIcon,
@@ -80,6 +81,9 @@ export default function Navbar () {
   // Don't render wallet-dependent elements until client-side hydration is complete
   const shouldShowAccount = mounted && isConnected
   const shouldShowAdmin = mounted && isConnected && isAdmin(address)
+
+  // Don't show auth status until after hydration
+  const showAuthStatus = mounted
 
   return (
     <nav className='bg-white shadow-sm'>
@@ -174,7 +178,10 @@ export default function Navbar () {
 
           {/* Mobile menu button */}
           <div className='flex items-center space-x-4 md:hidden'>
-            <CustomConnectButton />
+            <div className='flex items-center gap-2'>
+              {showAuthStatus && <AuthStatus />}
+              <CustomConnectButton />
+            </div>
             <button
               onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
               className='inline-flex items-center justify-center p-2 rounded-md text-gray-600 hover:text-blue-600 hover:bg-blue-50 transition-colors'
@@ -189,7 +196,10 @@ export default function Navbar () {
 
           {/* Desktop Connect Button */}
           <div className='hidden md:block flex-shrink-0'>
-            <CustomConnectButton />
+            <div className='flex items-center gap-2'>
+              {showAuthStatus && <AuthStatus />}
+              <CustomConnectButton />
+            </div>
           </div>
         </div>
       </div>

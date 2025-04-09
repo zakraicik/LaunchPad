@@ -5,6 +5,8 @@ import { useCampaignFactory } from '../../hooks/useCampaignFactory'
 import { toast } from 'react-hot-toast'
 import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage'
 import { db } from '../../utils/firebase'
+import { useFirebaseAuth } from '../../hooks/useFirebaseAuth'
+import { useAccount } from 'wagmi'
 
 interface CreateCampaignModalProps {
   isOpen: boolean
@@ -23,6 +25,8 @@ export default function CreateCampaignModal ({
   const [imageFile, setImageFile] = useState<File | null>(null)
   const [imagePreview, setImagePreview] = useState<string | null>(null)
   const { createCampaign, isLoading, error } = useCampaignFactory()
+  const { user } = useFirebaseAuth()
+  const { address } = useAccount()
 
   if (!isOpen) return null
 
@@ -50,6 +54,11 @@ export default function CreateCampaignModal ({
 
     if (!selectedToken) {
       toast.error('Please select a token')
+      return
+    }
+
+    if (!user) {
+      toast.error('Please sign in with your wallet')
       return
     }
 
