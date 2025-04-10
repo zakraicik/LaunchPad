@@ -1,11 +1,63 @@
 rules_version = '2';
-
 service cloud.firestore {
   match /databases/{database}/documents {
-    match /tokens/{tokenId} {
+    // Users collection rules
+    match /users/{userId} {
+      // Allow reading user documents
       allow read: if true;
+      
+      // Only allow creation if the document matches the wallet address
+      allow create: if 
+        // Document ID must match the address field (case insensitive)
+        userId.lower() == request.resource.data.address.lower() &&
+        // Validate document structure
+        request.resource.data.keys().hasAll(['address', 'createdAt']) &&
+        request.resource.data.keys().hasOnly(['address', 'createdAt']) &&
+        request.resource.data.address is string;
+      
+      // Only allow updates by the authenticated user
+      allow update: if 
+        request.auth != null && 
+        request.auth.uid.lower() == userId.lower() &&
+        request.resource.data.keys().hasAll(['address', 'createdAt']) &&
+        request.resource.data.keys().hasOnly(['address', 'createdAt']) &&
+        request.resource.data.address is string;
+      
+      allow delete: if false;
+    }
+
+    // Campaigns collection rules
+    match /campaigns/{campaignId} {
+      // Anyone can read campaign data
+      allow read: if true;
+      
+      // Only authenticated users can create campaigns
+      // The owner field must match the authenticated user's UID
+      allow create: if 
+        request.auth != null && 
+        request.resource.data.owner == request.auth.uid;
+      
+      // Only the campaign owner can update their campaign
+      allow update: if 
+        request.auth != null && (
+          (resource.data.keys().hasAny(['owner']) && resource.data.owner == request.auth.uid) || 
+          (resource.data.keys().hasAny(['creator']) && resource.data.creator.lower() == request.resource.data.ownerAddress.lower())
+        );
+      
+      // No one can delete campaigns
+      allow delete: if false;
+    }
+    
+    // Tokens collection rules - necessary for your token lookups
+    match /tokens/{tokenId} {
+      // Allow reading token documents
+      allow read: if true;
+      
+      // Only admin can write tokens (handled through Firebase Admin SDK)
       allow write: if false;
     }
+    
+    // Default rule - deny all other access
     match /{document=**} {
       allow read, write: if false;
     }

@@ -117,7 +117,10 @@ export function useCampaignFactory () {
                 log.topics
               )
               console.log('Decoded event:', decoded)
-              return decoded.opType === OP_CAMPAIGN_CREATED
+
+              // Use array-style access with index 0 instead of property name
+              // And compare with BigInt for exact type matching
+              return decoded[0] === BigInt(OP_CAMPAIGN_CREATED)
             } catch (e) {
               console.error('Error decoding event:', e)
               return false
@@ -137,7 +140,7 @@ export function useCampaignFactory () {
         )
         console.log('Final decoded event:', decodedEvent)
 
-        const campaignId = decodedEvent.campaignId
+        const campaignId = decodedEvent[3]
         console.log('Extracted campaign ID:', campaignId)
 
         // Create or update the campaign document in Firebase
@@ -145,16 +148,13 @@ export function useCampaignFactory () {
         const campaignData = {
           title,
           description,
-          targetAmount: targetAmountInWei.toString(),
-          tokenAddress: selectedToken,
+          goalAmountSmallestUnits: targetAmountInWei.toString(),
+          token: selectedToken,
           duration: durationInDays,
           owner: user.uid, // Use Firebase auth UID instead of wallet address
           ownerAddress, // Store wallet address for reference
           imageUrl: imageUrl || null,
           createdAt: new Date().toISOString(),
-          status: 'active',
-          raisedAmount: '0',
-          contributors: [],
           networkId: network.chainId.toString()
         }
 
