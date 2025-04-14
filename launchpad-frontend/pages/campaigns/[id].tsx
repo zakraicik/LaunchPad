@@ -1,60 +1,109 @@
 import { useRouter } from 'next/router'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { ShareIcon } from '@heroicons/react/24/outline'
 import Contributors from '../../components/campaigns/Contributors'
 import { formatNumber } from '../../utils/format'
+import { doc, getDoc } from 'firebase/firestore'
+import { db } from '../../utils/firebase'
+import { formatUnits } from 'ethers'
+import { useTokens } from '../../hooks/useTokens'
+import { differenceInDays } from 'date-fns'
 
-// We'll move this to a proper data fetching solution later
-import { dummyCampaigns } from './index'
-
-// Helper function to calculate days left
-const getDaysLeft = (endTime: number): number => {
-  const now = Math.floor(Date.now() / 1000)
-  const secondsLeft = endTime - now
-  return Math.max(0, Math.floor(secondsLeft / (24 * 60 * 60)))
+interface Campaign {
+  id: string
+  title: string
+  description: string
+  goalAmountSmallestUnits: string
+  totalRaised?: string
+  token: string
+  statusText: string
+  statusReasonText?: string
+  createdAt: string
+  duration: string
+  contributors?: number
+  imageUrl?: string
+  category?: string
 }
-
-// Sample contributors data
-const sampleContributors = [
-  {
-    address: '0x1234567890abcdef1234567890abcdef12345678',
-    amount: 25000,
-    timestamp: '2 days ago',
-    isTopContributor: true
-  },
-  {
-    address: '0x2345678901abcdef2345678901abcdef23456789',
-    amount: 15000,
-    timestamp: '3 days ago',
-    isTopContributor: true
-  },
-  {
-    address: '0x3456789012abcdef3456789012abcdef34567890',
-    amount: 10000,
-    timestamp: '4 days ago',
-    isTopContributor: true
-  },
-  {
-    address: '0x4567890123abcdef4567890123abcdef45678901',
-    amount: 5000,
-    timestamp: '5 days ago',
-    isTopContributor: false
-  },
-  {
-    address: '0x5678901234abcdef5678901234abcdef56789012',
-    amount: 2500,
-    timestamp: '6 days ago',
-    isTopContributor: false
-  }
-]
 
 export default function CampaignDetail () {
   const router = useRouter()
   const { id } = router.query
   const [activeTab, setActiveTab] = useState('details')
+  const [campaign, setCampaign] = useState<Campaign | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
+  const { getTokenByAddress } = useTokens()
+  const [mounted, setMounted] = useState(false)
 
-  // Find campaign from dummy data (will be replaced with API call)
-  const campaign = dummyCampaigns.find(c => c.id === Number(id))
+  useEffect(() => {
+    setMounted(true)
+    return () => {
+      setCampaign(null)
+      setIsLoading(true)
+      setActiveTab('details')
+      setMounted(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (id) {
+      setCampaign(null)
+      setIsLoading(true)
+      setActiveTab('details')
+    }
+  }, [id])
+
+  const fetchCampaign = async (campaignId: string) => {
+    if (!campaignId) return
+
+    try {
+      setIsLoading(true)
+      const campaignRef = doc(db, 'campaigns', campaignId)
+      const campaignSnap = await getDoc(campaignRef)
+
+      if (campaignSnap.exists()) {
+        setCampaign({
+          id: campaignSnap.id,
+          ...campaignSnap.data()
+        } as Campaign)
+      } else {
+        setCampaign(null)
+      }
+    } catch (error) {
+      console.error('Error fetching campaign:', error)
+      setCampaign(null)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    if (!mounted || !router.isReady) return
+
+    const currentId = router.query.id as string
+    if (currentId) {
+      fetchCampaign(currentId)
+    }
+  }, [router.isReady, router.query.id, mounted])
+
+  if (!mounted || !router.isReady) {
+    return (
+      <div className='min-h-screen bg-gray-50 py-8'>
+        <div className='container mx-auto px-4'>
+          <div className='text-center'>Loading...</div>
+        </div>
+      </div>
+    )
+  }
+
+  if (isLoading) {
+    return (
+      <div className='min-h-screen bg-gray-50 py-8'>
+        <div className='container mx-auto px-4'>
+          <div className='text-center'>Loading campaign...</div>
+        </div>
+      </div>
+    )
+  }
 
   if (!campaign) {
     return (
@@ -66,25 +115,72 @@ export default function CampaignDetail () {
     )
   }
 
-  const progress = (campaign.raised / campaign.target) * 100
-  const daysLeft = getDaysLeft(campaign.endTime)
+  const token = getTokenByAddress(campaign.token)
+
+  const formatAmount = (amount: string | undefined): string => {
+    if (!amount || !token) return '0'
+    try {
+      return formatUnits(amount, token.decimals)
+    } catch (error) {
+      console.error('Error formatting amount:', error)
+      return '0'
+    }
+  }
+
+  const calculateProgress = (): number => {
+    if (!campaign.totalRaised || !token) return 0
+    try {
+      const raisedAmount = parseFloat(
+        formatUnits(campaign.totalRaised, token.decimals)
+      )
+      const goalAmount = parseFloat(
+        formatUnits(campaign.goalAmountSmallestUnits, token.decimals)
+      )
+      return (raisedAmount / goalAmount) * 100
+    } catch (error) {
+      console.error('Error calculating progress:', error)
+      return 0
+    }
+  }
+
+  const calculateDaysRemaining = (): number => {
+    if (!campaign.createdAt || !campaign.duration) return 0
+    const endDate = new Date(
+      new Date(campaign.createdAt).getTime() +
+        parseInt(campaign.duration) * 24 * 60 * 60 * 1000
+    )
+    const daysRemaining = differenceInDays(endDate, new Date())
+    return Math.max(0, daysRemaining)
+  }
+
+  const progress = calculateProgress()
+  const daysLeft = calculateDaysRemaining()
+  const formattedRaised = formatAmount(campaign.totalRaised)
+  const formattedGoal = formatAmount(campaign.goalAmountSmallestUnits)
 
   return (
     <div className='min-h-screen bg-gray-50 py-8'>
       <div className='container mx-auto px-4'>
         {/* Campaign Header */}
         <div className='bg-white rounded-lg shadow-sm overflow-hidden mb-6'>
-          <div className='aspect-w-16 aspect-h-9 bg-gray-200'>
-            {/* Replace with actual Image component */}
-            <div className='w-full h-96 bg-gray-200'></div>
-          </div>
+          {campaign.imageUrl && (
+            <div className='aspect-w-16 aspect-h-9'>
+              <img
+                src={campaign.imageUrl}
+                alt={campaign.title}
+                className='w-full h-96 object-cover'
+              />
+            </div>
+          )}
 
           <div className='p-6'>
             <div className='flex justify-between items-start mb-4'>
               <div>
-                <span className='inline-block px-2 py-1 text-sm font-medium text-blue-600 bg-blue-50 rounded-full mb-2'>
-                  {campaign.category}
-                </span>
+                {campaign.category && (
+                  <span className='inline-block px-2 py-1 text-sm font-medium text-blue-600 bg-blue-50 rounded-full mb-2'>
+                    {campaign.category}
+                  </span>
+                )}
                 <h1 className='text-3xl font-bold'>{campaign.title}</h1>
               </div>
               <button
@@ -100,16 +196,16 @@ export default function CampaignDetail () {
               <div className='w-full bg-gray-200 rounded-full h-3'>
                 <div
                   className='bg-blue-600 h-3 rounded-full'
-                  style={{ width: `${progress}%` }}
+                  style={{ width: `${Math.min(100, progress)}%` }}
                 />
               </div>
               <div className='flex justify-between items-center mt-4'>
                 <div>
                   <p className='text-2xl font-bold'>
-                    {formatNumber(campaign.raised)} USDC
+                    {formattedRaised} {token?.symbol}
                   </p>
                   <p className='text-sm text-gray-600'>
-                    raised of {formatNumber(campaign.target)} USDC
+                    raised of {formattedGoal} {token?.symbol}
                   </p>
                 </div>
                 <div className='text-right'>
@@ -122,15 +218,23 @@ export default function CampaignDetail () {
             {/* Quick Stats */}
             <div className='grid grid-cols-3 gap-4 py-4 border-t border-b'>
               <div>
-                <p className='text-2xl font-bold'>{campaign.backers}</p>
+                <p className='text-2xl font-bold'>
+                  {campaign.contributors || 0}
+                </p>
                 <p className='text-sm text-gray-600'>contributors</p>
               </div>
               <div>
-                <p className='text-2xl font-bold'>{campaign.avgYield}%</p>
-                <p className='text-sm text-gray-600'>APY</p>
+                <p className='text-2xl font-bold'>
+                  {campaign.statusText}
+                  {campaign.statusReasonText &&
+                    ` (${campaign.statusReasonText})`}
+                </p>
+                <p className='text-sm text-gray-600'>Status</p>
               </div>
               <div>
-                <p className='text-2xl font-bold'>USDC</p>
+                <p className='text-2xl font-bold'>
+                  {token?.symbol || 'Loading...'}
+                </p>
                 <p className='text-sm text-gray-600'>target coin</p>
               </div>
             </div>
@@ -152,16 +256,6 @@ export default function CampaignDetail () {
                 Details
               </button>
               <button
-                onClick={() => setActiveTab('updates')}
-                className={`px-6 py-4 text-sm font-medium ${
-                  activeTab === 'updates'
-                    ? 'border-b-2 border-blue-600 text-blue-600'
-                    : 'text-gray-500 hover:text-gray-700'
-                }`}
-              >
-                Updates
-              </button>
-              <button
                 onClick={() => setActiveTab('contributors')}
                 className={`px-6 py-4 text-sm font-medium ${
                   activeTab === 'contributors'
@@ -171,16 +265,6 @@ export default function CampaignDetail () {
               >
                 Contributors
               </button>
-              <button
-                onClick={() => setActiveTab('faq')}
-                className={`px-6 py-4 text-sm font-medium ${
-                  activeTab === 'faq'
-                    ? 'border-b-2 border-blue-600 text-blue-600'
-                    : 'text-gray-500 hover:text-gray-700'
-                }`}
-              >
-                FAQ
-              </button>
             </nav>
           </div>
 
@@ -189,26 +273,19 @@ export default function CampaignDetail () {
             {activeTab === 'details' && (
               <div className='prose max-w-none'>
                 <p>{campaign.description}</p>
-                {/* We'll add more detailed content here */}
               </div>
             )}
 
-            {activeTab === 'updates' && (
+            {activeTab === 'contributors' && campaign.contributors ? (
               <div>
-                <p className='text-gray-600'>No updates yet</p>
+                <p className='text-gray-600'>
+                  This campaign has {campaign.contributors} contributor
+                  {campaign.contributors !== 1 ? 's' : ''}.
+                </p>
               </div>
-            )}
-
-            {activeTab === 'contributors' && (
-              <Contributors
-                contributors={sampleContributors}
-                totalContributors={campaign.backers}
-              />
-            )}
-
-            {activeTab === 'faq' && (
+            ) : (
               <div>
-                <p className='text-gray-600'>Loading FAQ...</p>
+                <p className='text-gray-600'>No contributors yet</p>
               </div>
             )}
           </div>
@@ -220,7 +297,7 @@ export default function CampaignDetail () {
           <div className='space-y-4'>
             <div>
               <label className='block text-sm font-medium text-gray-700 mb-1'>
-                Amount (USDC)
+                Amount ({token?.symbol})
               </label>
               <input
                 type='number'

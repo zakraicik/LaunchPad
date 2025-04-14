@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import {
   getAuth,
   signInWithCustomToken,
@@ -15,12 +15,22 @@ export function useFirebaseAuth () {
   const [user, setUser] = useState<User | null>(null)
   const { data: walletClient } = useWalletClient()
   const { address } = useAccount()
+  const mounted = useRef(false)
+
+  useEffect(() => {
+    mounted.current = true
+    return () => {
+      mounted.current = false
+    }
+  }, [])
 
   useEffect(() => {
     const auth = getAuth()
     const unsubscribe = onAuthStateChanged(auth, user => {
-      setUser(user)
-      setIsLoading(false)
+      if (mounted.current) {
+        setUser(user)
+        setIsLoading(false)
+      }
     })
 
     return () => unsubscribe()
@@ -29,14 +39,16 @@ export function useFirebaseAuth () {
   // Automatically sign in when both wallet address and client are available
   useEffect(() => {
     const autoSignIn = async () => {
-      if (address && walletClient && !user) {
+      if (address && walletClient && !user && mounted.current) {
         try {
           setIsLoading(true)
           await signInWithWallet()
         } catch (err) {
           console.error('Error during auto sign-in:', err)
         } finally {
-          setIsLoading(false)
+          if (mounted.current) {
+            setIsLoading(false)
+          }
         }
       }
     }

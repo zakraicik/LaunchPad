@@ -3,7 +3,6 @@ import Link from 'next/link'
 import { useRouter } from 'next/router'
 import { useAccount } from 'wagmi'
 import CustomConnectButton from './ConnectButton'
-import AuthStatus from './auth/AuthStatus'
 import {
   WalletIcon,
   PlusCircleIcon,
@@ -14,7 +13,8 @@ import {
   ChartBarIcon,
   DocumentTextIcon,
   Bars3Icon,
-  XMarkIcon
+  XMarkIcon,
+  RocketLaunchIcon
 } from '@heroicons/react/24/outline'
 import { isAdmin } from '../utils/admin'
 
@@ -33,8 +33,12 @@ export default function Navbar () {
   ]
 
   const accountNavigation = [
-    { name: 'Contributions', href: '/account', icon: WalletIcon },
-    { name: 'Campaigns', href: '/campaigns/manage', icon: PlusCircleIcon },
+    {
+      name: 'My Campaigns',
+      href: '/campaigns/my',
+      icon: RocketLaunchIcon
+    },
+    { name: 'Contributions', href: '/contributions', icon: WalletIcon },
     { name: 'Settings', href: '/settings', icon: Cog6ToothIcon }
   ]
 
@@ -81,9 +85,6 @@ export default function Navbar () {
   // Don't render wallet-dependent elements until client-side hydration is complete
   const shouldShowAccount = mounted && isConnected
   const shouldShowAdmin = mounted && isConnected && isAdmin(address)
-
-  // Don't show auth status until after hydration
-  const showAuthStatus = mounted
 
   return (
     <nav className='bg-white shadow-sm'>
@@ -179,7 +180,6 @@ export default function Navbar () {
           {/* Mobile menu button */}
           <div className='flex items-center space-x-4 md:hidden'>
             <div className='flex items-center gap-2'>
-              {showAuthStatus && <AuthStatus />}
               <CustomConnectButton />
             </div>
             <button
@@ -197,7 +197,6 @@ export default function Navbar () {
           {/* Desktop Connect Button */}
           <div className='hidden md:block flex-shrink-0'>
             <div className='flex items-center gap-2'>
-              {showAuthStatus && <AuthStatus />}
               <CustomConnectButton />
             </div>
           </div>

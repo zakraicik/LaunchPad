@@ -1,20 +1,11 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { Dialog } from '@headlessui/react'
 import { useCampaignFactory } from '../../hooks/useCampaignFactory'
 import { useTokens } from '../../hooks/useTokens'
 import { useAccount } from 'wagmi'
-import { formatEther } from 'ethers'
 import { useDropzone } from 'react-dropzone'
 import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage'
-import { db } from '../../utils/firebase'
-import {
-  doc,
-  setDoc,
-  DocumentData,
-  Firestore,
-  DocumentReference,
-  collection
-} from 'firebase/firestore'
+import toast from 'react-hot-toast'
 
 interface CreateCampaignModalProps {
   isOpen: boolean
@@ -34,6 +25,7 @@ export default function CreateCampaignModal ({
   isOpen,
   onClose
 }: CreateCampaignModalProps) {
+  const [mounted, setMounted] = useState(false)
   const { address } = useAccount()
   const { createCampaign } = useCampaignFactory()
   const { tokens, isLoading: isLoadingTokens } = useTokens()
@@ -62,6 +54,14 @@ export default function CreateCampaignModal ({
     }
   })
 
+  useEffect(() => {
+    setMounted(true)
+  }, [])
+
+  if (!mounted) {
+    return null
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError(null)
@@ -83,17 +83,20 @@ export default function CreateCampaignModal ({
       return
     }
 
+    const toastId = toast.loading('Creating your campaign...')
     setIsSubmitting(true)
 
     try {
       let imageUrl: string | undefined = undefined
       if (image) {
+        toast.loading('Uploading image...', { id: toastId })
         const storage = getStorage()
         const storageRef = ref(storage, `campaigns/${Date.now()}-${image.name}`)
         await uploadBytes(storageRef, image)
         imageUrl = await getDownloadURL(storageRef)
       }
 
+      toast.loading('Deploying campaign contract...', { id: toastId })
       const campaignId = await createCampaign(
         title,
         description,
@@ -104,32 +107,14 @@ export default function CreateCampaignModal ({
         category
       )
 
-      // Create a document in the campaigns collection
-      const campaignRef: DocumentReference<DocumentData> = doc(
-        db as Firestore,
-        'campaigns',
-        campaignId.campaignId
-      )
-      const campaignData: DocumentData = {
-        title,
-        description,
-        targetAmount,
-        tokenAddress: selectedToken,
-        duration,
-        imageUrl,
-        category,
-        owner: address,
-        status: 'active',
-        totalRaised: '0',
-        contributors: 0,
-        createdAt: new Date().toISOString()
-      }
-      await setDoc(campaignRef, campaignData)
-
+      toast.success('Campaign created successfully!', { id: toastId })
       onClose()
     } catch (err) {
       console.error('Error creating campaign:', err)
-      setError('Failed to create campaign. Please try again.')
+      const errorMessage =
+        err instanceof Error ? err.message : 'Failed to create campaign'
+      setError(errorMessage)
+      toast.error(errorMessage, { id: toastId })
     } finally {
       setIsSubmitting(false)
     }
@@ -145,12 +130,15 @@ export default function CreateCampaignModal ({
       <div className='fixed inset-0 bg-black/30' aria-hidden='true' />
 
       <div className='fixed inset-0 flex items-center justify-center p-4'>
-        <Dialog.Panel className='mx-auto max-w-2xl w-full bg-white rounded-xl shadow-lg'>
-          <Dialog.Title className='text-lg font-medium text-gray-900 p-6 border-b'>
+        <Dialog.Panel className='mx-auto max-w-2xl w-full bg-white rounded-xl shadow-lg flex flex-col max-h-[90vh]'>
+          <Dialog.Title className='text-lg font-medium text-gray-900 p-6 border-b bg-white rounded-t-xl'>
             Create New Campaign
           </Dialog.Title>
 
-          <form onSubmit={handleSubmit} className='p-6 space-y-6'>
+          <form
+            onSubmit={handleSubmit}
+            className='flex-1 overflow-y-auto p-6 space-y-6'
+          >
             {error && (
               <div className='bg-red-50 text-red-600 p-3 rounded-md text-sm'>
                 {error}
@@ -312,25 +300,25 @@ export default function CreateCampaignModal ({
                 )}
               </div>
             </div>
-
-            <div className='flex justify-end space-x-3 pt-4'>
-              <button
-                type='button'
-                onClick={onClose}
-                ref={cancelButtonRef}
-                className='px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500'
-              >
-                Cancel
-              </button>
-              <button
-                type='submit'
-                disabled={isSubmitting}
-                className='px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50'
-              >
-                {isSubmitting ? 'Creating...' : 'Create Campaign'}
-              </button>
-            </div>
           </form>
+
+          <div className='flex justify-end space-x-3 p-6 border-t bg-white rounded-b-xl'>
+            <button
+              type='button'
+              onClick={onClose}
+              className='px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 border border-gray-300 rounded-md'
+              ref={cancelButtonRef}
+            >
+              Cancel
+            </button>
+            <button
+              type='submit'
+              disabled={isSubmitting}
+              className='inline-flex justify-center px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 border border-transparent rounded-md disabled:opacity-50 disabled:cursor-not-allowed'
+            >
+              {isSubmitting ? 'Creating...' : 'Create Campaign'}
+            </button>
+          </div>
         </Dialog.Panel>
       </div>
     </Dialog>

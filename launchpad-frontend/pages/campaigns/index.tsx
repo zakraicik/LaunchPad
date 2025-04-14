@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import {
   MagnifyingGlassIcon,
   FunnelIcon,
@@ -165,11 +165,16 @@ export const dummyCampaigns: Campaign[] = [
 ]
 
 export default function CampaignsDiscovery () {
+  const [mounted, setMounted] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedCategory, setSelectedCategory] = useState('all')
   const [sortBy, setSortBy] = useState('newest')
   const [showFilters, setShowFilters] = useState(false)
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
+
+  useEffect(() => {
+    setMounted(true)
+  }, [])
 
   const handleCategoryChange = (category: string) => {
     setSelectedCategory(category)
@@ -270,10 +275,12 @@ export default function CampaignsDiscovery () {
         )}
 
         {/* Create Campaign Modal */}
-        <CreateCampaignModal
-          isOpen={isCreateModalOpen}
-          onClose={() => setIsCreateModalOpen(false)}
-        />
+        {mounted && (
+          <CreateCampaignModal
+            isOpen={isCreateModalOpen}
+            onClose={() => setIsCreateModalOpen(false)}
+          />
+        )}
       </div>
     </div>
   )

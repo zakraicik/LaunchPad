@@ -4,11 +4,16 @@ import Statistics from '../components/home/Statistics'
 import HowItWorks from '../components/home/HowItWorks'
 import Link from 'next/link'
 import { RocketLaunchIcon } from '@heroicons/react/24/outline'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import CreateCampaignModal from '../components/campaigns/CreateCampaignModal'
 
 export default function Home () {
+  const [mounted, setMounted] = useState(false)
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
+
+  useEffect(() => {
+    setMounted(true)
+  }, [])
 
   return (
     <main className='min-h-screen bg-white'>
@@ -55,10 +60,12 @@ export default function Home () {
       <HowItWorks />
 
       {/* Create Campaign Modal */}
-      <CreateCampaignModal
-        isOpen={isCreateModalOpen}
-        onClose={() => setIsCreateModalOpen(false)}
-      />
+      {mounted && (
+        <CreateCampaignModal
+          isOpen={isCreateModalOpen}
+          onClose={() => setIsCreateModalOpen(false)}
+        />
+      )}
     </main>
   )
 }
