@@ -10,23 +10,8 @@ import {
   Cog6ToothIcon
 } from '@heroicons/react/24/outline'
 import ProtectedRoute from '../../components/auth/ProtectedRoute'
-import CreateCampaignModal, {
-  CampaignFormData
-} from '../../components/campaigns/CreateCampaignModal'
-
-interface Campaign {
-  id: string
-  name: string
-  description: string
-  createdAt: string
-  status: 'draft' | 'active' | 'completed' | 'cancelled'
-  totalRaised: number
-  contributors: number
-  yieldGenerated: number
-  currentAPY: number
-  depositedAmount: number
-  availableYield: number
-}
+import CreateCampaignModal from '../../components/campaigns/CreateCampaignModal'
+import { useCampaigns } from '../../hooks/useCampaigns'
 
 interface DashboardStats {
   totalFundsRaised: number
@@ -43,47 +28,32 @@ export default function ManageCampaigns () {
     'overview' | 'campaigns' | 'yield' | 'settings'
   >('overview')
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
+  const { campaigns, isLoading: isLoadingCampaigns } = useCampaigns()
 
-  // Example campaigns data - replace with actual data fetching
-  const campaigns: Campaign[] = [
-    {
-      id: '1',
-      name: 'Ocean Cleanup Initiative',
-      description: 'Help us clean the oceans and protect marine life',
-      createdAt: '2024-03-15',
-      status: 'active',
-      totalRaised: 5000,
-      contributors: 12,
-      yieldGenerated: 150,
-      currentAPY: 12.5,
-      depositedAmount: 4000,
-      availableYield: 100
-    },
-    {
-      id: '2',
-      name: 'Renewable Energy Project',
-      description: 'Supporting clean energy transition',
-      createdAt: '2024-03-10',
-      status: 'draft',
-      totalRaised: 0,
-      contributors: 0,
-      yieldGenerated: 0,
-      currentAPY: 0,
-      depositedAmount: 0,
-      availableYield: 0
-    }
-  ]
-
-  // Example dashboard stats - replace with actual data
+  // Calculate dashboard stats from real campaign data
   const dashboardStats: DashboardStats = {
-    totalFundsRaised: 15000,
-    totalYieldGenerated: 450,
-    totalContributors: 45,
-    activeCampaigns: 3,
-    averageAPY: 12.8
+    totalFundsRaised: campaigns.reduce(
+      (sum, campaign) => sum + Number(campaign.totalRaised),
+      0
+    ),
+    totalYieldGenerated: campaigns.reduce(
+      (sum, campaign) => sum + Number(campaign.yieldGenerated),
+      0
+    ),
+    totalContributors: campaigns.reduce(
+      (sum, campaign) => sum + campaign.contributors,
+      0
+    ),
+    activeCampaigns: campaigns.filter(campaign => campaign.status === 'active')
+      .length,
+    averageAPY:
+      campaigns.length > 0
+        ? campaigns.reduce((sum, campaign) => sum + campaign.currentAPY, 0) /
+          campaigns.length
+        : 0
   }
 
-  const getStatusBadgeColor = (status: Campaign['status']) => {
+  const getStatusBadgeColor = (status: string) => {
     switch (status) {
       case 'draft':
         return 'bg-gray-100 text-gray-800'
@@ -93,10 +63,12 @@ export default function ManageCampaigns () {
         return 'bg-blue-100 text-blue-800'
       case 'cancelled':
         return 'bg-red-100 text-red-800'
+      default:
+        return 'bg-gray-100 text-gray-800'
     }
   }
 
-  const handleCreateCampaign = async (data: CampaignFormData) => {
+  const handleCreateCampaign = async (data: any) => {
     // TODO: Implement campaign creation logic
     console.log('Creating campaign with data:', data)
   }
@@ -162,7 +134,7 @@ export default function ManageCampaigns () {
             <div>
               <p className='text-sm text-gray-500'>Average APY</p>
               <p className='text-2xl font-bold text-yellow-600'>
-                {dashboardStats.averageAPY}%
+                {dashboardStats.averageAPY.toFixed(2)}%
               </p>
             </div>
             <ChartBarIcon className='w-8 h-8 text-yellow-500' />
@@ -177,35 +149,24 @@ export default function ManageCampaigns () {
             Recent Activity
           </h3>
           <div className='space-y-4'>
-            {/* Example activity items - replace with actual data */}
-            <div className='flex items-center space-x-4'>
-              <div className='flex-shrink-0'>
-                <div className='w-8 h-8 rounded-full bg-green-100 flex items-center justify-center'>
-                  <CurrencyDollarIcon className='w-4 h-4 text-green-600' />
+            {campaigns.slice(0, 2).map(campaign => (
+              <div key={campaign.id} className='flex items-center space-x-4'>
+                <div className='flex-shrink-0'>
+                  <div className='w-8 h-8 rounded-full bg-green-100 flex items-center justify-center'>
+                    <CurrencyDollarIcon className='w-4 h-4 text-green-600' />
+                  </div>
+                </div>
+                <div className='flex-1'>
+                  <p className='text-sm text-gray-900'>{campaign.title}</p>
+                  <p className='text-sm text-gray-500'>
+                    ${Number(campaign.totalRaised).toLocaleString()} raised
+                  </p>
+                </div>
+                <div className='text-sm text-gray-500'>
+                  {new Date(campaign.createdAt).toLocaleDateString()}
                 </div>
               </div>
-              <div className='flex-1'>
-                <p className='text-sm text-gray-900'>
-                  New contribution received
-                </p>
-                <p className='text-sm text-gray-500'>$500 from 0x123...abc</p>
-              </div>
-              <div className='text-sm text-gray-500'>2 hours ago</div>
-            </div>
-            <div className='flex items-center space-x-4'>
-              <div className='flex-shrink-0'>
-                <div className='w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center'>
-                  <ArrowTrendingUpIcon className='w-4 h-4 text-blue-600' />
-                </div>
-              </div>
-              <div className='flex-1'>
-                <p className='text-sm text-gray-900'>Yield generated</p>
-                <p className='text-sm text-gray-500'>
-                  $25.50 from Ocean Cleanup Initiative
-                </p>
-              </div>
-              <div className='text-sm text-gray-500'>5 hours ago</div>
-            </div>
+            ))}
           </div>
         </div>
       </div>
@@ -260,7 +221,7 @@ export default function ManageCampaigns () {
                 <td className='px-6 py-4 whitespace-nowrap text-sm text-gray-900'>
                   <div className='flex items-center'>
                     <div>
-                      <div className='font-medium'>{campaign.name}</div>
+                      <div className='font-medium'>{campaign.title}</div>
                       <div className='text-gray-500'>
                         Created{' '}
                         {new Date(campaign.createdAt).toLocaleDateString()}
@@ -279,13 +240,13 @@ export default function ManageCampaigns () {
                   </span>
                 </td>
                 <td className='px-6 py-4 whitespace-nowrap text-sm text-gray-500'>
-                  ${campaign.totalRaised.toLocaleString()}
+                  ${Number(campaign.totalRaised).toLocaleString()}
                 </td>
                 <td className='px-6 py-4 whitespace-nowrap text-sm text-gray-500'>
                   {campaign.contributors}
                 </td>
                 <td className='px-6 py-4 whitespace-nowrap text-sm text-gray-500'>
-                  ${campaign.yieldGenerated.toLocaleString()}
+                  ${Number(campaign.yieldGenerated).toLocaleString()}
                 </td>
                 <td className='px-6 py-4 whitespace-nowrap text-sm text-gray-500'>
                   <button
@@ -321,7 +282,7 @@ export default function ManageCampaigns () {
               <div className='flex justify-between items-start mb-4'>
                 <div>
                   <h3 className='text-lg font-medium text-gray-900'>
-                    {campaign.name}
+                    {campaign.title}
                   </h3>
                   <p className='text-sm text-gray-500'>
                     {campaign.description}
@@ -348,7 +309,7 @@ export default function ManageCampaigns () {
                         Total Raised
                       </span>
                       <span className='text-sm font-medium'>
-                        ${campaign.totalRaised.toLocaleString()}
+                        ${Number(campaign.totalRaised).toLocaleString()}
                       </span>
                     </div>
                     <div className='flex justify-between items-center'>
@@ -356,7 +317,7 @@ export default function ManageCampaigns () {
                         Deposited Amount
                       </span>
                       <span className='text-sm font-medium'>
-                        ${campaign.depositedAmount.toLocaleString()}
+                        ${Number(campaign.depositedAmount).toLocaleString()}
                       </span>
                     </div>
                     <div className='flex justify-between items-center'>
@@ -364,7 +325,7 @@ export default function ManageCampaigns () {
                         Available Yield
                       </span>
                       <span className='text-sm font-medium'>
-                        ${campaign.availableYield.toLocaleString()}
+                        ${Number(campaign.availableYield).toLocaleString()}
                       </span>
                     </div>
                     <div className='flex justify-between items-center'>
@@ -386,7 +347,7 @@ export default function ManageCampaigns () {
                       onClick={() => handleHarvestYield(campaign.id)}
                       disabled={
                         campaign.status !== 'active' ||
-                        campaign.availableYield === 0
+                        Number(campaign.availableYield) === 0
                       }
                     >
                       Harvest Yield
@@ -396,7 +357,8 @@ export default function ManageCampaigns () {
                       onClick={() => handleDepositToYield(campaign.id)}
                       disabled={
                         campaign.status !== 'active' ||
-                        campaign.totalRaised === campaign.depositedAmount
+                        Number(campaign.totalRaised) ===
+                          Number(campaign.depositedAmount)
                       }
                     >
                       Deposit to Yield Protocol
@@ -425,14 +387,17 @@ export default function ManageCampaigns () {
               <p className='text-2xl font-bold text-blue-600'>
                 $
                 {campaigns
-                  .reduce((sum, campaign) => sum + campaign.depositedAmount, 0)
+                  .reduce(
+                    (sum, campaign) => sum + Number(campaign.depositedAmount),
+                    0
+                  )
                   .toLocaleString()}
               </p>
             </div>
             <div className='bg-gray-50 rounded-lg p-4'>
               <p className='text-sm text-gray-500'>Average APY</p>
               <p className='text-2xl font-bold text-yellow-600'>
-                {dashboardStats.averageAPY}%
+                {dashboardStats.averageAPY.toFixed(2)}%
               </p>
             </div>
           </div>
@@ -606,7 +571,6 @@ export default function ManageCampaigns () {
         <CreateCampaignModal
           isOpen={isCreateModalOpen}
           onClose={() => setIsCreateModalOpen(false)}
-          onSubmit={handleCreateCampaign}
         />
       </div>
     </ProtectedRoute>

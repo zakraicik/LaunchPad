@@ -1,3 +1,5 @@
+import { useState } from 'react'
+
 interface CampaignFiltersProps {
   selectedCategory: string
   setSelectedCategory: (category: string) => void
@@ -5,72 +7,73 @@ interface CampaignFiltersProps {
   setSortBy: (sortBy: string) => void
 }
 
-const categories = [
-  { id: 'all', name: 'All Categories' },
-  { id: 'Environment', name: 'Environment' },
-  { id: 'Education', name: 'Education' },
-  { id: 'Healthcare', name: 'Healthcare' },
-  { id: 'Technology', name: 'Technology' },
-  { id: 'Social', name: 'Social Impact' }
-]
-
-const sortOptions = [
-  { id: 'newest', name: 'Newest First' },
-  { id: 'endingSoon', name: 'Ending Soon' },
-  { id: 'mostFunded', name: 'Most Funded' },
-  { id: 'mostBackers', name: 'Most Backers' }
-]
-
 export default function CampaignFilters ({
   selectedCategory,
   setSelectedCategory,
   sortBy,
   setSortBy
 }: CampaignFiltersProps) {
+  const categories = [
+    'all',
+    'Environment',
+    'Education',
+    'Healthcare',
+    'Technology',
+    'Infrastructure',
+    'Science & Research'
+  ]
+
+  const sortOptions = [
+    { value: 'newest', label: 'Newest' },
+    { value: 'endingSoon', label: 'Ending Soon' },
+    { value: 'mostFunded', label: 'Most Funded' },
+    { value: 'mostBackers', label: 'Most Backers' }
+  ]
+
   return (
-    <div className='mt-4 flex flex-col sm:flex-row gap-4'>
+    <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
       {/* Category Filter */}
-      <div className='flex-1'>
-        <label
-          htmlFor='category'
-          className='block text-sm font-medium text-gray-700 mb-1'
-        >
+      <div>
+        <label className='block text-sm font-medium text-gray-700 mb-2'>
           Category
         </label>
-        <select
-          id='category'
-          value={selectedCategory}
-          onChange={e => setSelectedCategory(e.target.value)}
-          className='w-full rounded-lg border border-gray-300 py-2 px-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500'
-        >
+        <div className='flex flex-wrap gap-2'>
           {categories.map(category => (
-            <option key={category.id} value={category.id}>
-              {category.name}
-            </option>
+            <button
+              key={category}
+              onClick={() => setSelectedCategory(category)}
+              className={`px-3 py-1 rounded-full text-sm font-medium ${
+                selectedCategory === category
+                  ? 'bg-blue-100 text-blue-800'
+                  : 'bg-gray-100 text-gray-800 hover:bg-gray-200'
+              }`}
+            >
+              {category === 'all' ? 'All Categories' : category}
+            </button>
           ))}
-        </select>
+        </div>
       </div>
 
-      {/* Sort Filter */}
-      <div className='flex-1'>
-        <label
-          htmlFor='sort'
-          className='block text-sm font-medium text-gray-700 mb-1'
-        >
+      {/* Sort Options */}
+      <div>
+        <label className='block text-sm font-medium text-gray-700 mb-2'>
           Sort By
         </label>
-        <select
-          id='sort'
-          value={sortBy}
-          onChange={e => setSortBy(e.target.value)}
-          className='w-full rounded-lg border border-gray-300 py-2 px-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500'
-        >
+        <div className='flex flex-wrap gap-2'>
           {sortOptions.map(option => (
-            <option key={option.id} value={option.id}>
-              {option.name}
-            </option>
+            <button
+              key={option.value}
+              onClick={() => setSortBy(option.value)}
+              className={`px-3 py-1 rounded-full text-sm font-medium ${
+                sortBy === option.value
+                  ? 'bg-blue-100 text-blue-800'
+                  : 'bg-gray-100 text-gray-800 hover:bg-gray-200'
+              }`}
+            >
+              {option.label}
+            </button>
           ))}
-        </select>
+        </div>
       </div>
     </div>
   )
