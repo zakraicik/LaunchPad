@@ -1,10 +1,10 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useState, useEffect } from 'react'
 import { ethers } from 'ethers'
 import { db } from '../utils/firebase'
 import { doc, getDoc, setDoc } from 'firebase/firestore'
 import CampaignContractFactory from '../../artifacts/contracts/CampaignContractFactory.sol/CampaignContractFactory.json'
 import { getContractAddress } from '../config/addresses'
-import { useWalletClient } from 'wagmi'
+import { useWalletClient, useAccount } from 'wagmi'
 import { getAuth } from 'firebase/auth'
 
 // Define the operation type constant
@@ -14,6 +14,14 @@ export function useCampaignFactory () {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const { data: walletClient } = useWalletClient()
+  const { address, isConnected } = useAccount()
+
+  // Initialize state in useEffect to avoid render-phase updates
+  useEffect(() => {
+    if (error) {
+      setError(null)
+    }
+  }, [error])
 
   const createCampaign = useCallback(
     async (
@@ -26,42 +34,71 @@ export function useCampaignFactory () {
       category?: string
     ) => {
       try {
+        console.log('useCampaignFactory: Starting campaign creation', {
+          isConnected,
+          hasWalletClient: !!walletClient,
+          address
+        })
+
         setIsLoading(true)
         setError(null)
 
-        if (!walletClient) {
+        if (!isConnected || !walletClient) {
+          console.log('useCampaignFactory: Wallet not connected')
           throw new Error('Please connect your wallet')
         }
 
         // Get the authenticated user
         const auth = getAuth()
         const user = auth.currentUser
+        console.log('useCampaignFactory: Firebase auth state', {
+          isAuthenticated: !!user,
+          user: user
+            ? {
+                uid: user.uid,
+                email: user.email,
+                isAnonymous: user.isAnonymous
+              }
+            : null
+        })
+
         if (!user) {
+          console.log('useCampaignFactory: No Firebase user found')
           throw new Error('Please sign in with your wallet')
         }
-
-        // Get token decimals from Firebase
-        const tokenDoc = await getDoc(doc(db, 'tokens', selectedToken))
-        if (!tokenDoc.exists()) {
-          throw new Error('Token not found')
-        }
-
-        const tokenData = tokenDoc.data()
-        const decimals = tokenData.decimals
 
         // Get the provider and signer from Wagmi
         const provider = new ethers.BrowserProvider(walletClient.transport)
         const network = await provider.getNetwork()
-        console.log('Connected to network:', network.name, network.chainId)
+        console.log('useCampaignFactory: Connected to network:', {
+          name: network.name,
+          chainId: network.chainId
+        })
 
         // Get the correct contract address for this network
         const factoryAddress = getContractAddress(
           Number(network.chainId),
           'campaignFactory'
         )
+        console.log(
+          'useCampaignFactory: Using factory address:',
+          factoryAddress
+        )
 
         const signer = await provider.getSigner()
         const ownerAddress = await signer.getAddress()
+        console.log('useCampaignFactory: Owner address:', ownerAddress)
+
+        // Get token decimals from Firebase
+        const tokenDoc = await getDoc(doc(db, 'tokens', selectedToken))
+        if (!tokenDoc.exists()) {
+          console.log('useCampaignFactory: Token not found:', selectedToken)
+          throw new Error('Token not found')
+        }
+
+        const tokenData = tokenDoc.data()
+        const decimals = tokenData.decimals
+        console.log('useCampaignFactory: Token decimals:', decimals)
 
         // Create contract instance
         const factory = new ethers.Contract(
@@ -72,11 +109,17 @@ export function useCampaignFactory () {
 
         // Convert target amount to token decimals
         const targetAmountInWei = ethers.parseUnits(targetAmount, decimals)
+        console.log(
+          'useCampaignFactory: Target amount in wei:',
+          targetAmountInWei.toString()
+        )
 
         // Convert duration to number
         const durationInDays = parseInt(duration)
+        console.log('useCampaignFactory: Duration in days:', durationInDays)
 
         // Call the deploy function
+        console.log('useCampaignFactory: Deploying campaign contract')
         const tx = await factory.deploy(
           selectedToken,
           targetAmountInWei,
@@ -84,29 +127,34 @@ export function useCampaignFactory () {
         )
 
         // Wait for transaction to be mined
+        console.log('useCampaignFactory: Waiting for transaction')
         const receipt = await tx.wait()
-        console.log('Transaction receipt:', receipt)
+        console.log('useCampaignFactory: Transaction receipt:', receipt)
 
         // Get the event topic hash for FactoryOperation
         const factoryOperationEvent =
           factory.interface.getEvent('FactoryOperation')
         if (!factoryOperationEvent) {
+          console.log(
+            'useCampaignFactory: FactoryOperation event not found in ABI'
+          )
           throw new Error('FactoryOperation event not found in ABI')
         }
 
         const factoryOperationTopic = factoryOperationEvent.topicHash
-        console.log('FactoryOperation topic hash:', factoryOperationTopic)
+        console.log(
+          'useCampaignFactory: FactoryOperation topic hash:',
+          factoryOperationTopic
+        )
 
         // Extract the campaign ID from the receipt
-        // The campaign ID is emitted in the FactoryOperation event
         const factoryOperationEventLog = receipt.logs.find(
           (log: ethers.Log) => {
-            console.log('Checking log:', {
+            console.log('useCampaignFactory: Checking log:', {
               topics: log.topics,
               data: log.data
             })
 
-            // First check if this is a FactoryOperation event
             if (log.topics[0] !== factoryOperationTopic) {
               return false
             }
@@ -117,20 +165,19 @@ export function useCampaignFactory () {
                 log.data,
                 log.topics
               )
-              console.log('Decoded event:', decoded)
-
-              // Use array-style access with index 0 instead of property name
-              // And compare with BigInt for exact type matching
+              console.log('useCampaignFactory: Decoded event:', decoded)
               return decoded[0] === BigInt(OP_CAMPAIGN_CREATED)
             } catch (e) {
-              console.error('Error decoding event:', e)
+              console.error('useCampaignFactory: Error decoding event:', e)
               return false
             }
           }
         )
 
         if (!factoryOperationEventLog) {
-          console.error('No FactoryOperation event found in logs')
+          console.log(
+            'useCampaignFactory: No FactoryOperation event found in logs'
+          )
           throw new Error('Failed to extract campaign ID from transaction')
         }
 
@@ -139,10 +186,10 @@ export function useCampaignFactory () {
           factoryOperationEventLog.data,
           factoryOperationEventLog.topics
         )
-        console.log('Final decoded event:', decodedEvent)
+        console.log('useCampaignFactory: Final decoded event:', decodedEvent)
 
         const campaignId = decodedEvent[3]
-        console.log('Extracted campaign ID:', campaignId)
+        console.log('useCampaignFactory: Extracted campaign ID:', campaignId)
 
         // Create or update the campaign document in Firebase
         const campaignRef = doc(db, 'campaigns', campaignId)
@@ -152,32 +199,33 @@ export function useCampaignFactory () {
           goalAmountSmallestUnits: targetAmountInWei.toString(),
           token: selectedToken,
           duration: durationInDays,
-          owner: user.uid, // Use Firebase auth UID instead of wallet address
-          ownerAddress, // Store wallet address for reference
+          owner: user.uid,
+          ownerAddress,
           imageUrl: imageUrl || null,
           category: category || null,
           createdAt: new Date().toISOString(),
           networkId: network.chainId.toString()
         }
 
-        // Use setDoc with merge: true to update if exists, create if not
+        console.log('useCampaignFactory: Saving campaign data to Firebase')
         await setDoc(campaignRef, campaignData, { merge: true })
+        console.log('useCampaignFactory: Campaign data saved successfully')
 
         return {
           txHash: receipt.hash,
           campaignId
         }
       } catch (err) {
-        console.error('Error creating campaign:', err)
-        setError(
+        console.error('useCampaignFactory: Error creating campaign:', err)
+        const errorMessage =
           err instanceof Error ? err.message : 'Failed to create campaign'
-        )
+        setError(errorMessage)
         throw err
       } finally {
         setIsLoading(false)
       }
     },
-    [walletClient]
+    [walletClient, isConnected]
   )
 
   return {

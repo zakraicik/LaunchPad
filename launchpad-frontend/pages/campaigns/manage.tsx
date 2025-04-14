@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { useAccount } from 'wagmi'
 import {
   PlusIcon,
@@ -22,7 +22,6 @@ interface DashboardStats {
 }
 
 export default function ManageCampaigns () {
-  const [mounted, setMounted] = useState(false)
   const { address } = useAccount()
   const [isLoading, setIsLoading] = useState(false)
   const [activeTab, setActiveTab] = useState<
@@ -30,10 +29,6 @@ export default function ManageCampaigns () {
   >('overview')
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
   const { campaigns, isLoading: isLoadingCampaigns } = useCampaigns()
-
-  useEffect(() => {
-    setMounted(true)
-  }, [])
 
   // Calculate dashboard stats from real campaign data
   const dashboardStats: DashboardStats = {
@@ -573,13 +568,10 @@ export default function ManageCampaigns () {
           </div>
         </div>
 
-        {/* Create Campaign Modal */}
-        {mounted && (
-          <CreateCampaignModal
-            isOpen={isCreateModalOpen}
-            onClose={() => setIsCreateModalOpen(false)}
-          />
-        )}
+        <CreateCampaignModal
+          isOpen={isCreateModalOpen}
+          onClose={() => setIsCreateModalOpen(false)}
+        />
       </div>
     </ProtectedRoute>
   )

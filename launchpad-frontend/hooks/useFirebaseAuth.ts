@@ -3,7 +3,8 @@ import {
   getAuth,
   signInWithCustomToken,
   onAuthStateChanged,
-  User
+  User,
+  signOut
 } from 'firebase/auth'
 import { useWalletClient, useAccount } from 'wagmi'
 import { db } from '../utils/firebase'
@@ -19,118 +20,188 @@ export function useFirebaseAuth () {
 
   useEffect(() => {
     mounted.current = true
+    console.log('useFirebaseAuth: Component mounted')
     return () => {
       mounted.current = false
+      console.log('useFirebaseAuth: Component unmounted')
     }
   }, [])
 
+  // Listen for auth state changes
   useEffect(() => {
+    console.log('useFirebaseAuth: Setting up auth state listener')
     const auth = getAuth()
     const unsubscribe = onAuthStateChanged(auth, user => {
+      console.log('useFirebaseAuth: Auth state changed', {
+        user: user
+          ? {
+              uid: user.uid,
+              email: user.email,
+              isAnonymous: user.isAnonymous
+            }
+          : null
+      })
       if (mounted.current) {
         setUser(user)
         setIsLoading(false)
       }
     })
 
-    return () => unsubscribe()
+    return () => {
+      console.log('useFirebaseAuth: Cleaning up auth state listener')
+      unsubscribe()
+    }
   }, [])
 
-  // Automatically sign in when both wallet address and client are available
+  // Automatically sign in when wallet is connected
   useEffect(() => {
     const autoSignIn = async () => {
-      if (address && walletClient && !user && mounted.current) {
-        try {
-          setIsLoading(true)
-          await signInWithWallet()
-        } catch (err) {
-          console.error('Error during auto sign-in:', err)
-        } finally {
+      console.log('useFirebaseAuth: Auto sign-in triggered', {
+        address,
+        hasWalletClient: !!walletClient,
+        currentUser: getAuth().currentUser
+      })
+
+      if (!mounted.current) {
+        console.log(
+          'useFirebaseAuth: Component not mounted, skipping auto sign-in'
+        )
+        return
+      }
+
+      if (!address || !walletClient) {
+        console.log(
+          'useFirebaseAuth: No wallet connected, skipping auto sign-in'
+        )
+        if (mounted.current) {
+          setIsLoading(false)
+        }
+        return
+      }
+
+      try {
+        setIsLoading(true)
+        setError(null)
+
+        // Check if we're already authenticated
+        const auth = getAuth()
+        const currentUser = auth.currentUser
+        console.log('useFirebaseAuth: Current auth state', {
+          isAuthenticated: !!currentUser,
+          currentUser: currentUser
+            ? {
+                uid: currentUser.uid,
+                email: currentUser.email,
+                isAnonymous: currentUser.isAnonymous
+              }
+            : null
+        })
+
+        if (currentUser) {
+          console.log(
+            'useFirebaseAuth: Already authenticated, skipping sign-in'
+          )
           if (mounted.current) {
             setIsLoading(false)
           }
+          return
+        }
+
+        console.log('useFirebaseAuth: Attempting to sign in with wallet')
+        await signInWithWallet()
+      } catch (err) {
+        console.error('useFirebaseAuth: Error during auto sign-in:', err)
+        if (mounted.current) {
+          setError(err instanceof Error ? err.message : 'Failed to sign in')
+        }
+      } finally {
+        if (mounted.current) {
+          setIsLoading(false)
         }
       }
     }
 
     autoSignIn()
-  }, [address, walletClient, user])
+  }, [address, walletClient])
+
+  // Handle wallet disconnection
+  useEffect(() => {
+    if (!address && user) {
+      console.log(
+        'useFirebaseAuth: Wallet disconnected, signing out from Firebase'
+      )
+      const auth = getAuth()
+      signOut(auth)
+    }
+  }, [address, user])
 
   const signInWithWallet = async () => {
+    console.log('useFirebaseAuth: Starting signInWithWallet')
+
+    if (!walletClient || !address) {
+      console.log('useFirebaseAuth: No wallet connected')
+      throw new Error('Please connect your wallet')
+    }
+
     try {
-      console.log('Firebase db instance exists:', !!db)
-
-      if (!walletClient || !address) {
-        throw new Error('Please connect your wallet')
-      }
-
-      console.log('Wallet connected')
-
       // Try to get the user document first
-      const userDoc = doc(db, 'users', address.toLowerCase()) // Ensure consistent case
-      let userSnap
+      const userDoc = doc(db, 'users', address.toLowerCase())
+      console.log('useFirebaseAuth: Checking user document', {
+        address: address.toLowerCase()
+      })
 
+      let userSnap
       try {
         userSnap = await getDoc(userDoc)
-        console.log('User document exists:', userSnap.exists())
+        console.log('useFirebaseAuth: User document exists:', userSnap.exists())
       } catch (err) {
-        console.error('Error checking user document:', err)
+        console.error('useFirebaseAuth: Error checking user document:', err)
         throw new Error('Failed to check user document')
       }
 
       // Create user document if it doesn't exist
       if (!userSnap.exists()) {
+        console.log('useFirebaseAuth: Creating new user document')
         try {
-          console.log(
-            'Creating user document for address:',
-            address.toLowerCase()
-          )
           await setDoc(userDoc, {
-            address: address.toLowerCase(), // Ensure consistent case
+            address: address.toLowerCase(),
             createdAt: new Date().toISOString()
           })
-          console.log('User document created successfully')
+          console.log('useFirebaseAuth: User document created successfully')
         } catch (err) {
-          console.error('Error creating user document:', err)
+          console.error('useFirebaseAuth: Error creating user document:', err)
           throw new Error('Failed to create user document')
         }
       }
 
       // Get the custom token
-      try {
-        console.log(
-          'Requesting custom token for address:',
-          address.toLowerCase()
-        )
-        const response = await fetch('/api/auth/custom-token', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({ address: address.toLowerCase() }) // Ensure consistent case
-        })
+      console.log('useFirebaseAuth: Requesting custom token')
+      const response = await fetch('/api/auth/custom-token', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ address: address.toLowerCase() })
+      })
 
-        if (!response.ok) {
-          const errorData = await response.json()
-          throw new Error(errorData.error || 'Failed to generate custom token')
-        }
-
-        const { token } = await response.json()
-        console.log('Custom token received successfully')
-
-        // Sign in with the custom token
-        const auth = getAuth()
-        await signInWithCustomToken(auth, token)
-        console.log('Successfully signed in with custom token')
-
-        return true
-      } catch (err) {
-        console.error('Error in token generation or sign in:', err)
-        throw err
+      if (!response.ok) {
+        const errorData = await response.json()
+        console.error('useFirebaseAuth: Failed to get custom token:', errorData)
+        throw new Error(errorData.error || 'Failed to generate custom token')
       }
+
+      const { token } = await response.json()
+      console.log('useFirebaseAuth: Received custom token')
+
+      // Sign in with the custom token
+      console.log('useFirebaseAuth: Signing in with custom token')
+      const auth = getAuth()
+      await signInWithCustomToken(auth, token)
+      console.log('useFirebaseAuth: Successfully signed in with custom token')
+
+      return true
     } catch (err) {
-      console.error('Error signing in with wallet:', err)
-      setError(err instanceof Error ? err.message : 'Failed to sign in')
+      console.error('useFirebaseAuth: Error in signInWithWallet:', err)
       throw err
     }
   }

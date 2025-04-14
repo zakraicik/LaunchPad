@@ -26,7 +26,7 @@ export default function CreateCampaignModal ({
   onClose
 }: CreateCampaignModalProps) {
   const [mounted, setMounted] = useState(false)
-  const { address } = useAccount()
+  const { address, isConnected } = useAccount()
   const { createCampaign } = useCampaignFactory()
   const { tokens, isLoading: isLoadingTokens } = useTokens()
   const [title, setTitle] = useState('')
@@ -54,19 +54,39 @@ export default function CreateCampaignModal ({
     }
   })
 
+  const formRef = useRef<HTMLFormElement>(null)
+
+  // Handle hydration
   useEffect(() => {
     setMounted(true)
+    return () => {
+      setMounted(false)
+    }
   }, [])
 
-  if (!mounted) {
-    return null
-  }
+  // Reset form when modal is opened
+  useEffect(() => {
+    if (isOpen && mounted) {
+      setTitle('')
+      setDescription('')
+      setTargetAmount('')
+      setSelectedToken('')
+      setDuration('')
+      setCategory('')
+      setImage(null)
+      setImagePreview(null)
+      setError(null)
+      setIsSubmitting(false)
+    }
+  }, [isOpen, mounted])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (!mounted) return
+
     setError(null)
 
-    if (!address) {
+    if (!isConnected) {
       setError('Please connect your wallet')
       return
     }
@@ -120,6 +140,16 @@ export default function CreateCampaignModal ({
     }
   }
 
+  const handleCreateClick = () => {
+    if (formRef.current && mounted) {
+      formRef.current.requestSubmit()
+    }
+  }
+
+  if (!mounted) {
+    return null
+  }
+
   return (
     <Dialog
       open={isOpen}
@@ -136,6 +166,7 @@ export default function CreateCampaignModal ({
           </Dialog.Title>
 
           <form
+            ref={formRef}
             onSubmit={handleSubmit}
             className='flex-1 overflow-y-auto p-6 space-y-6'
           >
@@ -312,7 +343,8 @@ export default function CreateCampaignModal ({
               Cancel
             </button>
             <button
-              type='submit'
+              type='button'
+              onClick={handleCreateClick}
               disabled={isSubmitting}
               className='inline-flex justify-center px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 border border-transparent rounded-md disabled:opacity-50 disabled:cursor-not-allowed'
             >

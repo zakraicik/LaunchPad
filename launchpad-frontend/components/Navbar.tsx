@@ -17,6 +17,7 @@ import {
   RocketLaunchIcon
 } from '@heroicons/react/24/outline'
 import { isAdmin } from '../utils/admin'
+import { useFirebaseAuth } from '../hooks/useFirebaseAuth'
 
 export default function Navbar () {
   const router = useRouter()
@@ -25,6 +26,7 @@ export default function Navbar () {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false)
   const [isAdminDropdownOpen, setIsAdminDropdownOpen] = useState(false)
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
+  const { user, isLoading } = useFirebaseAuth()
 
   const navigation = [
     { name: 'Home', href: '/' },
@@ -175,6 +177,31 @@ export default function Navbar () {
                 )}
               </div>
             )}
+
+            {/* Firebase Auth Status Indicator */}
+            <div className='flex items-center space-x-4'>
+              <div className='flex items-center space-x-2'>
+                <div
+                  className={`w-3 h-3 rounded-full ${
+                    isLoading
+                      ? 'bg-yellow-500'
+                      : user
+                      ? 'bg-green-500'
+                      : 'bg-red-500'
+                  }`}
+                  title={
+                    isLoading
+                      ? 'Loading...'
+                      : user
+                      ? 'Connected to Firebase'
+                      : 'Not connected to Firebase'
+                  }
+                />
+                <span className='text-sm text-gray-500'>
+                  {isLoading ? 'Loading...' : user ? 'Firebase' : 'No Firebase'}
+                </span>
+              </div>
+            </div>
           </div>
 
           {/* Mobile menu button */}
