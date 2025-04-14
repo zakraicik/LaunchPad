@@ -6,10 +6,17 @@ import { useAccount } from 'wagmi'
 import { useDropzone } from 'react-dropzone'
 import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage'
 import toast from 'react-hot-toast'
+import { PlusIcon, PhotoIcon } from '@heroicons/react/24/outline'
+
+interface Token {
+  address: string
+  symbol: string
+}
 
 interface CreateCampaignModalProps {
   isOpen: boolean
   onClose: () => void
+  onCampaignCreated?: () => void
 }
 
 const categories = [
@@ -23,7 +30,8 @@ const categories = [
 
 export default function CreateCampaignModal ({
   isOpen,
-  onClose
+  onClose,
+  onCampaignCreated
 }: CreateCampaignModalProps) {
   const [mounted, setMounted] = useState(false)
   const { address, isConnected } = useAccount()
@@ -129,6 +137,7 @@ export default function CreateCampaignModal ({
 
       toast.success('Campaign created successfully!', { id: toastId })
       onClose()
+      onCampaignCreated?.()
     } catch (err) {
       console.error('Error creating campaign:', err)
       const errorMessage =

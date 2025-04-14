@@ -203,7 +203,6 @@ export function useCampaignFactory () {
           ownerAddress,
           imageUrl: imageUrl || null,
           category: category || null,
-          createdAt: new Date().toISOString(),
           networkId: network.chainId.toString()
         }
 

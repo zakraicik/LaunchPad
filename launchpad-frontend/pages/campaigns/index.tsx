@@ -7,6 +7,8 @@ import {
 import CampaignCard from '../../components/campaigns/CampaignCard'
 import CampaignFilters from '../../components/campaigns/CampaignFilters'
 import CreateCampaignModal from '../../components/campaigns/CreateCampaignModal'
+import { useCampaigns } from '../../hooks/useCampaigns'
+import { useRouter } from 'next/router'
 
 interface Campaign {
   id: number
@@ -165,12 +167,15 @@ export const dummyCampaigns: Campaign[] = [
 ]
 
 export default function CampaignsDiscovery () {
+  const router = useRouter()
   const [mounted, setMounted] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedCategory, setSelectedCategory] = useState('all')
   const [sortBy, setSortBy] = useState('newest')
   const [showFilters, setShowFilters] = useState(false)
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
+  const { campaigns: realCampaigns, isLoading: isLoadingCampaigns } =
+    useCampaigns()
 
   useEffect(() => {
     setMounted(true)
@@ -181,7 +186,7 @@ export default function CampaignsDiscovery () {
   }
 
   // Filter campaigns based on search query and category
-  const filteredCampaigns = dummyCampaigns.filter(campaign => {
+  const filteredCampaigns = realCampaigns.filter(campaign => {
     const matchesSearch =
       campaign.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
       campaign.description.toLowerCase().includes(searchQuery.toLowerCase())
@@ -196,17 +201,21 @@ export default function CampaignsDiscovery () {
   const sortedCampaigns = [...filteredCampaigns].sort((a, b) => {
     switch (sortBy) {
       case 'newest':
-        return b.startTime - a.startTime
+        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
       case 'endingSoon':
-        return getDaysLeft(a.endTime) - getDaysLeft(b.endTime)
+        return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
       case 'mostFunded':
-        return b.raised - a.raised
+        return Number(b.totalRaised) - Number(a.totalRaised)
       case 'mostBackers':
-        return b.backers - a.backers
+        return (b.contributors || 0) - (a.contributors || 0)
       default:
         return 0
     }
   })
+
+  const handleCampaignClick = (campaignId: string) => {
+    router.push(`/campaigns/${campaignId}`)
+  }
 
   return (
     <div className='min-h-screen bg-gray-50 py-8'>
@@ -261,7 +270,11 @@ export default function CampaignsDiscovery () {
         {/* Campaign Grid */}
         <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6'>
           {sortedCampaigns.map(campaign => (
-            <CampaignCard key={campaign.id} campaign={campaign} />
+            <CampaignCard
+              key={campaign.id}
+              campaign={campaign}
+              onClick={() => handleCampaignClick(campaign.id)}
+            />
           ))}
         </div>
 
@@ -279,6 +292,10 @@ export default function CampaignsDiscovery () {
           <CreateCampaignModal
             isOpen={isCreateModalOpen}
             onClose={() => setIsCreateModalOpen(false)}
+            onCampaignCreated={() => {
+              // The useCampaigns hook will automatically refresh
+              setIsCreateModalOpen(false)
+            }}
           />
         )}
       </div>

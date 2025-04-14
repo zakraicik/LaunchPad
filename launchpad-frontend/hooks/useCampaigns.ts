@@ -21,6 +21,9 @@ export interface Campaign {
   owner: string
   ownerAddress: string
   networkId: string
+  goalAmountSmallestUnits: string
+  token: string
+  duration: string
 }
 
 export function useCampaigns () {
@@ -29,50 +32,53 @@ export function useCampaigns () {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  useEffect(() => {
-    const fetchCampaigns = async () => {
-      try {
-        setIsLoading(true)
-        setError(null)
+  const fetchCampaigns = async () => {
+    try {
+      setIsLoading(true)
+      setError(null)
 
-        const campaignsRef = collection(db, 'campaigns')
-        const q = query(campaignsRef, orderBy('createdAt', 'desc'))
+      const campaignsRef = collection(db, 'campaigns')
+      const q = query(campaignsRef, orderBy('createdAt', 'desc'))
 
-        const querySnapshot = await getDocs(q)
-        const fetchedCampaigns: Campaign[] = []
+      const querySnapshot = await getDocs(q)
+      const fetchedCampaigns: Campaign[] = []
 
-        querySnapshot.forEach(doc => {
-          const data = doc.data()
-          fetchedCampaigns.push({
-            id: doc.id,
-            title: data.title,
-            description: data.description,
-            imageUrl: data.imageUrl,
-            category: data.category,
-            targetAmount: data.goalAmountSmallestUnits,
-            totalRaised: data.totalContributions || '0',
-            status: getStatusFromNumber(data.status),
-            createdAt: data.createdAt,
-            contributors: data.contributors || 0,
-            yieldGenerated: data.yieldGenerated || '0',
-            currentAPY: data.currentAPY || 0,
-            depositedAmount: data.depositedAmount || '0',
-            availableYield: data.availableYield || '0',
-            owner: data.owner,
-            ownerAddress: data.ownerAddress,
-            networkId: data.networkId
-          })
+      querySnapshot.forEach(doc => {
+        const data = doc.data()
+        fetchedCampaigns.push({
+          id: doc.id,
+          title: data.title,
+          description: data.description,
+          imageUrl: data.imageUrl,
+          category: data.category,
+          targetAmount: data.goalAmountSmallestUnits,
+          totalRaised: data.totalContributions || '0',
+          status: getStatusFromNumber(data.status),
+          createdAt: data.createdAt,
+          contributors: data.contributors || 0,
+          yieldGenerated: data.yieldGenerated || '0',
+          currentAPY: data.currentAPY || 0,
+          depositedAmount: data.depositedAmount || '0',
+          availableYield: data.availableYield || '0',
+          owner: data.owner,
+          ownerAddress: data.ownerAddress,
+          networkId: data.networkId,
+          goalAmountSmallestUnits: data.goalAmountSmallestUnits,
+          token: data.token,
+          duration: data.duration || ''
         })
+      })
 
-        setCampaigns(fetchedCampaigns)
-      } catch (err) {
-        console.error('Error fetching campaigns:', err)
-        setError('Failed to fetch campaigns')
-      } finally {
-        setIsLoading(false)
-      }
+      setCampaigns(fetchedCampaigns)
+    } catch (err) {
+      console.error('Error fetching campaigns:', err)
+      setError('Failed to fetch campaigns')
+    } finally {
+      setIsLoading(false)
     }
+  }
 
+  useEffect(() => {
     fetchCampaigns()
   }, [address])
 
@@ -94,6 +100,7 @@ export function useCampaigns () {
   return {
     campaigns,
     isLoading,
-    error
+    error,
+    refresh: fetchCampaigns
   }
 }
