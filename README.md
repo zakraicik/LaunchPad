@@ -208,5 +208,3 @@ The platform uses a standardized error code system across all contracts for cons
 ---
 
 This platform combines the benefits of decentralized fundraising with DeFi yield generation, while maintaining a robust event tracking system for reliable off-chain indexing and analytics.
-
-commit on vacation
