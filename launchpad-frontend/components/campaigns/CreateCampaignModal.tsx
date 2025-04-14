@@ -1,12 +1,20 @@
-import { useState } from 'react'
-import { XMarkIcon } from '@heroicons/react/24/outline'
-import TokenSelector from '../TokenSelector'
+import { useState, useRef } from 'react'
+import { Dialog } from '@headlessui/react'
 import { useCampaignFactory } from '../../hooks/useCampaignFactory'
-import { toast } from 'react-hot-toast'
+import { useTokens } from '../../hooks/useTokens'
+import { useAccount } from 'wagmi'
+import { formatEther } from 'ethers'
+import { useDropzone } from 'react-dropzone'
 import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage'
 import { db } from '../../utils/firebase'
-import { useFirebaseAuth } from '../../hooks/useFirebaseAuth'
-import { useAccount } from 'wagmi'
+import {
+  doc,
+  setDoc,
+  DocumentData,
+  Firestore,
+  DocumentReference,
+  collection
+} from 'firebase/firestore'
 
 interface CreateCampaignModalProps {
   isOpen: boolean
@@ -26,68 +34,67 @@ export default function CreateCampaignModal ({
   isOpen,
   onClose
 }: CreateCampaignModalProps) {
+  const { address } = useAccount()
+  const { createCampaign } = useCampaignFactory()
+  const { tokens, isLoading: isLoadingTokens } = useTokens()
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
   const [targetAmount, setTargetAmount] = useState('')
   const [selectedToken, setSelectedToken] = useState('')
   const [duration, setDuration] = useState('')
   const [category, setCategory] = useState('')
-  const [imageFile, setImageFile] = useState<File | null>(null)
+  const [image, setImage] = useState<File | null>(null)
   const [imagePreview, setImagePreview] = useState<string | null>(null)
-  const { createCampaign, isLoading, error } = useCampaignFactory()
-  const { user } = useFirebaseAuth()
-  const { address } = useAccount()
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const cancelButtonRef = useRef(null)
 
-  if (!isOpen) return null
-
-  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (file) {
-      setImageFile(file)
-      const reader = new FileReader()
-      reader.onloadend = () => {
-        setImagePreview(reader.result as string)
+  const { getRootProps, getInputProps, isDragActive } = useDropzone({
+    accept: {
+      'image/*': ['.jpeg', '.jpg', '.png', '.gif']
+    },
+    maxFiles: 1,
+    onDrop: (acceptedFiles: File[]) => {
+      if (acceptedFiles.length > 0) {
+        setImage(acceptedFiles[0])
+        setImagePreview(URL.createObjectURL(acceptedFiles[0]))
       }
-      reader.readAsDataURL(file)
     }
-  }
-
-  const uploadImage = async (file: File): Promise<string> => {
-    const storage = getStorage()
-    const storageRef = ref(storage, `campaigns/${Date.now()}_${file.name}`)
-    await uploadBytes(storageRef, file)
-    return getDownloadURL(storageRef)
-  }
+  })
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    setError(null)
 
-    if (!selectedToken) {
-      toast.error('Please select a token')
+    if (!address) {
+      setError('Please connect your wallet')
       return
     }
 
-    if (!category) {
-      toast.error('Please select a category')
+    if (
+      !title ||
+      !description ||
+      !targetAmount ||
+      !selectedToken ||
+      !duration ||
+      !category
+    ) {
+      setError('Please fill in all required fields')
       return
     }
 
-    if (!user) {
-      toast.error('Please sign in with your wallet')
-      return
-    }
-
-    const toastId = toast.loading('Creating campaign...')
+    setIsSubmitting(true)
 
     try {
-      let imageUrl: string | undefined
-      if (imageFile) {
-        toast.loading('Uploading image...', { id: toastId })
-        imageUrl = await uploadImage(imageFile)
+      let imageUrl: string | undefined = undefined
+      if (image) {
+        const storage = getStorage()
+        const storageRef = ref(storage, `campaigns/${Date.now()}-${image.name}`)
+        await uploadBytes(storageRef, image)
+        imageUrl = await getDownloadURL(storageRef)
       }
 
-      toast.loading('Creating campaign...', { id: toastId })
-      const result = await createCampaign(
+      const campaignId = await createCampaign(
         title,
         description,
         targetAmount,
@@ -97,227 +104,235 @@ export default function CreateCampaignModal ({
         category
       )
 
-      toast.success('Campaign created successfully!', {
-        id: toastId
-      })
-      console.log('Transaction hash:', result.txHash)
-      console.log('Campaign ID:', result.campaignId)
+      // Create a document in the campaigns collection
+      const campaignRef: DocumentReference<DocumentData> = doc(
+        db as Firestore,
+        'campaigns',
+        campaignId.campaignId
+      )
+      const campaignData: DocumentData = {
+        title,
+        description,
+        targetAmount,
+        tokenAddress: selectedToken,
+        duration,
+        imageUrl,
+        category,
+        owner: address,
+        status: 'active',
+        totalRaised: '0',
+        contributors: 0,
+        createdAt: new Date().toISOString()
+      }
+      await setDoc(campaignRef, campaignData)
+
       onClose()
     } catch (err) {
       console.error('Error creating campaign:', err)
-      toast.error(error || 'Failed to create campaign', {
-        id: toastId
-      })
+      setError('Failed to create campaign. Please try again.')
+    } finally {
+      setIsSubmitting(false)
     }
   }
 
   return (
-    <div className='fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center'>
-      <div className='bg-white rounded-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto'>
-        <div className='flex justify-between items-center mb-4'>
-          <h2 className='text-2xl font-bold'>Create New Campaign</h2>
-          <button
-            onClick={onClose}
-            className='text-gray-500 hover:text-gray-700'
-            disabled={isLoading}
-          >
-            <XMarkIcon className='h-6 w-6' />
-          </button>
-        </div>
+    <Dialog
+      open={isOpen}
+      onClose={onClose}
+      className='relative z-50'
+      initialFocus={cancelButtonRef}
+    >
+      <div className='fixed inset-0 bg-black/30' aria-hidden='true' />
 
-        <form onSubmit={handleSubmit} className='space-y-4'>
-          <div>
-            <label
-              htmlFor='title'
-              className='block text-sm font-medium text-gray-700'
-            >
-              Campaign Title
-            </label>
-            <input
-              type='text'
-              id='title'
-              value={title}
-              onChange={e => setTitle(e.target.value)}
-              className='mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500'
-              required
-              disabled={isLoading}
-            />
-          </div>
+      <div className='fixed inset-0 flex items-center justify-center p-4'>
+        <Dialog.Panel className='mx-auto max-w-2xl w-full bg-white rounded-xl shadow-lg'>
+          <Dialog.Title className='text-lg font-medium text-gray-900 p-6 border-b'>
+            Create New Campaign
+          </Dialog.Title>
 
-          <div>
-            <label
-              htmlFor='description'
-              className='block text-sm font-medium text-gray-700'
-            >
-              Description
-            </label>
-            <textarea
-              id='description'
-              value={description}
-              onChange={e => setDescription(e.target.value)}
-              rows={4}
-              className='mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500'
-              required
-              disabled={isLoading}
-            />
-          </div>
+          <form onSubmit={handleSubmit} className='p-6 space-y-6'>
+            {error && (
+              <div className='bg-red-50 text-red-600 p-3 rounded-md text-sm'>
+                {error}
+              </div>
+            )}
 
-          <div>
-            <label
-              htmlFor='targetAmount'
-              className='block text-sm font-medium text-gray-700'
-            >
-              Target Amount
-            </label>
-            <div className='mt-1 flex rounded-md shadow-sm'>
+            <div>
+              <label
+                htmlFor='title'
+                className='block text-sm font-medium text-gray-700 mb-1'
+              >
+                Campaign Title
+              </label>
               <input
-                type='number'
-                id='targetAmount'
-                value={targetAmount}
-                onChange={e => setTargetAmount(e.target.value)}
-                className='block w-full rounded-l-md border-gray-300 focus:border-blue-500 focus:ring-blue-500'
+                type='text'
+                id='title'
+                value={title}
+                onChange={e => setTitle(e.target.value)}
+                className='w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500'
                 required
-                disabled={isLoading}
-              />
-              <TokenSelector
-                selectedToken={selectedToken}
-                onTokenSelect={setSelectedToken}
-                className='rounded-r-md'
-                disabled={isLoading}
               />
             </div>
-          </div>
 
-          <div>
-            <label
-              htmlFor='duration'
-              className='block text-sm font-medium text-gray-700'
-            >
-              Campaign Duration (days)
-            </label>
-            <input
-              type='number'
-              id='duration'
-              value={duration}
-              onChange={e => setDuration(e.target.value)}
-              min='1'
-              className='mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500'
-              required
-              disabled={isLoading}
-            />
-          </div>
+            <div>
+              <label
+                htmlFor='description'
+                className='block text-sm font-medium text-gray-700 mb-1'
+              >
+                Description
+              </label>
+              <textarea
+                id='description'
+                value={description}
+                onChange={e => setDescription(e.target.value)}
+                rows={4}
+                className='w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500'
+                required
+              />
+            </div>
 
-          <div>
-            <label
-              htmlFor='category'
-              className='block text-sm font-medium text-gray-700'
-            >
-              Category
-            </label>
-            <select
-              id='category'
-              value={category}
-              onChange={e => setCategory(e.target.value)}
-              className='mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500'
-              required
-              disabled={isLoading}
-            >
-              <option value=''>Select a category</option>
-              {categories.map(cat => (
-                <option key={cat} value={cat}>
-                  {cat}
-                </option>
-              ))}
-            </select>
-          </div>
+            <div>
+              <label
+                htmlFor='category'
+                className='block text-sm font-medium text-gray-700 mb-1'
+              >
+                Category
+              </label>
+              <select
+                id='category'
+                value={category}
+                onChange={e => setCategory(e.target.value)}
+                className='w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500'
+                required
+              >
+                <option value=''>Select a category</option>
+                {categories.map(cat => (
+                  <option key={cat} value={cat}>
+                    {cat}
+                  </option>
+                ))}
+              </select>
+            </div>
 
-          <div>
-            <label
-              htmlFor='image'
-              className='block text-sm font-medium text-gray-700'
-            >
-              Campaign Image
-            </label>
-            <div className='mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-md'>
-              <div className='space-y-1 text-center'>
+            <div className='grid grid-cols-2 gap-4'>
+              <div>
+                <label
+                  htmlFor='targetAmount'
+                  className='block text-sm font-medium text-gray-700 mb-1'
+                >
+                  Target Amount
+                </label>
+                <input
+                  type='number'
+                  id='targetAmount'
+                  value={targetAmount}
+                  onChange={e => setTargetAmount(e.target.value)}
+                  className='w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500'
+                  required
+                  min='0'
+                  step='0.000000000000000001'
+                />
+              </div>
+
+              <div>
+                <label
+                  htmlFor='token'
+                  className='block text-sm font-medium text-gray-700 mb-1'
+                >
+                  Token
+                </label>
+                <select
+                  id='token'
+                  value={selectedToken}
+                  onChange={e => setSelectedToken(e.target.value)}
+                  className='w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500'
+                  required
+                >
+                  <option value=''>Select a token</option>
+                  {tokens.map(token => (
+                    <option key={token.address} value={token.address}>
+                      {token.symbol || token.address}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div>
+              <label
+                htmlFor='duration'
+                className='block text-sm font-medium text-gray-700 mb-1'
+              >
+                Duration (days)
+              </label>
+              <input
+                type='number'
+                id='duration'
+                value={duration}
+                onChange={e => setDuration(e.target.value)}
+                className='w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500'
+                required
+                min='1'
+              />
+            </div>
+
+            <div>
+              <label className='block text-sm font-medium text-gray-700 mb-1'>
+                Campaign Image
+              </label>
+              <div
+                {...getRootProps()}
+                className={`border-2 border-dashed rounded-md p-6 text-center cursor-pointer ${
+                  isDragActive
+                    ? 'border-blue-500 bg-blue-50'
+                    : 'border-gray-300 hover:border-gray-400'
+                }`}
+              >
+                <input {...getInputProps()} />
                 {imagePreview ? (
-                  <div className='relative'>
+                  <div className='space-y-2'>
                     <img
                       src={imagePreview}
                       alt='Preview'
-                      className='max-h-48 mx-auto rounded-md'
+                      className='mx-auto h-32 object-cover rounded-md'
                     />
-                    <button
-                      type='button'
-                      onClick={() => setImagePreview(null)}
-                      className='absolute top-0 right-0 p-1 bg-red-500 text-white rounded-full'
-                      disabled={isLoading}
-                    >
-                      <XMarkIcon className='h-4 w-4' />
-                    </button>
+                    <p className='text-sm text-gray-500'>
+                      Click or drag to replace image
+                    </p>
                   </div>
                 ) : (
-                  <>
-                    <svg
-                      className='mx-auto h-12 w-12 text-gray-400'
-                      stroke='currentColor'
-                      fill='none'
-                      viewBox='0 0 48 48'
-                      aria-hidden='true'
-                    >
-                      <path
-                        d='M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02'
-                        strokeWidth={2}
-                        strokeLinecap='round'
-                        strokeLinejoin='round'
-                      />
-                    </svg>
-                    <div className='flex text-sm text-gray-600'>
-                      <label
-                        htmlFor='image-upload'
-                        className='relative cursor-pointer bg-white rounded-md font-medium text-blue-600 hover:text-blue-500 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-blue-500'
-                      >
-                        <span>Upload an image</span>
-                        <input
-                          id='image-upload'
-                          name='image-upload'
-                          type='file'
-                          className='sr-only'
-                          accept='image/*'
-                          onChange={handleImageChange}
-                          disabled={isLoading}
-                        />
-                      </label>
-                      <p className='pl-1'>or drag and drop</p>
-                    </div>
-                    <p className='text-xs text-gray-500'>
+                  <div className='space-y-2'>
+                    <p className='text-sm text-gray-500'>
+                      Drag and drop an image here, or click to select
+                    </p>
+                    <p className='text-xs text-gray-400'>
                       PNG, JPG, GIF up to 10MB
                     </p>
-                  </>
+                  </div>
                 )}
               </div>
             </div>
-          </div>
 
-          <div className='flex justify-end space-x-3 pt-4'>
-            <button
-              type='button'
-              onClick={onClose}
-              className='px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50'
-              disabled={isLoading}
-            >
-              Cancel
-            </button>
-            <button
-              type='submit'
-              className='px-4 py-2 bg-green-600 text-white rounded-md text-sm font-medium hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed'
-              disabled={isLoading}
-            >
-              {isLoading ? 'Creating...' : 'Create Campaign'}
-            </button>
-          </div>
-        </form>
+            <div className='flex justify-end space-x-3 pt-4'>
+              <button
+                type='button'
+                onClick={onClose}
+                ref={cancelButtonRef}
+                className='px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500'
+              >
+                Cancel
+              </button>
+              <button
+                type='submit'
+                disabled={isSubmitting}
+                className='px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50'
+              >
+                {isSubmitting ? 'Creating...' : 'Create Campaign'}
+              </button>
+            </div>
+          </form>
+        </Dialog.Panel>
       </div>
-    </div>
+    </Dialog>
   )
 }
