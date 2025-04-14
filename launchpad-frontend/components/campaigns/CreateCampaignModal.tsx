@@ -13,6 +13,15 @@ interface CreateCampaignModalProps {
   onClose: () => void
 }
 
+const categories = [
+  'Environment',
+  'Education',
+  'Healthcare',
+  'Technology',
+  'Infrastructure',
+  'Science & Research'
+]
+
 export default function CreateCampaignModal ({
   isOpen,
   onClose
@@ -22,6 +31,7 @@ export default function CreateCampaignModal ({
   const [targetAmount, setTargetAmount] = useState('')
   const [selectedToken, setSelectedToken] = useState('')
   const [duration, setDuration] = useState('')
+  const [category, setCategory] = useState('')
   const [imageFile, setImageFile] = useState<File | null>(null)
   const [imagePreview, setImagePreview] = useState<string | null>(null)
   const { createCampaign, isLoading, error } = useCampaignFactory()
@@ -57,6 +67,11 @@ export default function CreateCampaignModal ({
       return
     }
 
+    if (!category) {
+      toast.error('Please select a category')
+      return
+    }
+
     if (!user) {
       toast.error('Please sign in with your wallet')
       return
@@ -78,7 +93,8 @@ export default function CreateCampaignModal ({
         targetAmount,
         selectedToken,
         duration,
-        imageUrl
+        imageUrl,
+        category
       )
 
       toast.success('Campaign created successfully!', {
@@ -189,6 +205,30 @@ export default function CreateCampaignModal ({
               required
               disabled={isLoading}
             />
+          </div>
+
+          <div>
+            <label
+              htmlFor='category'
+              className='block text-sm font-medium text-gray-700'
+            >
+              Category
+            </label>
+            <select
+              id='category'
+              value={category}
+              onChange={e => setCategory(e.target.value)}
+              className='mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500'
+              required
+              disabled={isLoading}
+            >
+              <option value=''>Select a category</option>
+              {categories.map(cat => (
+                <option key={cat} value={cat}>
+                  {cat}
+                </option>
+              ))}
+            </select>
           </div>
 
           <div>

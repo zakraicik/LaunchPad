@@ -9,7 +9,18 @@ interface CampaignCardProps {
 
 export default function CampaignCard ({ campaign, onClick }: CampaignCardProps) {
   const progress =
-    (Number(campaign.totalRaised) / Number(campaign.targetAmount)) * 100
+    campaign.totalRaised && campaign.targetAmount
+      ? (Number(campaign.totalRaised) / Number(campaign.targetAmount)) * 100
+      : 0
+
+  const formatDate = (dateString: string | undefined) => {
+    if (!dateString) return 'Recently'
+    try {
+      return formatDistanceToNow(new Date(dateString), { addSuffix: true })
+    } catch (error) {
+      return 'Recently'
+    }
+  }
 
   return (
     <div
@@ -53,13 +64,17 @@ export default function CampaignCard ({ campaign, onClick }: CampaignCardProps) 
             <div>
               <span className='text-gray-600'>Raised</span>
               <p className='font-medium'>
-                {formatEther(campaign.totalRaised)} ETH
+                {campaign.totalRaised ? formatEther(campaign.totalRaised) : '0'}{' '}
+                ETH
               </p>
             </div>
             <div>
               <span className='text-gray-600'>Target</span>
               <p className='font-medium'>
-                {formatEther(campaign.targetAmount)} ETH
+                {campaign.targetAmount
+                  ? formatEther(campaign.targetAmount)
+                  : '0'}{' '}
+                ETH
               </p>
             </div>
           </div>
@@ -67,19 +82,16 @@ export default function CampaignCard ({ campaign, onClick }: CampaignCardProps) 
           <div className='grid grid-cols-2 gap-4 text-sm'>
             <div>
               <span className='text-gray-600'>Backers</span>
-              <p className='font-medium'>{campaign.contributors}</p>
+              <p className='font-medium'>{campaign.contributors || 0}</p>
             </div>
             <div>
               <span className='text-gray-600'>APY</span>
-              <p className='font-medium'>{campaign.currentAPY}%</p>
+              <p className='font-medium'>{campaign.currentAPY || 0}%</p>
             </div>
           </div>
 
           <div className='text-sm text-gray-500'>
-            Created{' '}
-            {formatDistanceToNow(new Date(campaign.createdAt), {
-              addSuffix: true
-            })}
+            Created {formatDate(campaign.createdAt)}
           </div>
         </div>
       </div>

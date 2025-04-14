@@ -22,7 +22,8 @@ export function useCampaignFactory () {
       targetAmount: string,
       selectedToken: string,
       duration: string,
-      imageUrl?: string
+      imageUrl?: string,
+      category?: string
     ) => {
       try {
         setIsLoading(true)
@@ -154,6 +155,7 @@ export function useCampaignFactory () {
           owner: user.uid, // Use Firebase auth UID instead of wallet address
           ownerAddress, // Store wallet address for reference
           imageUrl: imageUrl || null,
+          category: category || null,
           createdAt: new Date().toISOString(),
           networkId: network.chainId.toString()
         }
