@@ -3,11 +3,14 @@ import { useState, useEffect } from 'react'
 import { ShareIcon } from '@heroicons/react/24/outline'
 import Contributors from '../../components/campaigns/Contributors'
 import { formatNumber } from '../../utils/format'
-import { doc, getDoc } from 'firebase/firestore'
+import { doc, getDoc, Timestamp } from 'firebase/firestore'
 import { db } from '../../utils/firebase'
-import { formatUnits } from 'ethers'
+import { formatUnits, parseUnits, Contract, BrowserProvider } from 'ethers'
 import { useTokens } from '../../hooks/useTokens'
 import { differenceInDays } from 'date-fns'
+import { useAccount, useWalletClient, usePublicClient } from 'wagmi'
+import toast from 'react-hot-toast'
+import CampaignABI from '../../../artifacts/contracts/Campaign.sol/Campaign.json'
 
 interface Campaign {
   id: string
@@ -18,11 +21,14 @@ interface Campaign {
   token: string
   statusText: string
   statusReasonText?: string
-  createdAt: string
+  createdAt: string | Date | Timestamp
   duration: string
   contributors?: number
   imageUrl?: string
   category?: string
+  campaignAddress?: string
+  status: number
+  statusReason: number
 }
 
 export default function CampaignDetail () {
@@ -33,6 +39,11 @@ export default function CampaignDetail () {
   const [isLoading, setIsLoading] = useState(true)
   const { getTokenByAddress } = useTokens()
   const [mounted, setMounted] = useState(false)
+  const [contributionAmount, setContributionAmount] = useState('')
+  const [isContributing, setIsContributing] = useState(false)
+  const { address, isConnected } = useAccount()
+  const { data: walletClient } = useWalletClient()
+  const publicClient = usePublicClient()
 
   useEffect(() => {
     setMounted(true)
@@ -61,10 +72,15 @@ export default function CampaignDetail () {
       const campaignSnap = await getDoc(campaignRef)
 
       if (campaignSnap.exists()) {
-        setCampaign({
+        const campaignData = {
           id: campaignSnap.id,
           ...campaignSnap.data()
-        } as Campaign)
+        } as Campaign
+        console.log(
+          'Campaign address from Firestore:',
+          campaignData.campaignAddress
+        )
+        setCampaign(campaignData)
       } else {
         setCampaign(null)
       }
@@ -120,7 +136,9 @@ export default function CampaignDetail () {
   const formatAmount = (amount: string | undefined): string => {
     if (!amount || !token) return '0'
     try {
-      return formatUnits(amount, token.decimals)
+      const rawAmount = formatUnits(amount, token.decimals)
+      // Round to remove decimals, then format with commas
+      return formatNumber(Math.round(parseFloat(rawAmount)))
     } catch (error) {
       console.error('Error formatting amount:', error)
       return '0'
@@ -145,8 +163,21 @@ export default function CampaignDetail () {
 
   const calculateDaysRemaining = (): number => {
     if (!campaign.createdAt || !campaign.duration) return 0
+
+    // Convert createdAt to a Date object regardless of input type
+    let createdAtDate: Date
+
+    if (typeof campaign.createdAt === 'string') {
+      createdAtDate = new Date(campaign.createdAt)
+    } else if (campaign.createdAt instanceof Date) {
+      createdAtDate = campaign.createdAt
+    } else {
+      // Handle Firestore Timestamp
+      createdAtDate = campaign.createdAt.toDate()
+    }
+
     const endDate = new Date(
-      new Date(campaign.createdAt).getTime() +
+      createdAtDate.getTime() +
         parseInt(campaign.duration) * 24 * 60 * 60 * 1000
     )
     const daysRemaining = differenceInDays(endDate, new Date())
@@ -157,6 +188,148 @@ export default function CampaignDetail () {
   const daysLeft = calculateDaysRemaining()
   const formattedRaised = formatAmount(campaign.totalRaised)
   const formattedGoal = formatAmount(campaign.goalAmountSmallestUnits)
+
+  const handleContribute = async () => {
+    if (
+      !campaign?.campaignAddress ||
+      !contributionAmount ||
+      !walletClient ||
+      !isConnected ||
+      !token
+    ) {
+      toast.error('Please connect your wallet and enter an amount')
+      return
+    }
+
+    setIsContributing(true)
+    const toastId = toast.loading('Contributing to campaign...')
+    let signer
+
+    try {
+      // Create provider and signer using the same pattern as useCampaignFactory
+      const provider = new BrowserProvider(walletClient.transport)
+      signer = await provider.getSigner()
+
+      // Create token contract instance
+      const tokenContract = new Contract(
+        campaign.token,
+        [
+          'function approve(address spender, uint256 amount) public returns (bool)',
+          'function allowance(address owner, address spender) public view returns (uint256)',
+          'function balanceOf(address owner) public view returns (uint256)'
+        ],
+        signer
+      )
+
+      // Convert amount to smallest units
+      const amountInSmallestUnits = parseUnits(
+        contributionAmount,
+        token.decimals
+      )
+
+      // Check user's token balance
+      const userBalance = await tokenContract.balanceOf(address)
+      if (userBalance < amountInSmallestUnits) {
+        const formattedBalance = formatUnits(userBalance, token.decimals)
+        toast.error(
+          `Insufficient balance. You have ${formattedBalance} ${token.symbol}`,
+          { id: toastId }
+        )
+        return
+      }
+
+      // Check current allowance
+      const currentAllowance = await tokenContract.allowance(
+        address,
+        campaign.campaignAddress
+      )
+
+      // If allowance is less than amount, request approval
+      if (currentAllowance < amountInSmallestUnits) {
+        toast.loading('Approving token transfer...', { id: toastId })
+        try {
+          const approveTx = await tokenContract.approve(
+            campaign.campaignAddress,
+            amountInSmallestUnits
+          )
+          await approveTx.wait()
+        } catch (approveError: any) {
+          // Handle user rejection of approval
+          if (
+            approveError?.code === 'ACTION_REJECTED' ||
+            approveError?.message?.includes('user rejected')
+          ) {
+            toast.error('Token approval was cancelled', { id: toastId })
+            return
+          }
+          throw approveError // Re-throw other errors
+        }
+      }
+
+      // Create campaign contract instance
+      const campaignContract = new Contract(
+        campaign.campaignAddress,
+        CampaignABI.abi,
+        signer
+      )
+
+      // Send contribution transaction
+      const tx = await campaignContract.contribute(amountInSmallestUnits)
+      toast.loading('Waiting for confirmation...', { id: toastId })
+
+      // Wait for transaction
+      await tx.wait()
+
+      toast.success('Contribution successful!', { id: toastId })
+
+      // Refresh campaign data
+      await fetchCampaign(campaign.id)
+
+      // Reset form
+      setContributionAmount('')
+    } catch (error: any) {
+      console.error('Error contributing:', error)
+
+      // Reset approval on failure
+      if (signer) {
+        try {
+          const tokenContract = new Contract(
+            campaign.token,
+            [
+              'function approve(address spender, uint256 amount) public returns (bool)'
+            ],
+            signer
+          )
+          await tokenContract.approve(campaign.campaignAddress, 0)
+        } catch (approvalError) {
+          console.error('Error resetting approval:', approvalError)
+        }
+      }
+
+      // Show user-friendly error messages
+      let errorMessage = 'Failed to contribute'
+      if (error) {
+        if (
+          error.code === 'ACTION_REJECTED' ||
+          error.message?.includes('user rejected')
+        ) {
+          errorMessage = 'Transaction was cancelled'
+        } else if (error.message?.includes('transfer amount exceeds balance')) {
+          errorMessage = 'Insufficient token balance'
+        } else if (
+          error.message?.includes('transfer amount exceeds allowance')
+        ) {
+          errorMessage = 'Token approval failed'
+        } else {
+          errorMessage = error.message || 'Failed to contribute'
+        }
+      }
+
+      toast.error(errorMessage, { id: toastId })
+    } finally {
+      setIsContributing(false)
+    }
+  }
 
   return (
     <div className='min-h-screen bg-gray-50 py-8'>
@@ -181,7 +354,22 @@ export default function CampaignDetail () {
                     {campaign.category}
                   </span>
                 )}
-                <h1 className='text-3xl font-bold'>{campaign.title}</h1>
+                <div className='flex items-center gap-4'>
+                  <h1 className='text-3xl font-bold'>{campaign.title}</h1>
+                  {campaign.status === 1 ? (
+                    <span className='inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800'>
+                      Active
+                    </span>
+                  ) : campaign.status === 2 && campaign.statusReason === 1 ? (
+                    <span className='inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800'>
+                      Goal Reached
+                    </span>
+                  ) : (
+                    <span className='inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800'>
+                      Unsuccessful
+                    </span>
+                  )}
+                </div>
               </div>
               <button
                 className='p-2 hover:bg-gray-100 rounded-full'
@@ -209,33 +397,31 @@ export default function CampaignDetail () {
                   </p>
                 </div>
                 <div className='text-right'>
-                  <p className='text-2xl font-bold'>{daysLeft}</p>
-                  <p className='text-sm text-gray-600'>days left</p>
+                  <p className='text-2xl font-bold'>
+                    {formattedGoal} {token?.symbol}
+                  </p>
+                  <p className='text-sm text-gray-600'>Goal Amount</p>
                 </div>
               </div>
             </div>
 
             {/* Quick Stats */}
             <div className='grid grid-cols-3 gap-4 py-4 border-t border-b'>
-              <div>
+              <div className='text-center'>
                 <p className='text-2xl font-bold'>
                   {campaign.contributors || 0}
                 </p>
-                <p className='text-sm text-gray-600'>contributors</p>
+                <p className='text-sm text-gray-600'>Contributors</p>
               </div>
-              <div>
-                <p className='text-2xl font-bold'>
-                  {campaign.statusText}
-                  {campaign.statusReasonText &&
-                    ` (${campaign.statusReasonText})`}
-                </p>
-                <p className='text-sm text-gray-600'>Status</p>
+              <div className='text-center'>
+                <p className='text-2xl font-bold'>{daysLeft}</p>
+                <p className='text-sm text-gray-600'>Days Remaining</p>
               </div>
-              <div>
+              <div className='text-center'>
                 <p className='text-2xl font-bold'>
                   {token?.symbol || 'Loading...'}
                 </p>
-                <p className='text-sm text-gray-600'>target coin</p>
+                <p className='text-sm text-gray-600'>Target Coin</p>
               </div>
             </div>
           </div>
@@ -272,20 +458,19 @@ export default function CampaignDetail () {
           <div className='p-6'>
             {activeTab === 'details' && (
               <div className='prose max-w-none'>
-                <p>{campaign.description}</p>
+                <p className='text-gray-600'>{campaign.description}</p>
               </div>
             )}
 
-            {activeTab === 'contributors' && campaign.contributors ? (
+            {activeTab === 'contributors' && (
               <div>
                 <p className='text-gray-600'>
-                  This campaign has {campaign.contributors} contributor
-                  {campaign.contributors !== 1 ? 's' : ''}.
+                  {campaign.contributors
+                    ? `This campaign has ${campaign.contributors} contributor${
+                        campaign.contributors !== 1 ? 's' : ''
+                      }.`
+                    : 'No contributors yet'}
                 </p>
-              </div>
-            ) : (
-              <div>
-                <p className='text-gray-600'>No contributors yet</p>
               </div>
             )}
           </div>
@@ -302,13 +487,35 @@ export default function CampaignDetail () {
               <input
                 type='number'
                 min='0'
+                value={contributionAmount}
+                onChange={e => setContributionAmount(e.target.value)}
                 placeholder='Enter amount'
                 className='w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500'
+                disabled={isContributing}
               />
             </div>
-            <button className='w-full bg-blue-600 text-white py-3 px-4 rounded-lg font-medium hover:bg-blue-700 transition-colors'>
-              Contribute
+            <button
+              onClick={handleContribute}
+              disabled={
+                !isConnected ||
+                isContributing ||
+                !contributionAmount ||
+                !campaign?.campaignAddress
+              }
+              className='w-full bg-blue-600 text-white py-3 px-4 rounded-lg font-medium hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed'
+            >
+              {isContributing ? 'Contributing...' : 'Contribute'}
             </button>
+            {!isConnected && (
+              <p className='text-sm text-red-600'>
+                Please connect your wallet to contribute
+              </p>
+            )}
+            {!campaign?.campaignAddress && (
+              <p className='text-sm text-red-600'>
+                Campaign contract address not found
+              </p>
+            )}
           </div>
         </div>
       </div>
