@@ -14,7 +14,9 @@ import {
   DocumentTextIcon,
   Bars3Icon,
   XMarkIcon,
-  RocketLaunchIcon
+  RocketLaunchIcon,
+  CurrencyDollarIcon,
+  BanknotesIcon
 } from '@heroicons/react/24/outline'
 import { isAdmin } from '../utils/admin'
 import { useFirebaseAuth } from '../hooks/useFirebaseAuth'
@@ -45,12 +47,20 @@ export default function Navbar () {
   ]
 
   const adminNavigation = [
-    { name: 'Dashboard', href: '/admin', icon: ChartBarIcon },
-    { name: 'User Management', href: '/admin/users', icon: UsersIcon },
     {
-      name: 'Campaign Review',
-      href: '/admin/campaigns',
-      icon: DocumentTextIcon
+      name: 'Token Management',
+      href: '/admin/token-management',
+      icon: CurrencyDollarIcon
+    },
+    {
+      name: 'Platform Admins',
+      href: '/admin/platform-admins',
+      icon: ShieldCheckIcon
+    },
+    {
+      name: 'Fee Management',
+      href: '/admin/fee-management',
+      icon: BanknotesIcon
     }
   ]
 
