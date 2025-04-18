@@ -11,6 +11,7 @@ import { differenceInDays } from 'date-fns'
 import { useAccount, useWalletClient, usePublicClient } from 'wagmi'
 import toast from 'react-hot-toast'
 import CampaignABI from '../../../artifacts/contracts/Campaign.sol/Campaign.json'
+import CampaignTimer from '../../components/campaigns/CampaignTimer'
 
 interface Campaign {
   id: string
@@ -414,8 +415,12 @@ export default function CampaignDetail () {
                 <p className='text-sm text-gray-600'>Contributors</p>
               </div>
               <div className='text-center'>
-                <p className='text-2xl font-bold'>{daysLeft}</p>
-                <p className='text-sm text-gray-600'>Days Remaining</p>
+                <CampaignTimer
+                  startTime={campaign.createdAt instanceof Date ? campaign.createdAt.getTime() / 1000 : typeof campaign.createdAt === 'string' ? new Date(campaign.createdAt).getTime() / 1000 : campaign.createdAt.toDate().getTime() / 1000}
+                  endTime={campaign.createdAt instanceof Date ? campaign.createdAt.getTime() / 1000 + Number(campaign.duration) * 24 * 60 * 60 : typeof campaign.createdAt === 'string' ? new Date(campaign.createdAt).getTime() / 1000 + Number(campaign.duration) * 24 * 60 * 60 : campaign.createdAt.toDate().getTime() / 1000 + Number(campaign.duration) * 24 * 60 * 60}
+                  duration={Number(campaign.duration)}
+                />
+                <p className='text-sm text-gray-600'>Time Remaining</p>
               </div>
               <div className='text-center'>
                 <p className='text-2xl font-bold'>

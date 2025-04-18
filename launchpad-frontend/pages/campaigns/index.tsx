@@ -166,7 +166,7 @@ export const dummyCampaigns: Campaign[] = [
   }
 ]
 
-export default function CampaignsDiscovery () {
+export default function CampaignsDiscovery() {
   const router = useRouter()
   const [mounted, setMounted] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
@@ -174,19 +174,37 @@ export default function CampaignsDiscovery () {
   const [sortBy, setSortBy] = useState('newest')
   const [showFilters, setShowFilters] = useState(false)
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
-  const { campaigns: realCampaigns, isLoading: isLoadingCampaigns } =
-    useCampaigns()
+  const { campaigns, isLoading, error, refresh } = useCampaigns()
+
+  // Handle category from URL parameter
+  useEffect(() => {
+    if (router.isReady) {
+      const { category } = router.query
+      if (category && typeof category === 'string') {
+        setSelectedCategory(category.toLowerCase() === 'all' ? 'all' : category)
+      } else {
+        // If no category is specified, default to 'all'
+        setSelectedCategory('all')
+      }
+    }
+  }, [router.isReady, router.query])
 
   useEffect(() => {
     setMounted(true)
   }, [])
 
   const handleCategoryChange = (category: string) => {
-    setSelectedCategory(category)
+    const newCategory = category.toLowerCase() === 'all' ? 'all' : category
+    setSelectedCategory(newCategory)
+    // Update URL when category changes
+    router.push({
+      pathname: router.pathname,
+      query: { ...router.query, category: newCategory }
+    }, undefined, { shallow: true })
   }
 
   // Filter campaigns based on search query and category
-  const filteredCampaigns = realCampaigns.filter(campaign => {
+  const filteredCampaigns = campaigns.filter(campaign => {
     const matchesSearch =
       campaign.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
       campaign.description.toLowerCase().includes(searchQuery.toLowerCase())
@@ -222,13 +240,15 @@ export default function CampaignsDiscovery () {
       <div className='container mx-auto px-4 py-8'>
         <div className='flex justify-between items-center mb-8'>
           <h1 className='text-3xl font-bold'>Discover Campaigns</h1>
-          <button
-            onClick={() => setIsCreateModalOpen(true)}
-            className='inline-flex items-center px-4 py-2 bg-green-600 text-white hover:bg-green-700 rounded-lg font-medium transition-colors'
-          >
-            <RocketLaunchIcon className='w-5 h-5 mr-2' />
-            Create Campaign
-          </button>
+          {sortedCampaigns.length > 0 && (
+            <button
+              onClick={() => setIsCreateModalOpen(true)}
+              className='inline-flex items-center px-4 py-2 bg-green-600 text-white hover:bg-green-700 rounded-lg font-medium transition-colors'
+            >
+              <RocketLaunchIcon className='w-5 h-5 mr-2' />
+              Create Campaign
+            </button>
+          )}
         </div>
 
         {/* Search and Filter Bar */}
@@ -249,7 +269,7 @@ export default function CampaignsDiscovery () {
             {/* Filter Toggle Button */}
             <button
               onClick={() => setShowFilters(!showFilters)}
-              className='flex items-center justify-center px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50'
+              className='inline-flex items-center px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50'
             >
               <FunnelIcon className='h-5 w-5 mr-2' />
               Filters
@@ -258,46 +278,52 @@ export default function CampaignsDiscovery () {
 
           {/* Filters Panel */}
           {showFilters && (
-            <CampaignFilters
-              selectedCategory={selectedCategory}
-              setSelectedCategory={handleCategoryChange}
-              sortBy={sortBy}
-              setSortBy={setSortBy}
-            />
+            <div className='mt-4'>
+              <CampaignFilters
+                selectedCategory={selectedCategory}
+                setSelectedCategory={handleCategoryChange}
+                sortBy={sortBy}
+                setSortBy={setSortBy}
+              />
+            </div>
           )}
         </div>
 
         {/* Campaign Grid */}
-        <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6'>
-          {sortedCampaigns.map(campaign => (
-            <CampaignCard
-              key={campaign.id}
-              campaign={campaign}
-              onClick={() => handleCampaignClick(campaign.id)}
-            />
-          ))}
-        </div>
-
-        {/* No Results Message */}
-        {sortedCampaigns.length === 0 && (
+        {sortedCampaigns.length > 0 ? (
+          <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6'>
+            {sortedCampaigns.map(campaign => (
+              <CampaignCard
+                key={campaign.id}
+                campaign={campaign}
+                onClick={() => handleCampaignClick(campaign.id)}
+              />
+            ))}
+          </div>
+        ) : (
           <div className='text-center py-12'>
-            <p className='text-gray-600'>
-              No campaigns found matching your criteria.
+            <h3 className='text-xl font-semibold mb-4'>
+              No campaigns found in this category
+            </h3>
+            <p className='text-gray-600 mb-6'>
+              Be the first to create a campaign in the {selectedCategory} category!
             </p>
+            <button
+              onClick={() => setIsCreateModalOpen(true)}
+              className='inline-flex items-center px-6 py-3 bg-green-600 text-white hover:bg-green-700 rounded-lg font-medium transition-colors'
+            >
+              <RocketLaunchIcon className='w-5 h-5 mr-2' />
+              Create Campaign
+            </button>
           </div>
         )}
 
         {/* Create Campaign Modal */}
-        {mounted && (
-          <CreateCampaignModal
-            isOpen={isCreateModalOpen}
-            onClose={() => setIsCreateModalOpen(false)}
-            onCampaignCreated={() => {
-              // The useCampaigns hook will automatically refresh
-              setIsCreateModalOpen(false)
-            }}
-          />
-        )}
+        <CreateCampaignModal
+          isOpen={isCreateModalOpen}
+          onClose={() => setIsCreateModalOpen(false)}
+          onSuccess={refresh}
+        />
       </div>
     </div>
   )

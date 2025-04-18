@@ -1,9 +1,60 @@
-// List of admin addresses (in production this should come from the smart contract)
-const ADMIN_ADDRESSES = ['0xBF8E22884D8d91434bC162ff6514F61dbD6Fa67A'].map(
-  addr => addr.toLowerCase()
-)
+import { useCallback, useEffect, useState } from 'react'
+import { usePublicClient } from 'wagmi'
+import { CONTRACT_ADDRESSES } from '../config/addresses'
+import PlatformAdminABI from '../../artifacts/contracts/PlatformAdmin.sol/PlatformAdmin.json'
 
-export const isAdmin = (address?: string): boolean => {
-  if (!address) return false
-  return ADMIN_ADDRESSES.includes(address.toLowerCase())
+// Cache for admin status to avoid excessive RPC calls
+const adminStatusCache = new Map<string, { status: boolean; timestamp: number }>()
+const CACHE_DURATION = 5 * 60 * 1000 // 5 minutes
+
+export function useIsAdmin(address?: string) {
+  const [isAdmin, setIsAdmin] = useState<boolean>(false)
+  const [isLoading, setIsLoading] = useState<boolean>(true)
+  const publicClient = usePublicClient()
+
+  const checkAdminStatus = useCallback(async () => {
+    if (!address || !publicClient) {
+      setIsAdmin(false)
+      setIsLoading(false)
+      return
+    }
+
+    const normalizedAddress = address.toLowerCase()
+
+    // Check cache first
+    const cached = adminStatusCache.get(normalizedAddress)
+    if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
+      setIsAdmin(cached.status)
+      setIsLoading(false)
+      return
+    }
+
+    try {
+      const isAdminStatus = await publicClient.readContract({
+        address: CONTRACT_ADDRESSES[84532].platformAdmin as `0x${string}`,
+        abi: PlatformAdminABI.abi,
+        functionName: 'isPlatformAdmin',
+        args: [address]
+      }) as boolean
+
+      // Update cache
+      adminStatusCache.set(normalizedAddress, {
+        status: isAdminStatus,
+        timestamp: Date.now()
+      })
+
+      setIsAdmin(isAdminStatus)
+    } catch (error) {
+      console.error('Error checking admin status:', error)
+      setIsAdmin(false)
+    } finally {
+      setIsLoading(false)
+    }
+  }, [address, publicClient])
+
+  useEffect(() => {
+    checkAdminStatus()
+  }, [checkAdminStatus])
+
+  return { isAdmin, isLoading, refresh: checkAdminStatus }
 }

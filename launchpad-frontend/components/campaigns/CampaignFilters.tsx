@@ -15,12 +15,24 @@ export default function CampaignFilters ({
 }: CampaignFiltersProps) {
   const categories = [
     'all',
-    'Environment',
+    'Medical',
+    'Memorial',
+    'Emergency',
+    'Nonprofit',
     'Education',
-    'Healthcare',
-    'Technology',
-    'Infrastructure',
-    'Science & Research'
+    'Animal',
+    'Environment',
+    'Business',
+    'Community',
+    'Competition',
+    'Creative',
+    'Event',
+    'Faith',
+    'Family',
+    'Sports',
+    'Travel',
+    'Volunteer',
+    'Wishes'
   ]
 
   const sortOptions = [

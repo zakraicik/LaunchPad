@@ -17,12 +17,13 @@ import {
   CurrencyDollarIcon,
   BanknotesIcon
 } from '@heroicons/react/24/outline'
-import { isAdmin } from '../utils/admin'
+import { useIsAdmin } from '../utils/admin'
 import { useFirebaseAuth } from '../hooks/useFirebaseAuth'
 
 export default function Navbar () {
   const router = useRouter()
   const { isConnected, address } = useAccount()
+  const { isAdmin, isLoading: isLoadingAdmin } = useIsAdmin(address)
   const [mounted, setMounted] = useState(false)
   const [isDropdownOpen, setIsDropdownOpen] = useState(false)
   const [isAdminDropdownOpen, setIsAdminDropdownOpen] = useState(false)
@@ -31,7 +32,7 @@ export default function Navbar () {
 
   const navigation = [
     { name: 'Home', href: '/' },
-    { name: 'Discover', href: '/campaigns' },
+    { name: 'Discover', href: '/campaigns?category=all' },
     { name: 'About', href: '/about' }
   ]
 
@@ -66,7 +67,10 @@ export default function Navbar () {
 
   // Handle hydration mismatch
   useEffect(() => {
-    setMounted(true)
+    const timeout = setTimeout(() => {
+      setMounted(true)
+    }, 0)
+    return () => clearTimeout(timeout)
   }, [])
 
   // Close dropdowns when clicking outside
@@ -94,7 +98,21 @@ export default function Navbar () {
 
   // Don't render wallet-dependent elements until client-side hydration is complete
   const shouldShowAccount = mounted && isConnected
-  const shouldShowAdmin = mounted && isConnected && isAdmin(address)
+  const shouldShowAdmin = mounted && isConnected && isAdmin && !isLoadingAdmin
+
+  if (!mounted) {
+    return (
+      <nav className='bg-white shadow-sm'>
+        <div className='max-w-7xl mx-auto px-4 sm:px-6 lg:px-8'>
+          <div className='flex items-center justify-between h-16'>
+            <Link href='/' className='flex-shrink-0'>
+              <span className='text-xl font-bold text-blue-600'>LaunchPad</span>
+            </Link>
+          </div>
+        </div>
+      </nav>
+    )
+  }
 
   return (
     <nav className='bg-white shadow-sm'>

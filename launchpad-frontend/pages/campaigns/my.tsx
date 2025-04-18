@@ -3,10 +3,10 @@ import { useAccount } from 'wagmi'
 import { formatUnits } from 'ethers'
 import { useTokens } from '../../hooks/useTokens'
 import Link from 'next/link'
-import { differenceInDays } from 'date-fns'
 import { PlusIcon } from '@heroicons/react/24/outline'
 import { useRouter } from 'next/router'
 import CreateCampaignModal from '../../components/campaigns/CreateCampaignModal'
+import CampaignCard from '../../components/campaigns/CampaignCard'
 import {
   useCampaigns,
   Campaign as BaseCampaign
@@ -22,36 +22,9 @@ interface Campaign extends BaseCampaign {
 
 interface CampaignWithCalculations extends Campaign {
   progress: number
-  daysRemaining: number
   formattedRaised: string
   formattedTarget: string
   statusColor: string
-}
-
-const calculateDaysRemaining = (
-  createdAt: string | Date | FirebaseFirestore.Timestamp,
-  duration: string
-) => {
-  if (!createdAt || !duration) return 0
-
-  // Convert createdAt to a Date object regardless of input type
-  let createdAtDate: Date
-
-  if (typeof createdAt === 'string') {
-    createdAtDate = new Date(createdAt)
-  } else if (createdAt instanceof Date) {
-    createdAtDate = createdAt
-  } else {
-    // Handle Firestore Timestamp
-    createdAtDate = createdAt.toDate()
-  }
-
-  const endDate = new Date(
-    createdAtDate.getTime() + parseInt(duration) * 24 * 60 * 60 * 1000
-  )
-
-  const daysRemaining = differenceInDays(endDate, new Date())
-  return Math.max(0, daysRemaining)
 }
 
 export default function MyCampaigns () {
@@ -125,8 +98,6 @@ export default function MyCampaigns () {
       const statusText =
         campaign.status.charAt(0).toUpperCase() + campaign.status.slice(1)
 
-      const daysRemaining = calculateDaysRemaining(campaign.createdAt, duration)
-
       const processedCampaign = {
         ...campaign,
         duration,
@@ -138,7 +109,6 @@ export default function MyCampaigns () {
           goalAmountSmallestUnits,
           token
         ),
-        daysRemaining,
         formattedRaised: formatAmount(campaign.totalRaised, token),
         formattedTarget: formatAmount(goalAmountSmallestUnits, token),
         statusColor: getStatusColor(statusText)
@@ -227,7 +197,7 @@ export default function MyCampaigns () {
           <CreateCampaignModal
             isOpen={isCreateModalOpen}
             onClose={() => setIsCreateModalOpen(false)}
-            onCampaignCreated={() => {
+            onSuccess={() => {
               setIsCreateModalOpen(false)
               refreshCampaigns()
             }}
@@ -257,84 +227,13 @@ export default function MyCampaigns () {
         </div>
 
         <div className='grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3'>
-          {processedCampaigns.map(campaign => {
-            const token = memoizedGetTokenByAddress(campaign.token)
-
-            return (
-              <div
-                key={campaign.id}
-                className='bg-white overflow-hidden shadow rounded-lg divide-y divide-gray-200'
-              >
-                <div className='px-4 py-5 sm:px-6'>
-                  <button
-                    onClick={() => handleViewCampaign(campaign.id)}
-                    className='w-full text-left'
-                  >
-                    <h3 className='text-lg font-medium text-gray-900 hover:text-blue-600'>
-                      {campaign.title}
-                    </h3>
-                  </button>
-                  <p className='mt-1 text-sm text-gray-500 line-clamp-2'>
-                    {campaign.description}
-                  </p>
-                </div>
-                <div className='px-4 py-4 sm:px-6'>
-                  <div className='flex items-center justify-between mb-4'>
-                    <div>
-                      <p className='text-sm text-gray-500'>Raised</p>
-                      <p className='text-lg font-semibold text-gray-900'>
-                        {campaign.formattedRaised} {token?.symbol}
-                      </p>
-                    </div>
-                    <div>
-                      <p className='text-sm text-gray-500'>Goal</p>
-                      <p className='text-lg font-semibold text-gray-900'>
-                        {campaign.formattedTarget} {token?.symbol}
-                      </p>
-                    </div>
-                  </div>
-                  <div className='mt-4'>
-                    <div className='relative pt-1'>
-                      <div className='flex mb-2 items-center justify-between'>
-                        <span className='text-sm text-gray-500'>Progress</span>
-                        <span className='text-sm font-semibold text-gray-900'>
-                          {campaign.progress.toFixed(1)}%
-                        </span>
-                      </div>
-                      <div className='overflow-hidden h-2 mb-4 text-xs flex rounded bg-gray-200'>
-                        <div
-                          style={{ width: `${campaign.progress}%` }}
-                          className='shadow-none flex flex-col text-center whitespace-nowrap text-white justify-center bg-blue-500'
-                        />
-                      </div>
-                      <div className='flex items-center justify-between'>
-                        <div>
-                          <span
-                            className={`text-xs font-semibold inline-block py-1 px-2 uppercase rounded-full ${campaign.statusColor}`}
-                          >
-                            {campaign.statusText}
-                          </span>
-                        </div>
-                        <div className='text-right'>
-                          <span className='text-xs font-semibold inline-block text-gray-600'>
-                            {campaign.daysRemaining} days left
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                  <div className='mt-4'>
-                    <Link
-                      href={`/campaigns/${campaign.id}`}
-                      className='text-sm font-medium text-blue-600 hover:text-blue-500'
-                    >
-                      View campaign details →
-                    </Link>
-                  </div>
-                </div>
-              </div>
-            )
-          })}
+          {processedCampaigns.map(campaign => (
+            <CampaignCard
+              key={campaign.id}
+              campaign={campaign}
+              onClick={() => handleViewCampaign(campaign.id)}
+            />
+          ))}
         </div>
       </div>
     </div>

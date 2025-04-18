@@ -1,7 +1,7 @@
 import { Campaign } from '../../hooks/useCampaigns'
 import { formatUnits } from 'ethers'
 import { useTokens } from '../../hooks/useTokens'
-import { differenceInDays } from 'date-fns'
+import { formatTimeLeft } from '../../utils/format'
 import { Timestamp } from 'firebase/firestore'
 
 interface CampaignCardProps {
@@ -29,8 +29,8 @@ export default function CampaignCard ({ campaign, onClick }: CampaignCardProps) 
       ? (Number(campaign.totalRaised) / Number(campaign.targetAmount)) * 100
       : 0
 
-  const calculateDaysRemaining = (): number => {
-    if (!campaign.createdAt || !campaign.duration) return 0
+  const calculateTimeRemaining = (): string => {
+    if (!campaign.createdAt || !campaign.duration) return '0'
 
     try {
       // Handle Firebase Timestamp
@@ -42,11 +42,13 @@ export default function CampaignCard ({ campaign, onClick }: CampaignCardProps) 
         createdAtDate.getTime() +
           parseInt(campaign.duration) * 24 * 60 * 60 * 1000
       )
-      const daysRemaining = differenceInDays(endDate, new Date())
-      return Math.max(0, daysRemaining)
+      
+      const now = new Date()
+      const secondsRemaining = Math.floor((endDate.getTime() - now.getTime()) / 1000)
+      return formatTimeLeft(secondsRemaining)
     } catch (error) {
-      console.error('Error calculating days remaining:', error)
-      return 0
+      console.error('Error calculating time remaining:', error)
+      return '0'
     }
   }
 
@@ -115,9 +117,9 @@ export default function CampaignCard ({ campaign, onClick }: CampaignCardProps) 
               </p>
             </div>
             <div>
-              <span className='text-gray-600'>Days Left</span>
+              <span className='text-gray-600'>Time Left</span>
               <p className='font-medium bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent'>
-                {calculateDaysRemaining()}
+                {calculateTimeRemaining()}
               </p>
             </div>
           </div>

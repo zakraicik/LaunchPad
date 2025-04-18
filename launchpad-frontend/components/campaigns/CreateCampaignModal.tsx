@@ -14,7 +14,7 @@ interface Token {
 interface CreateCampaignModalProps {
   isOpen: boolean
   onClose: () => void
-  onCampaignCreated?: () => void
+  onSuccess?: () => void
 }
 
 const categories = [
@@ -41,7 +41,7 @@ const categories = [
 export default function CreateCampaignModal ({
   isOpen,
   onClose,
-  onCampaignCreated
+  onSuccess
 }: CreateCampaignModalProps) {
   const [mounted, setMounted] = useState(false)
   const { address, isConnected } = useAccount()
@@ -109,7 +109,7 @@ export default function CreateCampaignModal ({
 
     try {
       toast.loading('Deploying campaign contract...', { id: toastId })
-      const campaignId = await createCampaign(
+      await createCampaign(
         title,
         description,
         targetAmount,
@@ -120,7 +120,9 @@ export default function CreateCampaignModal ({
 
       toast.success('Campaign created successfully!', { id: toastId })
       onClose()
-      onCampaignCreated?.()
+      if (onSuccess) {
+        onSuccess()
+      }
     } catch (err) {
       console.error('Error creating campaign:', err)
       const errorMessage =

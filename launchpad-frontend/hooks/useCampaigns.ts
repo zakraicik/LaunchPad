@@ -46,7 +46,7 @@ export function useCampaigns ({ filterByOwner = false }: UseCampaignsOptions = {
 
       // Add owner filter if requested and address is available
       if (filterByOwner && address) {
-        q = query(campaignsRef, where('ownerAddress', '==', address.toLowerCase()), orderBy('createdAt', 'desc'))
+        q = query(campaignsRef, where('creator', '==', address.toLowerCase()), orderBy('createdAt', 'desc'))
       }
 
       const querySnapshot = await getDocs(q)

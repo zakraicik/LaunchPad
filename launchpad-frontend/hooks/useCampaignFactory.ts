@@ -30,7 +30,6 @@ export function useCampaignFactory () {
       targetAmount: string,
       selectedToken: string,
       duration: string,
-      imageUrl?: string,
       category?: string
     ) => {
       try {
@@ -189,7 +188,9 @@ export function useCampaignFactory () {
         console.log('useCampaignFactory: Final decoded event:', decodedEvent)
 
         const campaignId = decodedEvent[3]
+        const campaignAddress = decodedEvent[1].toLowerCase()
         console.log('useCampaignFactory: Extracted campaign ID:', campaignId)
+        console.log('useCampaignFactory: Extracted campaign address:', campaignAddress)
 
         // Create or update the campaign document in Firebase
         const campaignRef = doc(db, 'campaigns', campaignId)
@@ -199,9 +200,7 @@ export function useCampaignFactory () {
           goalAmountSmallestUnits: targetAmountInWei.toString(),
           token: selectedToken,
           duration: durationInDays,
-          owner: user.uid,
-          ownerAddress,
-          imageUrl: imageUrl || null,
+          frontEndAuthID: user.uid,
           category: category || null,
           networkId: network.chainId.toString()
         }
