@@ -9,10 +9,10 @@ export const CONTRACT_ADDRESSES: Record<SupportedNetwork, {
   platformAdmin: string
 }> = {
   84532: {
-    tokenRegistry: '0x38ddf2ad02d9d5c8bd237173aae5c438222b4e22',
-    campaignFactory: '0x3861f352ef5bf6a188cb654de2893ec768a0e670',
-    defiManager: '0x56b236df8f47cc0cf258c477d387ec8bcfe5c170',
-    platformAdmin: '0xB79BD073759FF71396C747362957255475F91bA7'
+    tokenRegistry: '0x83bEF8918f2c00080dD7aB984B7d22CaF28a5826',
+    campaignFactory: '0xeC5828af1995430f6a9c870ba34d8c567bF41C7F',
+    defiManager: '0xC857a4B4f1df79efe286d76A68B6c9742B3083Cb',
+    platformAdmin: '0xDF41aa9f24165a057CD1bFda93Ca0A7F3ACC7f69'
   }
   // Add other networks as needed
 } as const
