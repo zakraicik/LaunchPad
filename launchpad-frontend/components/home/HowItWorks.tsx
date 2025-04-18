@@ -7,27 +7,51 @@ import StepContent from '@mui/material/StepContent'
 import Button from '@mui/material/Button'
 import Paper from '@mui/material/Paper'
 import Typography from '@mui/material/Typography'
+import { styled } from '@mui/material/styles'
+
+const CustomStepIcon = styled('div')(({ theme }) => ({
+  width: 32,
+  height: 32,
+  borderRadius: '50%',
+  backgroundColor: theme.palette.primary.main,
+  color: theme.palette.primary.contrastText,
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  fontWeight: 600
+}))
+
+const StepNumber = React.forwardRef<HTMLDivElement>((props, ref) => {
+  const { active, completed, icon } = props as any
+  return (
+    <CustomStepIcon ref={ref}>
+      {icon}
+    </CustomStepIcon>
+  )
+})
+
+StepNumber.displayName = 'StepNumber'
 
 const steps = [
   {
     label: 'Contribute to Campaigns',
     description:
-      'Choose a campaign you want to support and contribute funds using the campaign token'
+      "Choose a campaign and contribute using the campaign's designated token. Your contribution is securely tracked on-chain, and you're registered as an official contributor."
   },
   {
     label: 'Automatic Yield Generation',
     description:
-      'Your contribution is automatically deployed to a yield-generating protocol'
+      'Your contributions are automatically deployed to established yield protocols, meaning every contribution generates yield while the campaign is active.'
   },
   {
-    label: 'Transparent Tracking',
+    label: 'Campaign Completion - Goal Reached',
     description:
-      'Accumulated yield covers platform fees, meaning your donation keeps working to support the cause'
+      'If the funding goal is reached, the campaign owner can claim all funds plus generated yield. A portion of the yield will be sent to the platform treasury and the owner is free to keep the rest.'
   },
   {
-    label: 'Sustainable Impact',
+    label: 'Campaign Completion - Goal Not Reached',
     description:
-      'Your initial contribution remains intact while generated yields provide ongoing support to the campaign'
+      'If the deadline passes without reaching the goal, contributors can request refunds of their original contributions. Some generated yield will still be sent to the platform treasury, but never at the expense of refund requests.'
   }
 ]
 
@@ -63,6 +87,9 @@ export default function HowItWorks() {
               {steps.map((step, index) => (
                 <Step key={step.label}>
                   <StepLabel
+                    slots={{
+                      stepIcon: StepNumber
+                    }}
                     optional={
                       index === steps.length - 1 ? (
                         <Typography variant="caption">Last step</Typography>
@@ -74,33 +101,36 @@ export default function HowItWorks() {
                   <StepContent>
                     <Typography>{step.description}</Typography>
                     <Box sx={{ mb: 2 }}>
-                      <Button
-                        variant="contained"
-                        onClick={handleNext}
-                        sx={{ mt: 1, mr: 1 }}
-                      >
-                        {index === steps.length - 1 ? 'Finish' : 'Continue'}
-                      </Button>
-                      <Button
-                        disabled={index === 0}
-                        onClick={handleBack}
-                        sx={{ mt: 1, mr: 1 }}
-                      >
-                        Back
-                      </Button>
+                      {index < steps.length - 1 && (
+                        <Button
+                          variant="contained"
+                          onClick={handleNext}
+                          sx={{ mt: 1, mr: 1 }}
+                        >
+                          Continue
+                        </Button>
+                      )}
+                      {index > 0 && (
+                        <Button
+                          onClick={handleBack}
+                          sx={{ mt: 1, mr: 1 }}
+                        >
+                          Back
+                        </Button>
+                      )}
                     </Box>
                   </StepContent>
                 </Step>
               ))}
             </Stepper>
-            {activeStep === steps.length && (
+            {/* {activeStep === steps.length && (
               <Paper square elevation={0} sx={{ p: 3 }}>
                 <Typography>All steps completed - you&apos;re finished</Typography>
                 <Button onClick={handleReset} sx={{ mt: 1, mr: 1 }}>
                   Reset
                 </Button>
               </Paper>
-            )}
+            )} */}
           </Box>
 
           <div className='mt-12 bg-blue-50 rounded-lg p-6'>
