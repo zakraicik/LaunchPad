@@ -57,17 +57,17 @@ const calculateDaysRemaining = (
 export default function MyCampaigns () {
   const router = useRouter()
   const { address } = useAccount()
+  const [mounted, setMounted] = useState(false)
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
   const {
     campaigns: realCampaigns,
     isLoading: isLoadingCampaigns,
     refresh: refreshCampaigns
-  } = useCampaigns()
+  } = useCampaigns({ filterByOwner: true })
+  const { getTokenByAddress } = useTokens()
   const [processedCampaigns, setProcessedCampaigns] = useState<
     CampaignWithCalculations[]
   >([])
-  const { getTokenByAddress } = useTokens()
-  const [mounted, setMounted] = useState(false)
-  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
 
   // Handle hydration
   useEffect(() => {
@@ -201,6 +201,42 @@ export default function MyCampaigns () {
     )
   }
 
+  if (processedCampaigns.length === 0) {
+    return (
+      <div className='min-h-screen bg-gray-50 py-8'>
+        <div className='mx-auto max-w-7xl px-4 sm:px-6 lg:px-8'>
+          <div className='text-center'>
+            <h1 className='text-3xl font-bold tracking-tight text-gray-900 sm:text-4xl'>
+              No Campaigns Yet
+            </h1>
+            <p className='mt-4 text-lg text-gray-500'>
+              You haven't created any campaigns yet. Start your first campaign and begin raising funds today!
+            </p>
+            <div className='mt-8'>
+              <button
+                onClick={() => setIsCreateModalOpen(true)}
+                className='inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500'
+              >
+                <PlusIcon className='w-5 h-5 mr-2' />
+                Create Your First Campaign
+              </button>
+            </div>
+          </div>
+        </div>
+        {mounted && (
+          <CreateCampaignModal
+            isOpen={isCreateModalOpen}
+            onClose={() => setIsCreateModalOpen(false)}
+            onCampaignCreated={() => {
+              setIsCreateModalOpen(false)
+              refreshCampaigns()
+            }}
+          />
+        )}
+      </div>
+    )
+  }
+
   return (
     <div className='min-h-screen bg-gray-50 py-8'>
       <div className='mx-auto max-w-7xl px-4 sm:px-6 lg:px-8'>
@@ -300,18 +336,6 @@ export default function MyCampaigns () {
             )
           })}
         </div>
-
-        {/* Create Campaign Modal */}
-        {mounted && (
-          <CreateCampaignModal
-            isOpen={isCreateModalOpen}
-            onClose={() => setIsCreateModalOpen(false)}
-            onCampaignCreated={() => {
-              setIsCreateModalOpen(false)
-              refreshCampaigns()
-            }}
-          />
-        )}
       </div>
     </div>
   )

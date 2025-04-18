@@ -1,66 +1,158 @@
 import {
-  BeakerIcon,
-  BookOpenIcon,
-  GlobeAltIcon,
   HeartIcon,
-  ComputerDesktopIcon,
-  BuildingOfficeIcon
+  FireIcon,
+  ShieldExclamationIcon,
+  HandRaisedIcon,
+  AcademicCapIcon,
+  BuildingStorefrontIcon,
+  UsersIcon,
+  TrophyIcon,
+  SunIcon,
+  HomeIcon,
+  FlagIcon,
+  GlobeAmericasIcon,
+  SparklesIcon,
+  CalendarIcon
 } from '@heroicons/react/24/outline'
 import Link from 'next/link'
 
 const categories = [
   {
-    name: 'Science & Research',
-    icon: BeakerIcon,
-    description: 'Support groundbreaking scientific research projects',
-    color: 'bg-blue-100',
+    name: 'Medical',
+    icon: HeartIcon,
+    description: 'Support medical treatments and healthcare needs',
+    color: 'bg-blue-50',
+    textColor: 'text-blue-600'
+  },
+  {
+    name: 'Memorial',
+    icon: FireIcon,
+    description: 'Honor and remember loved ones',
+    color: 'bg-blue-50',
+    textColor: 'text-blue-600'
+  },
+  {
+    name: 'Emergency',
+    icon: ShieldExclamationIcon,
+    description: 'Help those facing urgent crises and disasters',
+    color: 'bg-blue-50',
+    textColor: 'text-blue-600'
+  },
+  {
+    name: 'Nonprofit',
+    icon: HandRaisedIcon,
+    description: 'Support charitable organizations and causes',
+    color: 'bg-blue-50',
     textColor: 'text-blue-600'
   },
   {
     name: 'Education',
-    icon: BookOpenIcon,
-    description: 'Fund educational initiatives and learning resources',
-    color: 'bg-green-100',
-    textColor: 'text-green-600'
+    icon: AcademicCapIcon,
+    description: 'Fund educational opportunities and resources',
+    color: 'bg-blue-50',
+    textColor: 'text-blue-600'
+  },
+  {
+    name: 'Animal',
+    icon: HeartIcon,
+    description: 'Help animals in need and support pet care',
+    color: 'bg-blue-50',
+    textColor: 'text-blue-600'
   },
   {
     name: 'Environment',
-    icon: GlobeAltIcon,
-    description: 'Back projects fighting climate change and pollution',
-    color: 'bg-emerald-100',
-    textColor: 'text-emerald-600'
+    icon: SunIcon,
+    description: 'Support environmental conservation efforts',
+    color: 'bg-blue-50',
+    textColor: 'text-blue-600'
   },
   {
-    name: 'Healthcare',
-    icon: HeartIcon,
-    description: 'Support medical research and healthcare access',
-    color: 'bg-red-100',
-    textColor: 'text-red-600'
+    name: 'Business',
+    icon: BuildingStorefrontIcon,
+    description: 'Help small businesses grow and succeed',
+    color: 'bg-blue-50',
+    textColor: 'text-blue-600'
   },
   {
-    name: 'Technology',
-    icon: ComputerDesktopIcon,
-    description: 'Fund innovative tech solutions and development',
-    color: 'bg-purple-100',
-    textColor: 'text-purple-600'
+    name: 'Community',
+    icon: UsersIcon,
+    description: 'Support local community initiatives',
+    color: 'bg-blue-50',
+    textColor: 'text-blue-600'
   },
   {
-    name: 'Infrastructure',
-    icon: BuildingOfficeIcon,
-    description: 'Support community development projects',
-    color: 'bg-orange-100',
-    textColor: 'text-orange-600'
+    name: 'Competition',
+    icon: TrophyIcon,
+    description: 'Fund competitive events and tournaments',
+    color: 'bg-blue-50',
+    textColor: 'text-blue-600'
+  },
+  {
+    name: 'Creative',
+    icon: SparklesIcon,
+    description: 'Support artists and creative projects',
+    color: 'bg-blue-50',
+    textColor: 'text-blue-600'
+  },
+  {
+    name: 'Event',
+    icon: CalendarIcon,
+    description: 'Fund events and gatherings',
+    color: 'bg-blue-50',
+    textColor: 'text-blue-600'
+  },
+  {
+    name: 'Faith',
+    icon: HomeIcon,
+    description: 'Support religious and spiritual causes',
+    color: 'bg-blue-50',
+    textColor: 'text-blue-600'
+  },
+  {
+    name: 'Family',
+    icon: UsersIcon,
+    description: 'Help families in need',
+    color: 'bg-blue-50',
+    textColor: 'text-blue-600'
+  },
+  {
+    name: 'Sports',
+    icon: TrophyIcon,
+    description: 'Support athletes and sports programs',
+    color: 'bg-blue-50',
+    textColor: 'text-blue-600'
+  },
+  {
+    name: 'Travel',
+    icon: GlobeAmericasIcon,
+    description: 'Fund travel and exploration',
+    color: 'bg-blue-50',
+    textColor: 'text-blue-600'
+  },
+  {
+    name: 'Volunteer',
+    icon: HandRaisedIcon,
+    description: 'Support volunteer initiatives',
+    color: 'bg-blue-50',
+    textColor: 'text-blue-600'
+  },
+  {
+    name: 'Wishes',
+    icon: SparklesIcon,
+    description: 'Help make wishes come true',
+    color: 'bg-blue-50',
+    textColor: 'text-blue-600'
   }
 ]
 
 export default function CampaignCategories () {
   return (
-    <section className='py-12 bg-gray-50'>
+    <section className='py-12 bg-white'>
       <div className='container mx-auto px-4'>
         <h2 className='text-3xl font-bold mb-8 text-center'>
           Campaign Categories
         </h2>
-        <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6'>
+        <div className='grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-4'>
           {categories.map(category => (
             <Link
               key={category.name}
@@ -68,16 +160,16 @@ export default function CampaignCategories () {
               className='relative group cursor-pointer h-full'
             >
               <div
-                className={`p-6 rounded-lg ${category.color} transition-all duration-300 hover:scale-105 h-full flex flex-col`}
+                className={`p-4 rounded-lg ${category.color} border border-gray-100 transition-all duration-300 hover:scale-105 hover:shadow-md h-full flex flex-col`}
               >
-                <div className='flex flex-col items-start flex-grow'>
+                <div className='flex flex-col items-center text-center flex-grow'>
                   <category.icon
-                    className={`w-12 h-12 ${category.textColor} mb-4`}
+                    className={`w-8 h-8 ${category.textColor} mb-3`}
                   />
-                  <h3 className='text-xl font-semibold mb-2'>
+                  <h3 className='text-lg font-semibold mb-1 text-gray-900'>
                     {category.name}
                   </h3>
-                  <p className='text-gray-600'>{category.description}</p>
+                  <p className='text-sm text-gray-600'>{category.description}</p>
                 </div>
               </div>
             </Link>

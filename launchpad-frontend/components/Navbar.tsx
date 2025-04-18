@@ -6,7 +6,6 @@ import CustomConnectButton from './ConnectButton'
 import {
   WalletIcon,
   PlusCircleIcon,
-  Cog6ToothIcon,
   ChevronDownIcon,
   ShieldCheckIcon,
   UsersIcon,
@@ -42,8 +41,7 @@ export default function Navbar () {
       href: '/campaigns/my',
       icon: RocketLaunchIcon
     },
-    { name: 'Contributions', href: '/contributions', icon: WalletIcon },
-    { name: 'Settings', href: '/settings', icon: Cog6ToothIcon }
+    { name: 'Contributions', href: '/contributions', icon: WalletIcon }
   ]
 
   const adminNavigation = [
@@ -188,30 +186,6 @@ export default function Navbar () {
               </div>
             )}
 
-            {/* Firebase Auth Status Indicator */}
-            <div className='flex items-center space-x-4'>
-              <div className='flex items-center space-x-2'>
-                <div
-                  className={`w-3 h-3 rounded-full ${
-                    isLoading
-                      ? 'bg-yellow-500'
-                      : user
-                      ? 'bg-green-500'
-                      : 'bg-red-500'
-                  }`}
-                  title={
-                    isLoading
-                      ? 'Loading...'
-                      : user
-                      ? 'Connected to Firebase'
-                      : 'Not connected to Firebase'
-                  }
-                />
-                <span className='text-sm text-gray-500'>
-                  {isLoading ? 'Loading...' : user ? 'Firebase' : 'No Firebase'}
-                </span>
-              </div>
-            </div>
           </div>
 
           {/* Mobile menu button */}

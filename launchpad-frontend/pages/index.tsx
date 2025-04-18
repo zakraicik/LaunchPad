@@ -1,6 +1,4 @@
-import FeaturedCampaigns from '../components/home/FeaturedCampaigns'
 import CampaignCategories from '../components/home/CampaignCategories'
-import Statistics from '../components/home/Statistics'
 import HowItWorks from '../components/home/HowItWorks'
 import Link from 'next/link'
 import { RocketLaunchIcon } from '@heroicons/react/24/outline'
@@ -17,12 +15,10 @@ export default function Home () {
         <div className='container mx-auto px-4'>
           <div className='max-w-4xl mx-auto text-center'>
             <h1 className='text-5xl font-bold mb-6'>
-              Fee-Free Crowdfunding Powered by DeFi
+              Revolutionizing Crowdfunding with DeFi
             </h1>
             <p className='text-xl text-gray-600 mb-8'>
-              Your donations work harder through DeFi investments, eliminating
-              platform fees. Fund causes directly while yields sustain
-              continuous support.
+              Generate sustainable yields through DeFi integration, making platform fees effectively self-funded. Your contributions work harder while preserving capital.
             </p>
             <div className='flex justify-center gap-4'>
               <Link
@@ -43,14 +39,8 @@ export default function Home () {
         </div>
       </section>
 
-      {/* Featured Campaigns */}
-      <FeaturedCampaigns />
-
       {/* Campaign Categories */}
       <CampaignCategories />
-
-      {/* Statistics */}
-      <Statistics />
 
       {/* How It Works */}
       <HowItWorks />

@@ -218,7 +218,7 @@ export default function CampaignsDiscovery () {
   }
 
   return (
-    <div className='min-h-screen bg-gray-50 py-8'>
+    <div className='min-h-screen bg-gradient-to-b from-blue-50 to-white py-8'>
       <div className='container mx-auto px-4 py-8'>
         <div className='flex justify-between items-center mb-8'>
           <h1 className='text-3xl font-bold'>Discover Campaigns</h1>

@@ -8,6 +8,16 @@ import '../styles/globals.css'
 import Layout from '../components/Layout'
 import { useState } from 'react'
 import { Toaster } from 'react-hot-toast'
+import { ThemeProvider, createTheme } from '@mui/material/styles'
+import CssBaseline from '@mui/material/CssBaseline'
+
+const theme = createTheme({
+  palette: {
+    primary: {
+      main: '#2563eb', // blue-600
+    },
+  },
+})
 
 export default function App ({ Component, pageProps }: AppProps) {
   const [queryClient] = useState(() => new QueryClient())
@@ -16,10 +26,13 @@ export default function App ({ Component, pageProps }: AppProps) {
     <WagmiProvider config={config}>
       <QueryClientProvider client={queryClient}>
         <RainbowKitProvider>
-          <Toaster position='top-right' />
-          <Layout>
-            <Component {...pageProps} />
-          </Layout>
+          <ThemeProvider theme={theme}>
+            <CssBaseline />
+            <Toaster position='top-right' />
+            <Layout>
+              <Component {...pageProps} />
+            </Layout>
+          </ThemeProvider>
         </RainbowKitProvider>
       </QueryClientProvider>
     </WagmiProvider>

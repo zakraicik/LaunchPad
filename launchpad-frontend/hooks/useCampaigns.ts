@@ -26,7 +26,11 @@ export interface Campaign {
   duration: string
 }
 
-export function useCampaigns () {
+interface UseCampaignsOptions {
+  filterByOwner?: boolean
+}
+
+export function useCampaigns ({ filterByOwner = false }: UseCampaignsOptions = {}) {
   const { address } = useAccount()
   const [campaigns, setCampaigns] = useState<Campaign[]>([])
   const [isLoading, setIsLoading] = useState(true)
@@ -38,7 +42,12 @@ export function useCampaigns () {
       setError(null)
 
       const campaignsRef = collection(db, 'campaigns')
-      const q = query(campaignsRef, orderBy('createdAt', 'desc'))
+      let q = query(campaignsRef, orderBy('createdAt', 'desc'))
+
+      // Add owner filter if requested and address is available
+      if (filterByOwner && address) {
+        q = query(campaignsRef, where('ownerAddress', '==', address.toLowerCase()), orderBy('createdAt', 'desc'))
+      }
 
       const querySnapshot = await getDocs(q)
       const fetchedCampaigns: Campaign[] = []
@@ -80,7 +89,7 @@ export function useCampaigns () {
 
   useEffect(() => {
     fetchCampaigns()
-  }, [address])
+  }, [address, filterByOwner])
 
   const getStatusFromNumber = (status: number): Campaign['status'] => {
     switch (status) {

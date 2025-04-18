@@ -1,38 +1,51 @@
-import {
-  BanknotesIcon,
-  ArrowPathIcon,
-  ChartBarSquareIcon,
-  HandRaisedIcon
-} from '@heroicons/react/24/outline'
+import * as React from 'react'
+import Box from '@mui/material/Box'
+import Stepper from '@mui/material/Stepper'
+import Step from '@mui/material/Step'
+import StepLabel from '@mui/material/StepLabel'
+import StepContent from '@mui/material/StepContent'
+import Button from '@mui/material/Button'
+import Paper from '@mui/material/Paper'
+import Typography from '@mui/material/Typography'
 
 const steps = [
   {
-    title: 'Contribute to Campaigns',
+    label: 'Contribute to Campaigns',
     description:
-      'Choose a campaign you want to support and contribute funds using cryptocurrency',
-    icon: BanknotesIcon
+      'Choose a campaign you want to support and contribute funds using the campaign token'
   },
   {
-    title: 'Automatic Yield Generation',
+    label: 'Automatic Yield Generation',
     description:
-      'Your contribution is automatically deployed to generate yield through DeFi protocols',
-    icon: ArrowPathIcon
+      'Your contribution is automatically deployed to a yield-generating protocol'
   },
   {
-    title: 'Transparent Tracking',
+    label: 'Transparent Tracking',
     description:
-      'Monitor the yield generated and how it supports the campaign in real-time',
-    icon: ChartBarSquareIcon
+      'Accumulated yield covers platform fees, meaning your donation keeps working to support the cause'
   },
   {
-    title: 'Sustainable Impact',
+    label: 'Sustainable Impact',
     description:
-      'Your initial contribution keeps working to support the cause through generated yields',
-    icon: HandRaisedIcon
+      'Your initial contribution remains intact while generated yields provide ongoing support to the campaign'
   }
 ]
 
-export default function HowItWorks () {
+export default function HowItWorks() {
+  const [activeStep, setActiveStep] = React.useState(0)
+
+  const handleNext = () => {
+    setActiveStep((prevActiveStep) => prevActiveStep + 1)
+  }
+
+  const handleBack = () => {
+    setActiveStep((prevActiveStep) => prevActiveStep - 1)
+  }
+
+  const handleReset = () => {
+    setActiveStep(0)
+  }
+
   return (
     <section className='py-16 bg-gradient-to-b from-blue-50 to-white'>
       <div className='container mx-auto px-4'>
@@ -44,49 +57,67 @@ export default function HowItWorks () {
           </p>
         </div>
 
-        <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 relative'>
-          {steps.map((step, index) => (
-            <div key={step.title} className='relative'>
-              {/* Connector line */}
-              {index < steps.length - 1 && (
-                <div
-                  className='hidden lg:block absolute left-1/2 right-0 top-12 h-0.5 bg-blue-200 -translate-y-1/2 transform'
-                  style={{ width: '100%' }}
-                />
-              )}
+        <div className='max-w-2xl mx-auto'>
+          <Box sx={{ maxWidth: 400, margin: 'auto' }}>
+            <Stepper activeStep={activeStep} orientation="vertical">
+              {steps.map((step, index) => (
+                <Step key={step.label}>
+                  <StepLabel
+                    optional={
+                      index === steps.length - 1 ? (
+                        <Typography variant="caption">Last step</Typography>
+                      ) : null
+                    }
+                  >
+                    {step.label}
+                  </StepLabel>
+                  <StepContent>
+                    <Typography>{step.description}</Typography>
+                    <Box sx={{ mb: 2 }}>
+                      <Button
+                        variant="contained"
+                        onClick={handleNext}
+                        sx={{ mt: 1, mr: 1 }}
+                      >
+                        {index === steps.length - 1 ? 'Finish' : 'Continue'}
+                      </Button>
+                      <Button
+                        disabled={index === 0}
+                        onClick={handleBack}
+                        sx={{ mt: 1, mr: 1 }}
+                      >
+                        Back
+                      </Button>
+                    </Box>
+                  </StepContent>
+                </Step>
+              ))}
+            </Stepper>
+            {activeStep === steps.length && (
+              <Paper square elevation={0} sx={{ p: 3 }}>
+                <Typography>All steps completed - you&apos;re finished</Typography>
+                <Button onClick={handleReset} sx={{ mt: 1, mr: 1 }}>
+                  Reset
+                </Button>
+              </Paper>
+            )}
+          </Box>
 
-              <div className='relative z-10 flex flex-col items-center'>
-                {/* Icon container with background */}
-                <div className='mb-6 bg-white p-2 rounded-full'>
-                  <div className='p-3 rounded-full bg-blue-100'>
-                    <step.icon className='w-8 h-8 text-blue-600' />
-                  </div>
-                </div>
-
-                {/* Content */}
-                <h3 className='text-xl font-semibold text-center mb-2'>
-                  {step.title}
-                </h3>
-                <p className='text-gray-600 text-center'>{step.description}</p>
-              </div>
-            </div>
-          ))}
-        </div>
-
-        <div className='mt-12 max-w-2xl mx-auto bg-blue-50 rounded-lg p-6'>
-          <h3 className='text-xl font-semibold mb-4 text-center'>
-            Why Yield Generation Matters
-          </h3>
-          <p className='text-gray-600 mb-4'>
-            Traditional donations are one-time contributions. Our platform
-            leverages DeFi protocols to generate continuous yields from your
-            initial contribution, creating a sustainable source of funding for
-            the causes you care about.
-          </p>
-          <p className='text-gray-600'>
-            Your contribution remains intact while the generated yields provide
-            ongoing support, maximizing the impact of your donation over time.
-          </p>
+          <div className='mt-12 bg-blue-50 rounded-lg p-6'>
+            <h3 className='text-xl font-semibold mb-4 text-center'>
+              Why Yield Generation Matters
+            </h3>
+            <p className='text-gray-600 mb-4'>
+              Traditional donations are one-time contributions. Our platform
+              leverages DeFi protocols to generate continuous yields from your
+              initial contribution, creating a sustainable source of funding for
+              the causes you care about.
+            </p>
+            <p className='text-gray-600'>
+              Your contribution remains intact while the generated yields provide
+              ongoing support, maximizing the impact of your donation over time.
+            </p>
+          </div>
         </div>
       </div>
     </section>

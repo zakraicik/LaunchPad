@@ -1,6 +1,8 @@
 import { Campaign } from '../../hooks/useCampaigns'
-import { formatEther } from 'ethers'
-import { formatDistanceToNow } from 'date-fns'
+import { formatUnits } from 'ethers'
+import { useTokens } from '../../hooks/useTokens'
+import { differenceInDays } from 'date-fns'
+import { Timestamp } from 'firebase/firestore'
 
 interface CampaignCardProps {
   campaign: Campaign
@@ -8,40 +10,68 @@ interface CampaignCardProps {
 }
 
 export default function CampaignCard ({ campaign, onClick }: CampaignCardProps) {
+  const { getTokenByAddress } = useTokens()
+  const token = getTokenByAddress(campaign.token)
+
+  const formatAmount = (amount: string | undefined) => {
+    if (!amount || !token) return '0'
+    try {
+      const formatted = formatUnits(amount, token.decimals)
+      return Math.floor(parseFloat(formatted)).toLocaleString()
+    } catch (error) {
+      console.error('Error formatting amount:', error)
+      return '0'
+    }
+  }
+
   const progress =
     campaign.totalRaised && campaign.targetAmount
       ? (Number(campaign.totalRaised) / Number(campaign.targetAmount)) * 100
       : 0
 
-  const formatDate = (dateString: string | undefined) => {
-    if (!dateString) return 'Recently'
+  const calculateDaysRemaining = (): number => {
+    if (!campaign.createdAt || !campaign.duration) return 0
+
     try {
-      return formatDistanceToNow(new Date(dateString), { addSuffix: true })
+      // Handle Firebase Timestamp
+      const createdAtDate = typeof campaign.createdAt === 'object' && 'toDate' in campaign.createdAt
+        ? (campaign.createdAt as Timestamp).toDate()
+        : new Date(campaign.createdAt)
+
+      const endDate = new Date(
+        createdAtDate.getTime() +
+          parseInt(campaign.duration) * 24 * 60 * 60 * 1000
+      )
+      const daysRemaining = differenceInDays(endDate, new Date())
+      return Math.max(0, daysRemaining)
     } catch (error) {
-      return 'Recently'
+      console.error('Error calculating days remaining:', error)
+      return 0
     }
   }
 
   return (
     <div
       onClick={onClick}
-      className='bg-white rounded-lg shadow-md overflow-hidden cursor-pointer hover:shadow-lg transition-shadow duration-200'
+      className='bg-gradient-to-br from-white to-gray-50 rounded-lg shadow-md overflow-hidden cursor-pointer hover:shadow-lg transition-all duration-300 hover:scale-[1.02] [backface-visibility:hidden] [transform-style:preserve-3d]'
     >
-      <div className='relative h-48'>
-        <img
-          src={campaign.imageUrl || '/placeholder-campaign.jpg'}
-          alt={campaign.title}
-          className='w-full h-full object-cover'
-        />
-        <div className='absolute top-2 right-2 bg-blue-500 text-white px-2 py-1 rounded-full text-xs font-medium'>
-          {campaign.category}
-        </div>
-      </div>
-
       <div className='p-4'>
-        <h3 className='text-lg font-semibold text-gray-900 mb-2'>
-          {campaign.title}
-        </h3>
+        <div className='flex justify-between items-start mb-2'>
+          <h3 className='text-lg font-semibold bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent'>
+            {campaign.title}
+          </h3>
+          <div className='flex items-center gap-2'>
+            <div className='bg-gradient-to-r from-blue-500 to-blue-600 text-white px-2 py-1 rounded-full text-xs font-medium'>
+              {campaign.category}
+            </div>
+            {token && (
+              <div className='bg-gradient-to-r from-gray-100 to-gray-200 text-gray-700 px-2 py-1 rounded-full text-xs font-medium'>
+                {token.symbol}
+              </div>
+            )}
+          </div>
+        </div>
+        
         <p className='text-gray-600 text-sm mb-4 line-clamp-2'>
           {campaign.description}
         </p>
@@ -50,11 +80,13 @@ export default function CampaignCard ({ campaign, onClick }: CampaignCardProps) 
           <div>
             <div className='flex justify-between text-sm mb-1'>
               <span className='text-gray-600'>Progress</span>
-              <span className='font-medium'>{progress.toFixed(1)}%</span>
+              <span className='font-medium bg-gradient-to-r from-blue-500 to-blue-600 bg-clip-text text-transparent'>
+                {progress.toFixed(1)}%
+              </span>
             </div>
-            <div className='w-full bg-gray-200 rounded-full h-2'>
+            <div className='w-full bg-gradient-to-r from-gray-100 to-gray-200 rounded-full h-2 overflow-hidden'>
               <div
-                className='bg-blue-500 h-2 rounded-full'
+                className='bg-gradient-to-r from-blue-500 to-blue-600 h-2 rounded-full transition-all duration-500'
                 style={{ width: `${progress}%` }}
               />
             </div>
@@ -63,18 +95,14 @@ export default function CampaignCard ({ campaign, onClick }: CampaignCardProps) 
           <div className='grid grid-cols-2 gap-4 text-sm'>
             <div>
               <span className='text-gray-600'>Raised</span>
-              <p className='font-medium'>
-                {campaign.totalRaised ? formatEther(campaign.totalRaised) : '0'}{' '}
-                ETH
+              <p className='font-medium bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent'>
+                {formatAmount(campaign.totalRaised)} {token?.symbol}
               </p>
             </div>
             <div>
               <span className='text-gray-600'>Target</span>
-              <p className='font-medium'>
-                {campaign.targetAmount
-                  ? formatEther(campaign.targetAmount)
-                  : '0'}{' '}
-                ETH
+              <p className='font-medium bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent'>
+                {formatAmount(campaign.targetAmount)} {token?.symbol}
               </p>
             </div>
           </div>
@@ -82,16 +110,16 @@ export default function CampaignCard ({ campaign, onClick }: CampaignCardProps) 
           <div className='grid grid-cols-2 gap-4 text-sm'>
             <div>
               <span className='text-gray-600'>Backers</span>
-              <p className='font-medium'>{campaign.contributors || 0}</p>
+              <p className='font-medium bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent'>
+                {campaign.contributors || 0}
+              </p>
             </div>
             <div>
-              <span className='text-gray-600'>APY</span>
-              <p className='font-medium'>{campaign.currentAPY || 0}%</p>
+              <span className='text-gray-600'>Days Left</span>
+              <p className='font-medium bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent'>
+                {calculateDaysRemaining()}
+              </p>
             </div>
-          </div>
-
-          <div className='text-sm text-gray-500'>
-            Created {formatDate(campaign.createdAt)}
           </div>
         </div>
       </div>

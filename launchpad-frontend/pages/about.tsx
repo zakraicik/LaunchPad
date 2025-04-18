@@ -15,102 +15,104 @@ export default function About () {
         <div className='text-center mb-16'>
           <h1 className='text-4xl font-bold mb-4'>About LaunchPad</h1>
           <p className='text-xl text-gray-600 max-w-3xl mx-auto'>
-            Revolutionizing crowdfunding through sustainable yield generation,
-            ensuring long-term impact for meaningful projects.
+            Revolutionizing crowdfunding by generating sustainable yields through DeFi integration, making platform fees effectively self-funded.
           </p>
         </div>
 
-        {/* Yield Generation Section */}
+        {/* Core Features Section */}
         <div className='bg-white rounded-lg shadow-sm p-8 mb-8'>
           <h2 className='text-2xl font-bold mb-6 flex items-center'>
             <ChartBarIcon className='h-8 w-8 text-blue-600 mr-3' />
-            How Yield Generation Works
+            How It Works
           </h2>
           <div className='grid md:grid-cols-2 gap-8'>
             <div className='space-y-4'>
               <p className='text-gray-600'>
-                Our platform leverages DeFi protocols to generate sustainable
-                yields from campaign contributions. Here's how it works:
+                LaunchPad combines crowdfunding with DeFi to create a sustainable funding model:
               </p>
               <ol className='space-y-4 list-decimal list-inside text-gray-600'>
                 <li>
-                  Contributors provide capital to campaigns they believe in
+                  Campaign creators set up their funding goals with minimal platform fees
                 </li>
-                <li>Funds are deployed to vetted DeFi protocols</li>
+                <li>Contributors donate directly to causes they believe in</li>
                 <li>
-                  Generated yields continuously support the campaign's cause
+                  Funds are automatically deployed to Aave for yield generation
                 </li>
                 <li>
-                  Original contribution remains intact and can be withdrawn
+                  Generated yields cover platform fees while preserving the original capital
                 </li>
               </ol>
             </div>
             <div className='bg-blue-50 rounded-lg p-6'>
-              <h3 className='font-semibold mb-3'>Current Yield Sources</h3>
+              <h3 className='font-semibold mb-3'>Key Benefits</h3>
               <ul className='space-y-3'>
                 <li className='flex items-center'>
                   <ArrowPathIcon className='h-5 w-5 text-blue-600 mr-2' />
-                  <span>Lending protocols (Aave, Compound)</span>
+                  <span>Self-funded platform fees through yield</span>
                 </li>
                 <li className='flex items-center'>
                   <ArrowPathIcon className='h-5 w-5 text-blue-600 mr-2' />
-                  <span>Liquidity provision</span>
+                  <span>Direct funding to causes</span>
                 </li>
                 <li className='flex items-center'>
                   <ArrowPathIcon className='h-5 w-5 text-blue-600 mr-2' />
-                  <span>Staking rewards</span>
+                  <span>Sustainable yield generation</span>
+                </li>
+                <li className='flex items-center'>
+                  <ArrowPathIcon className='h-5 w-5 text-blue-600 mr-2' />
+                  <span>Capital preservation</span>
                 </li>
               </ul>
             </div>
           </div>
         </div>
 
-        {/* Fees and Revenue Section */}
+        {/* DeFi Integration Section */}
         <div className='bg-white rounded-lg shadow-sm p-8 mb-8'>
           <h2 className='text-2xl font-bold mb-6 flex items-center'>
             <BanknotesIcon className='h-8 w-8 text-blue-600 mr-3' />
-            Platform Fees & Revenue Model
+            DeFi Integration
           </h2>
           <div className='grid md:grid-cols-2 gap-8'>
             <div>
-              <h3 className='font-semibold mb-4'>Fee Structure</h3>
+              <h3 className='font-semibold mb-4'>Aave Integration</h3>
               <div className='space-y-4'>
                 <div className='flex items-start space-x-3 p-4 bg-gray-50 rounded-lg'>
                   <ScaleIcon className='h-6 w-6 text-blue-600 flex-shrink-0' />
                   <div>
-                    <p className='font-medium'>Base Platform Fee</p>
-                    <p className='text-gray-600'>2% of generated yield</p>
+                    <p className='font-medium'>Automated Yield Generation</p>
+                    <p className='text-gray-600'>Funds are automatically deployed to Aave for optimal yield</p>
                   </div>
                 </div>
                 <div className='flex items-start space-x-3 p-4 bg-gray-50 rounded-lg'>
                   <ScaleIcon className='h-6 w-6 text-blue-600 flex-shrink-0' />
                   <div>
-                    <p className='font-medium'>Campaign Creation</p>
-                    <p className='text-gray-600'>Free</p>
+                    <p className='font-medium'>Multiple Token Support</p>
+                    <p className='text-gray-600'>Support for various ERC20 tokens through our Token Registry</p>
                   </div>
                 </div>
                 <div className='flex items-start space-x-3 p-4 bg-gray-50 rounded-lg'>
                   <ScaleIcon className='h-6 w-6 text-blue-600 flex-shrink-0' />
                   <div>
-                    <p className='font-medium'>Contribution Fee</p>
-                    <p className='text-gray-600'>No additional fees</p>
+                    <p className='font-medium'>Secure Fund Management</p>
+                    <p className='text-gray-600'>Funds are locked in Aave until campaign completion (goal reached or deadline passed)</p>
                   </div>
                 </div>
               </div>
             </div>
             <div className='bg-blue-50 rounded-lg p-6'>
-              <h3 className='font-semibold mb-3'>Revenue Allocation</h3>
+              <h3 className='font-semibold mb-3'>Yield Distribution</h3>
               <ul className='space-y-3'>
                 <li className='flex items-center'>
                   <div className='w-full'>
                     <div className='flex justify-between mb-1'>
                       <span>Campaign Beneficiary</span>
-                      <span className='font-medium'>95%</span>
+                      <span className='font-medium'>99%</span>
                     </div>
                     <div className='w-full bg-blue-200 rounded-full h-2'>
                       <div
                         className='bg-blue-600 h-2 rounded-full'
-                        style={{ width: '95%' }}
+                        style={{ width: '99%' }}
                       ></div>
                     </div>
                   </div>
@@ -119,29 +121,18 @@ export default function About () {
                   <div className='w-full'>
                     <div className='flex justify-between mb-1'>
                       <span>Platform Operations</span>
-                      <span className='font-medium'>2%</span>
+                      <span className='font-medium'>1%</span>
                     </div>
                     <div className='w-full bg-blue-200 rounded-full h-2'>
                       <div
                         className='bg-blue-600 h-2 rounded-full'
-                        style={{ width: '2%' }}
+                        style={{ width: '1%' }}
                       ></div>
                     </div>
                   </div>
                 </li>
-                <li className='flex items-center mt-4'>
-                  <div className='w-full'>
-                    <div className='flex justify-between mb-1'>
-                      <span>Protocol Development</span>
-                      <span className='font-medium'>3%</span>
-                    </div>
-                    <div className='w-full bg-blue-200 rounded-full h-2'>
-                      <div
-                        className='bg-blue-600 h-2 rounded-full'
-                        style={{ width: '3%' }}
-                      ></div>
-                    </div>
-                  </div>
+                <li className='mt-4 text-gray-600'>
+                  Platform fees are covered by a small portion of the generated yield, ensuring sustainable operations while maximizing benefits to campaign beneficiaries.
                 </li>
               </ul>
             </div>
@@ -152,34 +143,34 @@ export default function About () {
         <div className='bg-white rounded-lg shadow-sm p-8'>
           <h2 className='text-2xl font-bold mb-6 flex items-center'>
             <ShieldCheckIcon className='h-8 w-8 text-blue-600 mr-3' />
-            Security Measures
+            Security & Transparency
           </h2>
           <div className='grid md:grid-cols-3 gap-6'>
             <div className='p-6 bg-gray-50 rounded-lg'>
               <LockClosedIcon className='h-8 w-8 text-blue-600 mb-4' />
               <h3 className='font-semibold mb-2'>Smart Contract Security</h3>
               <ul className='text-gray-600 space-y-2'>
-                <li>• Audited by leading security firms</li>
                 <li>• Open-source and verified contracts</li>
-                <li>• Multi-signature governance</li>
+                <li>• Built on battle-tested protocols</li>
+                <li>• Regular security audits</li>
               </ul>
             </div>
             <div className='p-6 bg-gray-50 rounded-lg'>
               <ShieldCheckIcon className='h-8 w-8 text-blue-600 mb-4' />
-              <h3 className='font-semibold mb-2'>Risk Management</h3>
+              <h3 className='font-semibold mb-2'>Fund Safety</h3>
               <ul className='text-gray-600 space-y-2'>
-                <li>• Diversified yield sources</li>
-                <li>• Protocol risk assessment</li>
-                <li>• Insurance coverage</li>
+                <li>• Non-custodial design</li>
+                <li>• Direct Aave integration</li>
+                <li>• Transparent fund tracking</li>
               </ul>
             </div>
             <div className='p-6 bg-gray-50 rounded-lg'>
               <ShieldCheckIcon className='h-8 w-8 text-blue-600 mb-4' />
-              <h3 className='font-semibold mb-2'>Campaign Verification</h3>
+              <h3 className='font-semibold mb-2'>Transparency</h3>
               <ul className='text-gray-600 space-y-2'>
-                <li>• KYC for campaign creators</li>
-                <li>• Project milestone tracking</li>
-                <li>• Transparent reporting</li>
+                <li>• Real-time yield tracking</li>
+                <li>• On-chain verification</li>
+                <li>• Open contribution history</li>
               </ul>
             </div>
           </div>
