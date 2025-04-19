@@ -20,7 +20,7 @@ async function main () {
     deployedAddresses.TokenRegistry
   )) as TokenRegistry
 
-  const tokenAddress = '0x5deac602762362fe5f135fa5904351916053cf70'
+  const tokenAddress = '0x036cbd53842c5426634e7929541ec2318f3dcf7e'
 
   try {
     // Check if token is in the registry

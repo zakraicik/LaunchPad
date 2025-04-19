@@ -1,8 +1,7 @@
 import { useReadContract, useReadContracts, useChainId } from 'wagmi'
 import { getContractAddress } from '../config/addresses'
-import TokenRegistryABI from '../abis/TokenRegistry.json'
+import TokenRegistry from '../../artifacts/contracts/TokenRegistry.sol/TokenRegistry.json'
 import { type Abi } from 'viem'
-import { erc20Abi } from 'viem'
 
 interface TokenInfo {
   address: string
@@ -18,32 +17,16 @@ export function useTokenRegistry() {
 
   const { data: supportedTokens } = useReadContract({
     address: getContractAddress((chainId || 84532) as 84532, 'tokenRegistry') as `0x${string}`,
-    abi: TokenRegistryABI as Abi,
+    abi: TokenRegistry.abi,
     functionName: 'getAllSupportedTokens'
   })
 
   const { data: tokenConfigs } = useReadContracts({
     contracts: (supportedTokens as string[] || []).map(address => ({
       address: getContractAddress((chainId || 84532) as 84532, 'tokenRegistry') as `0x${string}`,
-      abi: TokenRegistryABI as Abi,
+      abi: TokenRegistry.abi,
       functionName: 'getMinContributionAmount',
       args: [address]
-    }))
-  })
-
-  const { data: tokenSymbols } = useReadContracts({
-    contracts: (supportedTokens as string[] || []).map(address => ({
-      address: address as `0x${string}`,
-      abi: erc20Abi,
-      functionName: 'symbol'
-    }))
-  })
-
-  const { data: tokenNames } = useReadContracts({
-    contracts: (supportedTokens as string[] || []).map(address => ({
-      address: address as `0x${string}`,
-      abi: erc20Abi,
-      functionName: 'name'
     }))
   })
 
@@ -53,8 +36,8 @@ export function useTokenRegistry() {
     const [minAmount, decimals] = config as [bigint, number]
     return {
       address,
-      name: tokenNames?.[index]?.result?.toString() || address.slice(0, 6) + '...' + address.slice(-4),
-      symbol: tokenSymbols?.[index]?.result?.toString() || address.slice(0, 6) + '...' + address.slice(-4),
+      name: address.slice(0, 6) + '...' + address.slice(-4),
+      symbol: address.slice(0, 6) + '...' + address.slice(-4),
       isSupported: true,
       minAmount: minAmount.toString(),
       decimals

@@ -76,7 +76,7 @@ export function useCampaignFactory () {
 
         // Get the correct contract address for this network
         const factoryAddress = getContractAddress(
-          Number(network.chainId),
+          (Number(network.chainId) as 84532),
           'campaignFactory'
         )
         console.log(

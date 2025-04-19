@@ -109,6 +109,7 @@ export default function CreateCampaignModal ({
 
     try {
       toast.loading('Deploying campaign contract...', { id: toastId })
+      console.log(selectedToken)
       await createCampaign(
         title,
         description,

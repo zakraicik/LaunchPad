@@ -1,10 +1,11 @@
 import { PlusIcon, PencilIcon, TrashIcon } from '@heroicons/react/24/outline'
-import { useTokenRegistry } from '@/hooks/useTokenRegistry'
+import { useTokenRegistry } from '../../hooks/useTokenRegistry'
+import { useAddToken } from '../../hooks/useAddToken'
 import { useState, useEffect, useRef } from 'react'
 import { collection, doc, setDoc, getDoc } from 'firebase/firestore'
-import { db } from '@/utils/firebase'
-import { useAccount } from 'wagmi'
-import { useIsAdmin } from '@/utils/admin'
+import { db } from '../../utils/firebase'
+import { useAccount, useWriteContract, useChainId } from 'wagmi'
+import { useIsAdmin } from '../../utils/admin'
 
 interface TokenInfo {
   address: string
@@ -20,11 +21,19 @@ export default function TokenManagement() {
   const { tokens } = useTokenRegistry()
   const { address } = useAccount()
   const { isAdmin, isLoading: isLoadingAdmin } = useIsAdmin(address)
+  const { addToken, isAdding, error } = useAddToken()
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false)
   const [selectedToken, setSelectedToken] = useState<TokenInfo | null>(null)
   const [customSymbol, setCustomSymbol] = useState('')
   const [tokenSymbols, setTokenSymbols] = useState<Record<string, string>>({})
+  const [newTokenAddress, setNewTokenAddress] = useState('')
+  const [minContribution, setMinContribution] = useState('')
+  const [addTokenError, setAddTokenError] = useState<string | null>(null)
   const hasFetchedSymbols = useRef(false)
+  const chainId = useChainId()
+
+  const { writeContract, isPending, isError: writeContractError } = useWriteContract()
 
   // Fetch custom symbols from Firestore
   useEffect(() => {
@@ -80,11 +89,29 @@ export default function TokenManagement() {
     }
   }
 
+  const handleAddToken = async () => {
+    if (!isAdmin || !newTokenAddress || !minContribution) return
+
+    try {
+      setAddTokenError(null)
+      await addToken(newTokenAddress, minContribution)
+      setIsAddModalOpen(false)
+      setNewTokenAddress('')
+      setMinContribution('')
+    } catch (error) {
+      console.error('Error adding token:', error)
+      setAddTokenError(error instanceof Error ? error.message : 'Failed to add token')
+    }
+  }
+
   return (
     <div className='p-6'>
       <div className='flex justify-between items-center mb-6'>
         <h1 className='text-2xl font-bold'>Token Management</h1>
-        <button className='bg-blue-600 text-white px-4 py-2 rounded-lg flex items-center gap-2'>
+        <button 
+          onClick={() => setIsAddModalOpen(true)}
+          className='bg-blue-600 text-white px-4 py-2 rounded-lg flex items-center gap-2'
+        >
           <PlusIcon className='h-5 w-5' />
           Add Token
         </button>
@@ -104,7 +131,7 @@ export default function TokenManagement() {
           <tbody>
             {tokens?.map(token => (
               <tr key={token.address} className='border-b'>
-                <td className='px-6 py-4'>{token.name}</td>
+                <td className='px-6 py-4'>{token.address}</td>
                 <td className='px-6 py-4'>
                   <div className="flex items-center gap-2">
                     {tokenSymbols[token.address.toLowerCase()] || token.symbol || 'No symbol set'}
@@ -166,6 +193,66 @@ export default function TokenManagement() {
                 className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md"
               >
                 Save
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add Token Modal */}
+      {isAddModalOpen && (
+        <div className="fixed inset-0 bg-black/30 flex items-center justify-center p-4">
+          <div className="bg-white rounded-lg p-6 max-w-sm w-full">
+            <h2 className="text-lg font-medium mb-4">Add New Token</h2>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Token Address
+                </label>
+                <input
+                  type="text"
+                  value={newTokenAddress}
+                  onChange={(e) => setNewTokenAddress(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                  placeholder="Enter token address"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Minimum Contribution (in whole tokens)
+                </label>
+                <input
+                  type="number"
+                  value={minContribution}
+                  onChange={(e) => setMinContribution(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                  placeholder="Enter minimum contribution amount"
+                  min="0"
+                  step="0.000000000000000001"
+                />
+              </div>
+              {addTokenError && (
+                <p className="mt-2 text-sm text-red-600">{addTokenError}</p>
+              )}
+            </div>
+            <div className="flex justify-end gap-2 mt-4">
+              <button
+                onClick={() => {
+                  setIsAddModalOpen(false)
+                  setNewTokenAddress('')
+                  setMinContribution('')
+                  setAddTokenError(null)
+                }}
+                className="px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 rounded-md"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleAddToken}
+                disabled={isAdding || !newTokenAddress || !minContribution}
+                className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isAdding ? 'Adding...' : 'Add Token'}
               </button>
             </div>
           </div>
