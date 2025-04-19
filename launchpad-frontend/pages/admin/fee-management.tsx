@@ -1,30 +1,49 @@
 import { useState } from 'react'
-import { PencilIcon, CheckIcon } from '@heroicons/react/24/outline'
+import { useFeeManager } from '@/hooks/feeManagement/useFeeManager'
+import { formatDistanceToNow, isValid } from 'date-fns'
+import { PencilIcon } from '@heroicons/react/24/outline'
+import { useIsAdmin } from '@/utils/admin'
+import { useAccount } from 'wagmi'
+import { Timestamp } from 'firebase/firestore'
 
-export default function FeeManagement () {
-  const [feeStructures] = useState([
-    {
-      id: 1,
-      type: 'Platform Fee',
-      percentage: 2.5,
-      description: 'Standard platform fee for all transactions',
-      lastUpdated: '2024-03-15'
-    },
-    {
-      id: 2,
-      type: 'Early Withdrawal Fee',
-      percentage: 5.0,
-      description: 'Fee for withdrawing before campaign completion',
-      lastUpdated: '2024-03-14'
-    },
-    {
-      id: 3,
-      type: 'Creator Success Fee',
-      percentage: 1.5,
-      description: 'Fee charged on successful campaign completion',
-      lastUpdated: '2024-03-10'
+export default function FeeManagement() {
+  const { feeSettings, isLoading, error } = useFeeManager()
+  const { address } = useAccount()
+  const { isAdmin } = useIsAdmin(address)
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false)
+
+  const formatDate = (timestamp: Timestamp | string) => {
+    try {
+      // Handle Firebase Timestamp
+      const date = typeof timestamp === 'object' && 'toDate' in timestamp
+        ? (timestamp as Timestamp).toDate()
+        : new Date(timestamp)
+
+      if (!isValid(date)) return 'Invalid date'
+      return formatDistanceToNow(date, { addSuffix: true })
+    } catch (err) {
+      console.error('Error formatting date:', err)
+      return 'Invalid date'
     }
-  ])
+  }
+
+  if (isLoading) {
+    return (
+      <div className="p-6 flex justify-center items-center">
+        <div className="text-gray-600">Loading fee settings...</div>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="p-6">
+        <div className="bg-red-50 text-red-600 p-4 rounded-lg">
+          Error loading fee settings: {error}
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className='p-6'>
@@ -32,54 +51,79 @@ export default function FeeManagement () {
         <h1 className='text-2xl font-bold'>Fee Management</h1>
       </div>
 
-      <div className='grid gap-6'>
-        {feeStructures.map(fee => (
-          <div key={fee.id} className='bg-white rounded-lg shadow p-6'>
-            <div className='flex justify-between items-start mb-4'>
-              <div>
-                <h3 className='text-lg font-semibold'>{fee.type}</h3>
-                <p className='text-gray-600 text-sm mt-1'>{fee.description}</p>
-              </div>
-              <button className='text-blue-600 hover:text-blue-800'>
+      <div className='bg-white rounded-lg shadow'>
+        <div className='p-6 space-y-6'>
+          {/* Platform Fee Share */}
+          <div className='flex items-center justify-between'>
+            <div>
+              <h3 className='text-sm font-medium text-gray-500 uppercase tracking-wider'>Platform Fee Share</h3>
+              <p className='mt-1 text-2xl font-semibold'>{feeSettings?.platformFeeShare}
+                <span className='text-sm text-gray-500 ml-1'>basis points</span>
+              </p>
+            </div>
+            {isAdmin && (
+              <button 
+                onClick={() => setIsEditModalOpen(true)}
+                className='text-blue-600 hover:text-blue-800'
+              >
                 <PencilIcon className='h-5 w-5' />
               </button>
-            </div>
+            )}
+          </div>
 
-            <div className='flex items-center gap-4'>
-              <div className='flex-1'>
-                <label className='block text-sm font-medium text-gray-700 mb-1'>
-                  Fee Percentage
-                </label>
-                <div className='flex items-center'>
-                  <input
-                    type='number'
-                    value={fee.percentage}
-                    className='block w-full rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500'
-                    step='0.1'
-                    min='0'
-                    max='100'
-                  />
-                  <span className='ml-2'>%</span>
-                </div>
-              </div>
-
-              <div className='flex-1'>
-                <label className='block text-sm font-medium text-gray-700 mb-1'>
-                  Last Updated
-                </label>
-                <p className='text-gray-600'>{fee.lastUpdated}</p>
-              </div>
+          {/* Treasury Address */}
+          <div>
+            <h3 className='text-sm font-medium text-gray-500 uppercase tracking-wider'>Treasury Address</h3>
+            <div className='mt-1 flex items-center justify-between'>
+              <p className='font-mono text-sm'>
+                {feeSettings?.treasuryAddress}
+              </p>
+              {isAdmin && (
+                <button 
+                  onClick={() => setIsEditModalOpen(true)}
+                  className='text-blue-600 hover:text-blue-800'
+                >
+                  <PencilIcon className='h-5 w-5' />
+                </button>
+              )}
             </div>
           </div>
-        ))}
+
+          {/* Last Updated */}
+          <div>
+            <h3 className='text-sm font-medium text-gray-500 uppercase tracking-wider'>Last Updated</h3>
+            <p className='mt-1 text-sm text-gray-600'>
+              {feeSettings?.lastUpdated && formatDate(feeSettings.lastUpdated)}
+            </p>
+            <p className='mt-1 text-sm text-gray-600'>
+              Operation: {feeSettings?.lastOperation}
+            </p>
+          </div>
+        </div>
       </div>
 
-      <div className='mt-6 flex justify-end'>
-        <button className='bg-blue-600 text-white px-4 py-2 rounded-lg flex items-center gap-2'>
-          <CheckIcon className='h-5 w-5' />
-          Save Changes
-        </button>
-      </div>
+      {/* Edit Modal placeholder - implement actual modal based on your needs */}
+      {isEditModalOpen && (
+        <div className="fixed inset-0 bg-black/30 flex items-center justify-center p-4">
+          <div className="bg-white rounded-lg p-6 max-w-sm w-full">
+            <h2 className="text-lg font-medium mb-4">Edit Fee Settings</h2>
+            {/* Add your form fields here */}
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => setIsEditModalOpen(false)}
+                className="px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 rounded-md"
+              >
+                Cancel
+              </button>
+              <button
+                className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md"
+              >
+                Save
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
