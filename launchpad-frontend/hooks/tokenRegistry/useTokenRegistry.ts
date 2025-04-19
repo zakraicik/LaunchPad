@@ -1,6 +1,6 @@
 import { useReadContract, useReadContracts, useChainId } from 'wagmi'
-import { getContractAddress } from '../config/addresses'
-import TokenRegistry from '../../artifacts/contracts/TokenRegistry.sol/TokenRegistry.json'
+import { getContractAddress } from '@/config/addresses'
+import TokenRegistry from '../../../artifacts/contracts/TokenRegistry.sol/TokenRegistry.json'
 import { type Abi } from 'viem'
 
 interface TokenInfo {
@@ -24,7 +24,7 @@ export function useTokenRegistry() {
   const { data: tokenConfigs } = useReadContracts({
     contracts: (supportedTokens as string[] || []).map(address => ({
       address: getContractAddress((chainId || 84532) as 84532, 'tokenRegistry') as `0x${string}`,
-      abi: TokenRegistry.abi,
+      abi: TokenRegistry.abi as Abi,
       functionName: 'getMinContributionAmount',
       args: [address]
     }))

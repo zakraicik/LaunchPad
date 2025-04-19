@@ -1,18 +1,18 @@
 import { useWalletClient, useChainId } from 'wagmi'
-import { getContractAddress } from '../config/addresses'
-import TokenRegistry from '../../artifacts/contracts/TokenRegistry.sol/TokenRegistry.json'
+import { getContractAddress } from '@/config/addresses'
+import TokenRegistry from '../../../artifacts/contracts/TokenRegistry.sol/TokenRegistry.json'
 import { useState } from 'react'
 import { ethers } from 'ethers'
 
-export function useAddToken() {
+export function useToggleTokenSupport() {
   const chainId = useChainId()
   const { data: walletClient } = useWalletClient()
-  const [isAdding, setIsAdding] = useState(false)
+  const [isToggling, setIsToggling] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const addToken = async (tokenAddress: string, minContribution: string) => {
+  const toggleSupport = async (tokenAddress: string, enable: boolean) => {
     try {
-      setIsAdding(true)
+      setIsToggling(true)
       setError(null)
 
       if (!walletClient) {
@@ -36,31 +36,29 @@ export function useAddToken() {
         signer
       )
 
-      // Call the addToken function
-      const tx = await registry.addToken(
-        tokenAddress,
-        minContribution
-      )
+      // Call the appropriate function based on enable flag
+      const tx = await (enable 
+        ? registry.enableTokenSupport(tokenAddress)
+        : registry.disableTokenSupport(tokenAddress))
 
-      // Wait for transaction to be mined
       const receipt = await tx.wait()
 
       return {
         txHash: receipt.hash
       }
     } catch (err) {
-      console.error('Error adding token:', err)
-      const errorMessage = err instanceof Error ? err.message : 'Failed to add token'
+      console.error('Error toggling token support:', err)
+      const errorMessage = err instanceof Error ? err.message : 'Failed to toggle token support'
       setError(errorMessage)
       throw err
     } finally {
-      setIsAdding(false)
+      setIsToggling(false)
     }
   }
 
   return {
-    addToken,
-    isAdding,
+    toggleSupport,
+    isToggling,
     error
   }
 } 
