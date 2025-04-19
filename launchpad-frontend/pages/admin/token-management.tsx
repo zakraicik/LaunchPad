@@ -6,6 +6,10 @@ import { collection, doc, setDoc, getDoc } from 'firebase/firestore'
 import { db } from '../../utils/firebase'
 import { useAccount, useWriteContract, useChainId } from 'wagmi'
 import { useIsAdmin } from '../../utils/admin'
+import { getContractAddress } from '../../config/addresses'
+import TokenRegistry from '../../../artifacts/contracts/TokenRegistry.sol/TokenRegistry.json'
+import { type Abi } from 'viem'
+import toast from 'react-hot-toast'
 
 interface TokenInfo {
   address: string
@@ -92,15 +96,19 @@ export default function TokenManagement() {
   const handleAddToken = async () => {
     if (!isAdmin || !newTokenAddress || !minContribution) return
 
+    const toastId = toast.loading('Adding token...')
     try {
       setAddTokenError(null)
-      await addToken(newTokenAddress, minContribution)
+      const { txHash } = await addToken(newTokenAddress, minContribution)
+      toast.success('Token added successfully!', { id: toastId })
       setIsAddModalOpen(false)
       setNewTokenAddress('')
       setMinContribution('')
     } catch (error) {
       console.error('Error adding token:', error)
-      setAddTokenError(error instanceof Error ? error.message : 'Failed to add token')
+      const errorMessage = error instanceof Error ? error.message : 'Failed to add token'
+      setAddTokenError(errorMessage)
+      toast.error(errorMessage, { id: toastId })
     }
   }
 
