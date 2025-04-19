@@ -1,144 +1,65 @@
-import { useState, useEffect } from 'react'
-import { useContractReads, usePublicClient } from 'wagmi'
-import { type Address, formatUnits } from 'viem'
-import { TokenRegistryAddress } from '../config/addresses'
-import { TokenRegistryABI } from '../config/abis/TokenRegistry'
+import { useReadContract, useReadContracts, useChainId } from 'wagmi'
+import { getContractAddress } from '../config/addresses'
+import TokenRegistryABI from '../abis/TokenRegistry.json'
+import { type Abi } from 'viem'
+import { erc20Abi } from 'viem'
 
-export interface Token {
-  address: Address
-  symbol: string
+interface TokenInfo {
+  address: string
   name: string
+  symbol: string
+  isSupported: boolean
+  minAmount: string
   decimals: number
-  minimumContribution: number
 }
 
-export function useTokenRegistry () {
-  const [supportedTokens, setSupportedTokens] = useState<Token[]>([])
-  const publicClient = usePublicClient()
+export function useTokenRegistry() {
+  const chainId = useChainId()
 
-  const { data: tokenAddresses } = useContractReads({
-    contracts: [
-      {
-        address: TokenRegistryAddress,
-        abi: TokenRegistryABI,
-        functionName: 'getAllSupportedTokens'
-      }
-    ]
+  const { data: supportedTokens } = useReadContract({
+    address: getContractAddress((chainId || 84532) as 84532, 'tokenRegistry') as `0x${string}`,
+    abi: TokenRegistryABI as Abi,
+    functionName: 'getAllSupportedTokens'
   })
 
-  useEffect(() => {
-    const fetchTokenDetails = async () => {
-      if (!tokenAddresses?.[0]?.result || !publicClient) return
+  const { data: tokenConfigs } = useReadContracts({
+    contracts: (supportedTokens as string[] || []).map(address => ({
+      address: getContractAddress((chainId || 84532) as 84532, 'tokenRegistry') as `0x${string}`,
+      abi: TokenRegistryABI as Abi,
+      functionName: 'getMinContributionAmount',
+      args: [address]
+    }))
+  })
 
-      const addresses = tokenAddresses[0].result as Address[]
-      const tokenDetails = await Promise.all(
-        addresses.map(async address => {
-          const [symbol, name, decimals, minContributionResult] =
-            await Promise.all([
-              publicClient.readContract({
-                address,
-                abi: [
-                  {
-                    inputs: [],
-                    name: 'symbol',
-                    outputs: [{ type: 'string', name: '' }],
-                    stateMutability: 'view',
-                    type: 'function'
-                  }
-                ],
-                functionName: 'symbol'
-              }),
-              publicClient.readContract({
-                address,
-                abi: [
-                  {
-                    inputs: [],
-                    name: 'name',
-                    outputs: [{ type: 'string', name: '' }],
-                    stateMutability: 'view',
-                    type: 'function'
-                  }
-                ],
-                functionName: 'name'
-              }),
-              publicClient.readContract({
-                address,
-                abi: [
-                  {
-                    inputs: [],
-                    name: 'decimals',
-                    outputs: [{ type: 'uint8', name: '' }],
-                    stateMutability: 'view',
-                    type: 'function'
-                  }
-                ],
-                functionName: 'decimals'
-              }),
-              publicClient.readContract({
-                address: TokenRegistryAddress,
-                abi: TokenRegistryABI,
-                functionName: 'getMinContributionAmount',
-                args: [address]
-              })
-            ])
+  const { data: tokenSymbols } = useReadContracts({
+    contracts: (supportedTokens as string[] || []).map(address => ({
+      address: address as `0x${string}`,
+      abi: erc20Abi,
+      functionName: 'symbol'
+    }))
+  })
 
-          const [minimumAmount, minDecimals] =
-            minContributionResult as readonly [bigint, number]
+  const { data: tokenNames } = useReadContracts({
+    contracts: (supportedTokens as string[] || []).map(address => ({
+      address: address as `0x${string}`,
+      abi: erc20Abi,
+      functionName: 'name'
+    }))
+  })
 
-          return {
-            address,
-            symbol: symbol as string,
-            name: name as string,
-            decimals: decimals as number,
-            minimumContribution: Number(formatUnits(minimumAmount, minDecimals))
-          }
-        })
-      )
+  const tokens = (supportedTokens as string[] | undefined)?.map((address: string, index: number) => {
+    const config = tokenConfigs?.[index]?.result
+    if (!config) return null
+    const [minAmount, decimals] = config as [bigint, number]
+    return {
+      address,
+      name: tokenNames?.[index]?.result?.toString() || address.slice(0, 6) + '...' + address.slice(-4),
+      symbol: tokenSymbols?.[index]?.result?.toString() || address.slice(0, 6) + '...' + address.slice(-4),
+      isSupported: true,
+      minAmount: minAmount.toString(),
+      decimals
+    } as TokenInfo
+  }).filter(Boolean) as TokenInfo[]
 
-      setSupportedTokens(tokenDetails)
-    }
-
-    fetchTokenDetails()
-  }, [tokenAddresses, publicClient])
-
-  const getMinContribution = async (tokenAddress: Address): Promise<number> => {
-    if (!publicClient) return 0
-
-    const token = supportedTokens.find(t => t.address === tokenAddress)
-    if (token) return token.minimumContribution
-
-    const [decimals, minContributionResult] = await Promise.all([
-      publicClient.readContract({
-        address: tokenAddress,
-        abi: [
-          {
-            inputs: [],
-            name: 'decimals',
-            outputs: [{ type: 'uint8', name: '' }],
-            stateMutability: 'view',
-            type: 'function'
-          }
-        ],
-        functionName: 'decimals'
-      }),
-      publicClient.readContract({
-        address: TokenRegistryAddress,
-        abi: TokenRegistryABI,
-        functionName: 'getMinContributionAmount',
-        args: [tokenAddress]
-      })
-    ])
-
-    const [minimumAmount, minDecimals] = minContributionResult as readonly [
-      bigint,
-      number
-    ]
-
-    return Number(formatUnits(minimumAmount, minDecimals))
-  }
-
-  return {
-    supportedTokens,
-    getMinContribution
-  }
+  return { tokens }
 }
