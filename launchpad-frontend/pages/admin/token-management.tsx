@@ -16,12 +16,12 @@ import { formatUnits, parseUnits } from 'ethers'
 
 interface TokenInfo {
   address: string
-  name: string
   symbol: string
-  isSupported: boolean
-  minAmount: string
   decimals: number
-  customSymbol?: string
+  isSupported: boolean
+  minimumContribution: string
+  lastOperation: 'TOKEN_ADDED' | 'TOKEN_REMOVED' | string
+  lastUpdated: string
 }
 
 export default function TokenManagement() {
@@ -168,7 +168,7 @@ export default function TokenManagement() {
     if (!isAdmin) return
     setSelectedTokenForMinAmount(token)
     // Convert WEI to whole tokens using the token's decimals
-    const wholeTokens = formatUnits(token.minAmount, token.decimals)
+    const wholeTokens = formatUnits(token.minimumContribution, token.decimals)
     setNewMinAmount(wholeTokens)
     setIsMinAmountModalOpen(true)
   }
@@ -262,7 +262,7 @@ export default function TokenManagement() {
                 </td>
                 <td className='px-6 py-4'>
                   <div className="flex items-center gap-2">
-                    {token.minAmount}
+                    {formatUnits(token.minimumContribution, token.decimals)}
                     {isAdmin && (
                       <button 
                         onClick={() => handleEditMinAmount(token)}

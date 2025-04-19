@@ -1,33 +1,44 @@
 import { useState } from 'react'
 import { PlusIcon, PencilIcon, TrashIcon } from '@heroicons/react/24/outline'
+import { usePlatformAdmin } from '@/hooks/platformAdmin/usePlatformAdmin'
+import { formatDistanceToNow, isValid } from 'date-fns'
+import { Timestamp } from 'firebase/firestore'
 
-export default function PlatformAdmins () {
-  const [admins] = useState([
-    {
-      id: 1,
-      name: 'John Doe',
-      email: 'john@example.com',
-      role: 'Super Admin',
-      status: 'Active',
-      lastLogin: '2024-03-15'
-    },
-    {
-      id: 2,
-      name: 'Jane Smith',
-      email: 'jane@example.com',
-      role: 'Admin',
-      status: 'Active',
-      lastLogin: '2024-03-14'
-    },
-    {
-      id: 3,
-      name: 'Mike Johnson',
-      email: 'mike@example.com',
-      role: 'Moderator',
-      status: 'Inactive',
-      lastLogin: '2024-03-10'
+export default function PlatformAdmins() {
+  const { admins, isLoading, error } = usePlatformAdmin()
+
+  const formatDate = (timestamp: Timestamp | string) => {
+    try {
+      // Handle Firebase Timestamp
+      const date = typeof timestamp === 'object' && 'toDate' in timestamp
+        ? (timestamp as Timestamp).toDate()
+        : new Date(timestamp)
+
+      if (!isValid(date)) return 'Invalid date'
+      return formatDistanceToNow(date, { addSuffix: true })
+    } catch (err) {
+      console.error('Error formatting date:', err)
+      return 'Invalid date'
     }
-  ])
+  }
+
+  if (isLoading) {
+    return (
+      <div className="p-6 flex justify-center items-center">
+        <div className="text-gray-600">Loading administrators...</div>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="p-6">
+        <div className="bg-red-50 text-red-600 p-4 rounded-lg">
+          Error loading administrators: {error}
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className='p-6'>
@@ -44,19 +55,16 @@ export default function PlatformAdmins () {
           <thead>
             <tr className='border-b'>
               <th className='px-6 py-3 text-left text-sm font-semibold'>
-                Name
-              </th>
-              <th className='px-6 py-3 text-left text-sm font-semibold'>
-                Email
-              </th>
-              <th className='px-6 py-3 text-left text-sm font-semibold'>
-                Role
+                Address
               </th>
               <th className='px-6 py-3 text-left text-sm font-semibold'>
                 Status
               </th>
               <th className='px-6 py-3 text-left text-sm font-semibold'>
-                Last Login
+                Last Operation
+              </th>
+              <th className='px-6 py-3 text-left text-sm font-semibold'>
+                Last Updated
               </th>
               <th className='px-6 py-3 text-left text-sm font-semibold'>
                 Actions
@@ -65,40 +73,37 @@ export default function PlatformAdmins () {
           </thead>
           <tbody>
             {admins.map(admin => (
-              <tr key={admin.id} className='border-b'>
-                <td className='px-6 py-4'>{admin.name}</td>
-                <td className='px-6 py-4'>{admin.email}</td>
-                <td className='px-6 py-4'>
-                  <span
-                    className={`px-2 py-1 rounded-full text-xs ${
-                      admin.role === 'Super Admin'
-                        ? 'bg-purple-100 text-purple-800'
-                        : admin.role === 'Admin'
-                        ? 'bg-blue-100 text-blue-800'
-                        : 'bg-gray-100 text-gray-800'
-                    }`}
-                  >
-                    {admin.role}
-                  </span>
+              <tr key={admin.address} className='border-b'>
+                <td className='px-6 py-4 font-mono text-sm'>
+                  {admin.address.slice(0, 6)}...{admin.address.slice(-4)}
                 </td>
                 <td className='px-6 py-4'>
                   <span
                     className={`px-2 py-1 rounded-full text-xs ${
-                      admin.status === 'Active'
+                      admin.isActive
                         ? 'bg-green-100 text-green-800'
                         : 'bg-red-100 text-red-800'
                     }`}
                   >
-                    {admin.status}
+                    {admin.isActive ? 'Active' : 'Inactive'}
                   </span>
                 </td>
-                <td className='px-6 py-4'>{admin.lastLogin}</td>
+                <td className='px-6 py-4'>
+                  <span className="text-sm">
+                    {admin.lastOperation}
+                  </span>
+                </td>
+                <td className='px-6 py-4'>
+                  <span className="text-sm text-gray-600" title={admin.lastUpdated}>
+                    {formatDate(admin.lastUpdated)}
+                  </span>
+                </td>
                 <td className='px-6 py-4'>
                   <div className='flex gap-2'>
-                    <button className='text-blue-600 hover:text-blue-800'>
-                      <PencilIcon className='h-5 w-5' />
-                    </button>
-                    <button className='text-red-600 hover:text-red-800'>
+                    <button 
+                      className='text-red-600 hover:text-red-800'
+                      title={admin.isActive ? 'Remove Admin' : 'Restore Admin'}
+                    >
                       <TrashIcon className='h-5 w-5' />
                     </button>
                   </div>
@@ -107,6 +112,12 @@ export default function PlatformAdmins () {
             ))}
           </tbody>
         </table>
+
+        {admins.length === 0 && (
+          <div className="text-center py-8 text-gray-500">
+            No administrators found.
+          </div>
+        )}
       </div>
     </div>
   )

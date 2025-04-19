@@ -60,9 +60,14 @@ service cloud.firestore {
         get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.isActive == true;
     }
     
+    // Platform Admin Collection rules 
+    match /admins/{adminId} {
+      allow read: if true;
+    }
+
     // Default rule - deny all other access
     match /{document=**} {
-      allow read, write: if false;
+      allow read: if false;
     }
   }
 }

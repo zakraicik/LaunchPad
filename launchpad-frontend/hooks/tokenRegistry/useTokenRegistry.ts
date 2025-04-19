@@ -1,48 +1,63 @@
-import { useReadContract, useReadContracts, useChainId } from 'wagmi'
-import { getContractAddress } from '@/config/addresses'
-import TokenRegistry from '../../../artifacts/contracts/TokenRegistry.sol/TokenRegistry.json'
-import { type Abi } from 'viem'
+import { useState, useEffect } from 'react'
+import { collection, onSnapshot } from 'firebase/firestore'
+import { db } from '@/utils/firebase'
 
 interface TokenInfo {
   address: string
-  name: string
   symbol: string
-  isSupported: boolean
-  minAmount: string
   decimals: number
+  isSupported: boolean
+  minimumContribution: string
+  lastOperation: 'TOKEN_ADDED' | 'TOKEN_REMOVED' | string
+  lastUpdated: string
 }
 
 export function useTokenRegistry() {
-  const chainId = useChainId()
+  const [tokens, setTokens] = useState<TokenInfo[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
-  const { data: supportedTokens } = useReadContract({
-    address: getContractAddress((chainId || 84532) as 84532, 'tokenRegistry') as `0x${string}`,
-    abi: TokenRegistry.abi,
-    functionName: 'getAllSupportedTokens'
-  })
+  useEffect(() => {
+    setIsLoading(true)
+    setError(null)
 
-  const { data: tokenConfigs } = useReadContracts({
-    contracts: (supportedTokens as string[] || []).map(address => ({
-      address: getContractAddress((chainId || 84532) as 84532, 'tokenRegistry') as `0x${string}`,
-      abi: TokenRegistry.abi as Abi,
-      functionName: 'getMinContributionAmount',
-      args: [address]
-    }))
-  })
+    // Set up real-time listener for the tokens collection
+    const unsubscribe = onSnapshot(
+      collection(db, 'tokens'),
+      (snapshot) => {
+        try {
+          const tokenData: TokenInfo[] = snapshot.docs.map(doc => ({
+            address: doc.id, // Use document ID as the address
+            ...doc.data() as Omit<TokenInfo, 'address'>
+          }))
+          
+          // Sort tokens by lastUpdated date, most recent first
+          tokenData.sort((a, b) => 
+            new Date(b.lastUpdated).getTime() - new Date(a.lastUpdated).getTime()
+          )
+          
+          setTokens(tokenData)
+          setIsLoading(false)
+        } catch (err) {
+          console.error('Error processing token data:', err)
+          setError('Failed to process token data')
+          setIsLoading(false)
+        }
+      },
+      (err) => {
+        console.error('Error fetching tokens:', err)
+        setError('Failed to fetch token data')
+        setIsLoading(false)
+      }
+    )
 
-  const tokens = (supportedTokens as string[] | undefined)?.map((address: string, index: number) => {
-    const config = tokenConfigs?.[index]?.result
-    if (!config) return null
-    const [minAmount, decimals] = config as [bigint, number]
-    return {
-      address,
-      name: address.slice(0, 6) + '...' + address.slice(-4),
-      symbol: address.slice(0, 6) + '...' + address.slice(-4),
-      isSupported: true,
-      minAmount: minAmount.toString(),
-      decimals
-    } as TokenInfo
-  }).filter(Boolean) as TokenInfo[]
+    // Cleanup subscription on unmount
+    return () => unsubscribe()
+  }, [])
 
-  return { tokens }
+  return {
+    tokens,
+    isLoading,
+    error
+  }
 }
