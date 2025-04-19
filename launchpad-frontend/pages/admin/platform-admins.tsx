@@ -54,32 +54,32 @@ export default function PlatformAdmins() {
         <table className='min-w-full'>
           <thead>
             <tr className='border-b'>
-              <th className='px-6 py-3 text-left text-sm font-semibold'>
+              <th className='px-6 py-3 text-left text-sm font-semibold text-gray-500 uppercase tracking-wider'>
                 Address
               </th>
-              <th className='px-6 py-3 text-left text-sm font-semibold'>
+              <th className='px-6 py-3 text-left text-sm font-semibold text-gray-500 uppercase tracking-wider'>
                 Status
               </th>
-              <th className='px-6 py-3 text-left text-sm font-semibold'>
+              <th className='px-6 py-3 text-left text-sm font-semibold text-gray-500 uppercase tracking-wider'>
                 Last Operation
               </th>
-              <th className='px-6 py-3 text-left text-sm font-semibold'>
+              <th className='px-6 py-3 text-left text-sm font-semibold text-gray-500 uppercase tracking-wider'>
                 Last Updated
               </th>
-              <th className='px-6 py-3 text-left text-sm font-semibold'>
+              <th className='px-6 py-3 text-left text-sm font-semibold text-gray-500 uppercase tracking-wider'>
                 Actions
               </th>
             </tr>
           </thead>
-          <tbody>
+          <tbody className='divide-y divide-gray-200'>
             {admins.map(admin => (
-              <tr key={admin.address} className='border-b'>
-                <td className='px-6 py-4 font-mono text-sm'>
+              <tr key={admin.address} className='border-b hover:bg-gray-50'>
+                <td className='px-6 py-4 whitespace-nowrap font-mono text-sm'>
                   {admin.address.slice(0, 6)}...{admin.address.slice(-4)}
                 </td>
-                <td className='px-6 py-4'>
+                <td className='px-6 py-4 whitespace-nowrap'>
                   <span
-                    className={`px-2 py-1 rounded-full text-xs ${
+                    className={`px-2 py-1 rounded-full text-xs font-medium ${
                       admin.isActive
                         ? 'bg-green-100 text-green-800'
                         : 'bg-red-100 text-red-800'
@@ -88,17 +88,17 @@ export default function PlatformAdmins() {
                     {admin.isActive ? 'Active' : 'Inactive'}
                   </span>
                 </td>
-                <td className='px-6 py-4'>
+                <td className='px-6 py-4 whitespace-nowrap'>
                   <span className="text-sm">
                     {admin.lastOperation}
                   </span>
                 </td>
-                <td className='px-6 py-4'>
+                <td className='px-6 py-4 whitespace-nowrap'>
                   <span className="text-sm text-gray-600" title={admin.lastUpdated}>
                     {formatDate(admin.lastUpdated)}
                   </span>
                 </td>
-                <td className='px-6 py-4'>
+                <td className='px-6 py-4 whitespace-nowrap'>
                   <div className='flex gap-2'>
                     <button 
                       className='text-red-600 hover:text-red-800'

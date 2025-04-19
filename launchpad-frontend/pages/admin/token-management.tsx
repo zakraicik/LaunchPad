@@ -209,33 +209,35 @@ export default function TokenManagement() {
         <table className='min-w-full'>
           <thead>
             <tr className='border-b'>
-              <th className='px-6 py-3 text-left text-sm font-semibold'>Address</th>
-              <th className='px-6 py-3 text-left text-sm font-semibold'>Symbol</th>
-              <th className='px-6 py-3 text-left text-sm font-semibold'>Status</th>
-              <th className='px-6 py-3 text-left text-sm font-semibold'>Min Amount</th>
-              <th className='px-6 py-3 text-left text-sm font-semibold'>Actions</th>
+              <th className='px-6 py-3 text-left text-sm font-semibold text-gray-500 uppercase tracking-wider'>Address</th>
+              <th className='px-6 py-3 text-left text-sm font-semibold text-gray-500 uppercase tracking-wider'>Symbol</th>
+              <th className='px-6 py-3 text-left text-sm font-semibold text-gray-500 uppercase tracking-wider'>Status</th>
+              <th className='px-6 py-3 text-left text-sm font-semibold text-gray-500 uppercase tracking-wider'>Min Amount</th>
+              <th className='px-6 py-3 text-left text-sm font-semibold text-gray-500 uppercase tracking-wider'>Actions</th>
             </tr>
           </thead>
-          <tbody>
+          <tbody className='divide-y divide-gray-200'>
             {tokens?.map(token => (
-              <tr key={token.address} className='border-b'>
-                <td className='px-6 py-4'>{token.address}</td>
-                <td className='px-6 py-4'>
+              <tr key={token.address} className='border-b hover:bg-gray-50'>
+                <td className='px-6 py-4 whitespace-nowrap font-mono text-sm'>
+                  {token.address.slice(0,6)}...{token.address.slice(-4)}
+                </td>
+                <td className='px-6 py-4 whitespace-nowrap'>
                   <div className="flex items-center gap-2">
-                    {tokenSymbols[token.address.toLowerCase()] || token.symbol || 'No symbol set'}
+                    <span className="text-sm">{tokenSymbols[token.address.toLowerCase()] || token.symbol || 'No symbol set'}</span>
                     {isAdmin && (
                       <button 
                         onClick={() => handleEditClick(token)}
                         className='text-blue-600 hover:text-blue-800'
                       >
-                        <PencilIcon className='h-4 w-4' />
+                        <PencilIcon className='h-5 w-5' />
                       </button>
                     )}
                   </div>
                 </td>
-                <td className='px-6 py-4'>
+                <td className='px-6 py-4 whitespace-nowrap'>
                   <div className="flex items-center gap-2">
-                    <span className={`px-2 py-1 rounded-full text-xs ${
+                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${
                       token.isSupported ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
                     }`}>
                       {token.isSupported ? 'Supported' : 'Not Supported'}
@@ -260,32 +262,40 @@ export default function TokenManagement() {
                     )}
                   </div>
                 </td>
-                <td className='px-6 py-4'>
+                <td className='px-6 py-4 whitespace-nowrap'>
                   <div className="flex items-center gap-2">
-                    {formatUnits(token.minimumContribution, token.decimals)}
+                    <span className="text-sm text-gray-600">{formatUnits(token.minimumContribution, token.decimals)}</span>
                     {isAdmin && (
                       <button 
                         onClick={() => handleEditMinAmount(token)}
                         className='text-blue-600 hover:text-blue-800'
                       >
-                        <PencilIcon className='h-4 w-4' />
+                        <PencilIcon className='h-5 w-5' />
                       </button>
                     )}
                   </div>
                 </td>
-                <td className='px-6 py-4'>
-                  <button 
-                    onClick={() => handleRemoveClick(token)}
-                    className='text-red-600 hover:text-red-800 disabled:opacity-50'
-                    disabled={!isAdmin}
-                  >
-                    <TrashIcon className='h-5 w-5' />
-                  </button>
+                <td className='px-6 py-4 whitespace-nowrap'>
+                  <div className='flex gap-2'>
+                    <button 
+                      onClick={() => handleRemoveClick(token)}
+                      className='text-red-600 hover:text-red-800 disabled:opacity-50'
+                      disabled={!isAdmin}
+                    >
+                      <TrashIcon className='h-5 w-5' />
+                    </button>
+                  </div>
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
+
+        {tokens?.length === 0 && (
+          <div className="text-center py-8 text-gray-500">
+            No tokens found.
+          </div>
+        )}
       </div>
 
       {/* Edit Modal */}
