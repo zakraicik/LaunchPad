@@ -1,4 +1,4 @@
-import { PlusIcon, PencilIcon, TrashIcon, CheckCircleIcon, XCircleIcon } from '@heroicons/react/24/outline'
+import { PlusIcon, PencilIcon, TrashIcon, CheckCircleIcon, XCircleIcon, ClipboardIcon, ClipboardDocumentCheckIcon } from '@heroicons/react/24/outline'
 import {
   useTokenRegistry,
   useAddToken,
@@ -13,6 +13,7 @@ import { useAccount, useWriteContract, useChainId } from 'wagmi'
 import { useIsAdmin } from '../../utils/admin'
 import toast from 'react-hot-toast'
 import { formatUnits, parseUnits } from 'ethers'
+import { useRouter } from 'next/router'
 
 interface TokenInfo {
   address: string
@@ -25,6 +26,7 @@ interface TokenInfo {
 }
 
 export default function TokenManagement() {
+  const router = useRouter()
   const { tokens } = useTokenRegistry()
   const { address } = useAccount()
   const { isAdmin, isLoading: isLoadingAdmin } = useIsAdmin(address)
@@ -42,16 +44,40 @@ export default function TokenManagement() {
   const [minContribution, setMinContribution] = useState('')
   const [addTokenError, setAddTokenError] = useState<string | null>(null)
   const [tokenToRemove, setTokenToRemove] = useState<TokenInfo | null>(null)
+  const [showAddressPopover, setShowAddressPopover] = useState<string | null>(null)
+  const [copiedAddress, setCopiedAddress] = useState<string | null>(null)
+  const popoverRef = useRef<HTMLDivElement>(null)
   const hasFetchedSymbols = useRef(false)
   const chainId = useChainId()
   const [togglingTokenAddress, setTogglingTokenAddress] = useState<string | null>(null)
   const [isMinAmountModalOpen, setIsMinAmountModalOpen] = useState(false)
   const [selectedTokenForMinAmount, setSelectedTokenForMinAmount] = useState<TokenInfo | null>(null)
   const [newMinAmount, setNewMinAmount] = useState('')
-
   const { writeContract, isPending, isError: writeContractError } = useWriteContract()
 
-  // Fetch custom symbols from Firestore
+  // Redirect if not admin
+  useEffect(() => {
+    if (!isLoadingAdmin && !isAdmin) {
+      router.push('/')
+      toast.error('You do not have permission to access this page')
+    }
+  }, [isAdmin, isLoadingAdmin, router])
+
+  // Click outside handler for popover
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (popoverRef.current && !popoverRef.current.contains(event.target as Node)) {
+        setShowAddressPopover(null)
+      }
+    }
+
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [])
+
+  // Fetch custom symbols
   useEffect(() => {
     const fetchCustomSymbols = async () => {
       if (!tokens || hasFetchedSymbols.current) return
@@ -74,6 +100,16 @@ export default function TokenManagement() {
 
     fetchCustomSymbols()
   }, [tokens])
+
+  const handleCopyAddress = async (address: string) => {
+    try {
+      await navigator.clipboard.writeText(address)
+      setCopiedAddress(address)
+      setTimeout(() => setCopiedAddress(null), 2000)
+    } catch (err) {
+      console.error('Failed to copy address:', err)
+    }
+  }
 
   const handleEditClick = (token: TokenInfo) => {
     if (!isAdmin) return
@@ -192,107 +228,161 @@ export default function TokenManagement() {
     }
   }
 
+  // Show loading state while checking admin status
+  if (isLoadingAdmin) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="animate-pulse text-gray-500">Loading...</div>
+      </div>
+    )
+  }
+
+  // Show nothing if not admin (redirect will happen)
+  if (!isAdmin) {
+    return null
+  }
+
   return (
     <div className='p-6'>
       <div className='flex justify-between items-center mb-6'>
         <h1 className='text-2xl font-bold'>Token Management</h1>
         <button 
           onClick={() => setIsAddModalOpen(true)}
-          className='bg-blue-600 text-white px-4 py-2 rounded-lg flex items-center gap-2'
+          className='bg-blue-600 text-white p-2 md:px-4 md:py-2 rounded-lg flex items-center gap-2'
+          title="Add Token"
         >
           <PlusIcon className='h-5 w-5' />
-          Add Token
+          <span className='hidden md:inline'>Add Token</span>
         </button>
       </div>
 
-      <div className='bg-white rounded-lg shadow'>
-        <table className='min-w-full'>
-          <thead>
-            <tr className='border-b'>
-              <th className='px-6 py-3 text-left text-sm font-semibold text-gray-500 uppercase tracking-wider'>Address</th>
-              <th className='px-6 py-3 text-left text-sm font-semibold text-gray-500 uppercase tracking-wider'>Symbol</th>
-              <th className='px-6 py-3 text-left text-sm font-semibold text-gray-500 uppercase tracking-wider'>Status</th>
-              <th className='px-6 py-3 text-left text-sm font-semibold text-gray-500 uppercase tracking-wider'>Min Amount</th>
-              <th className='px-6 py-3 text-left text-sm font-semibold text-gray-500 uppercase tracking-wider'>Actions</th>
-            </tr>
-          </thead>
-          <tbody className='divide-y divide-gray-200'>
-            {tokens?.map(token => (
-              <tr key={token.address} className='border-b hover:bg-gray-50'>
-                <td className='px-6 py-4 whitespace-nowrap font-mono text-sm'>
-                  {token.address.slice(0,6)}...{token.address.slice(-4)}
-                </td>
-                <td className='px-6 py-4 whitespace-nowrap'>
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm">{tokenSymbols[token.address.toLowerCase()] || token.symbol || 'No symbol set'}</span>
-                    {isAdmin && (
-                      <button 
-                        onClick={() => handleEditClick(token)}
-                        className='text-blue-600 hover:text-blue-800'
-                      >
-                        <PencilIcon className='h-5 w-5' />
-                      </button>
-                    )}
-                  </div>
-                </td>
-                <td className='px-6 py-4 whitespace-nowrap'>
-                  <div className="flex items-center gap-2">
-                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                      token.isSupported ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-                    }`}>
-                      {token.isSupported ? 'Supported' : 'Not Supported'}
-                    </span>
-                    {isAdmin && (
-                      <button
-                        onClick={() => handleToggleSupport(token)}
-                        disabled={isToggling && togglingTokenAddress === token.address}
-                        className={`p-1 rounded-full transition-colors ${
-                          token.isSupported
-                            ? 'text-red-600 hover:text-red-700 hover:bg-red-50'
-                            : 'text-green-600 hover:text-green-700 hover:bg-green-50'
-                        } disabled:opacity-50`}
-                        title={token.isSupported ? 'Disable Support' : 'Enable Support'}
-                      >
-                        {token.isSupported ? (
-                          <XCircleIcon className='h-5 w-5' />
-                        ) : (
-                          <CheckCircleIcon className='h-5 w-5' />
-                        )}
-                      </button>
-                    )}
-                  </div>
-                </td>
-                <td className='px-6 py-4 whitespace-nowrap'>
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm text-gray-600">{formatUnits(token.minimumContribution, token.decimals)}</span>
-                    {isAdmin && (
-                      <button 
-                        onClick={() => handleEditMinAmount(token)}
-                        className='text-blue-600 hover:text-blue-800'
-                      >
-                        <PencilIcon className='h-5 w-5' />
-                      </button>
-                    )}
-                  </div>
-                </td>
-                <td className='px-6 py-4 whitespace-nowrap'>
-                  <div className='flex gap-2'>
+      {/* Card Grid Layout */}
+      <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4'>
+        {tokens?.map(token => (
+          <div key={token.address} className='bg-white rounded-lg shadow p-4 space-y-4'>
+            {/* Header with symbol and remove button */}
+            <div className='flex justify-between items-start'>
+              <div className='space-y-1'>
+                <div className='flex items-center gap-2'>
+                  <span className="text-sm font-medium">{tokenSymbols[token.address.toLowerCase()] || token.symbol || 'No symbol set'}</span>
+                  {isAdmin && (
                     <button 
-                      onClick={() => handleRemoveClick(token)}
-                      className='text-red-600 hover:text-red-800 disabled:opacity-50'
-                      disabled={!isAdmin}
+                      onClick={() => handleEditClick(token)}
+                      className='text-blue-600 hover:text-blue-800'
+                      title="Edit Symbol"
                     >
-                      <TrashIcon className='h-5 w-5' />
+                      <PencilIcon className='h-4 w-4' />
                     </button>
+                  )}
+                </div>
+                <div className='relative'>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation() // Prevent event from bubbling
+                      setShowAddressPopover(showAddressPopover === token.address ? null : token.address)
+                    }}
+                    className='font-mono text-xs text-gray-500 hover:text-gray-700'
+                  >
+                    {token.address.slice(0,6)}...{token.address.slice(-4)}
+                  </button>
+                  
+                  {/* Address Popover */}
+                  {showAddressPopover === token.address && (
+                    <div 
+                      ref={popoverRef}
+                      className='absolute z-10 mt-2 bg-white rounded-lg shadow-lg border border-gray-200 p-3 w-fit min-w-[300px]'
+                    >
+                      <div className='flex items-start gap-2'>
+                        <div className='font-mono text-sm break-all'>{token.address}</div>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation() // Prevent event from bubbling
+                            handleCopyAddress(token.address)
+                          }}
+                          className='flex-shrink-0 text-gray-500 hover:text-gray-700'
+                          title="Copy Address"
+                        >
+                          {copiedAddress === token.address ? (
+                            <ClipboardDocumentCheckIcon className='h-5 w-5 text-green-600' />
+                          ) : (
+                            <ClipboardIcon className='h-5 w-5' />
+                          )}
+                        </button>
+                      </div>
+                      <div className='mt-2 text-xs text-gray-500'>
+                        <a
+                          href={`https://etherscan.io/token/${token.address}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className='text-blue-600 hover:text-blue-800'
+                          onClick={(e) => e.stopPropagation()} // Prevent event from bubbling
+                        >
+                          View on Etherscan
+                        </a>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+              {isAdmin && (
+                <button 
+                  onClick={() => handleRemoveClick(token)}
+                  className='text-red-600 hover:text-red-800 disabled:opacity-50'
+                  disabled={!isAdmin}
+                  title="Remove Token"
+                >
+                  <TrashIcon className='h-5 w-5' />
+                </button>
+              )}
+            </div>
+
+            {/* Token settings section */}
+            <div className='space-y-4 pt-2 border-t border-gray-100'>
+              {/* Support Status */}
+              <div className='flex justify-between items-center'>
+                <span className='text-sm text-gray-500'>Support Status</span>
+                <button
+                  onClick={() => isAdmin && handleToggleSupport(token)}
+                  disabled={isToggling && togglingTokenAddress === token.address || !isAdmin}
+                  className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed ${
+                    token.isSupported ? 'bg-green-600' : 'bg-gray-200'
+                  }`}
+                  role="switch"
+                  aria-checked={token.isSupported}
+                  title={isAdmin ? (token.isSupported ? 'Disable Support' : 'Enable Support') : 'Only admins can change token support'}
+                >
+                  <span
+                    className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                      token.isSupported ? 'translate-x-5' : 'translate-x-0'
+                    }`}
+                  />
+                </button>
+              </div>
+
+              {/* Minimum Contribution */}
+              <div className='flex justify-between items-center'>
+                <div>
+                  <span className='text-sm text-gray-500'>Minimum Contribution</span>
+                  <div className='text-sm text-gray-900 font-medium'>
+                    {formatUnits(token.minimumContribution, token.decimals)}
                   </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+                </div>
+                {isAdmin && (
+                  <button 
+                    onClick={() => handleEditMinAmount(token)}
+                    className='text-blue-600 hover:text-blue-800'
+                    title="Edit Minimum Contribution"
+                  >
+                    <PencilIcon className='h-5 w-5' />
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        ))}
 
         {tokens?.length === 0 && (
-          <div className="text-center py-8 text-gray-500">
+          <div className="text-center py-8 text-gray-500 bg-white rounded-lg shadow">
             No tokens found.
           </div>
         )}
