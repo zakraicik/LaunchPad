@@ -9,162 +9,7 @@ import CampaignFilters from '../../components/campaigns/CampaignFilters'
 import CreateCampaignModal from '../../components/campaigns/CreateCampaignModal'
 import { useCampaigns } from '../../hooks/useCampaigns'
 import { useRouter } from 'next/router'
-
-interface Campaign {
-  id: number
-  title: string
-  description: string
-  image: string
-  category: string
-  target: number
-  raised: number
-  startTime: number
-  endTime: number
-  duration: number
-  backers: number
-  avgYield: number
-}
-
-// Helper function to generate timestamps
-const getTimestamps = (durationInDays: number, isStarted: boolean = true) => {
-  const now = Math.floor(Date.now() / 1000)
-  const day = 24 * 60 * 60 // seconds in a day
-
-  if (isStarted) {
-    const startTime = now - 2 * day // Started 2 days ago
-    return {
-      startTime,
-      endTime: startTime + durationInDays * day,
-      duration: durationInDays
-    }
-  } else {
-    const startTime = now + day // Starts in 1 day
-    return {
-      startTime,
-      endTime: startTime + durationInDays * day,
-      duration: durationInDays
-    }
-  }
-}
-
-// Helper function to calculate days left
-const getDaysLeft = (endTime: number): number => {
-  const now = Math.floor(Date.now() / 1000)
-  const secondsLeft = endTime - now
-  return Math.max(0, Math.floor(secondsLeft / (24 * 60 * 60)))
-}
-
-// Dummy data - replace with real data later
-export const dummyCampaigns: Campaign[] = [
-  {
-    id: 1,
-    title: 'Clean Energy Initiative',
-    description: 'Supporting renewable energy projects with yield generation',
-    image: '/placeholder.svg',
-    category: 'Environment',
-    target: 100000,
-    raised: 75000,
-    ...getTimestamps(30), // 30-day campaign
-    backers: 156,
-    avgYield: 8.5
-  },
-  {
-    id: 2,
-    title: 'Education for All',
-    description: 'Providing educational resources through sustainable funding',
-    image: '/placeholder.svg',
-    category: 'Education',
-    target: 50000,
-    raised: 35000,
-    ...getTimestamps(45, false), // 45-day campaign, not started yet
-    backers: 89,
-    avgYield: 7.8
-  },
-  {
-    id: 3,
-    title: 'Ocean Cleanup Project',
-    description: 'Leveraging yield farming to fund ocean cleanup initiatives',
-    image: '/placeholder.svg',
-    category: 'Environment',
-    target: 75000,
-    raised: 45000,
-    ...getTimestamps(60), // 60-day campaign
-    backers: 112,
-    avgYield: 8.2
-  },
-  {
-    id: 4,
-    title: 'Medical Research Fund',
-    description: 'Accelerating breakthrough medical research through DeFi',
-    image: '/placeholder.svg',
-    category: 'Healthcare',
-    target: 200000,
-    raised: 120000,
-    ...getTimestamps(90), // 90-day campaign
-    backers: 234,
-    avgYield: 9.1
-  },
-  {
-    id: 5,
-    title: 'AI for Good',
-    description: 'Developing ethical AI solutions for social impact',
-    image: '/placeholder.svg',
-    category: 'Technology',
-    target: 150000,
-    raised: 85000,
-    ...getTimestamps(45), // 45-day campaign
-    backers: 167,
-    avgYield: 8.7
-  },
-  {
-    id: 6,
-    title: 'Sustainable Housing',
-    description: 'Building eco-friendly affordable housing communities',
-    image: '/placeholder.svg',
-    category: 'Infrastructure',
-    target: 300000,
-    raised: 195000,
-    ...getTimestamps(120), // 120-day campaign
-    backers: 312,
-    avgYield: 7.9
-  },
-  {
-    id: 7,
-    title: 'Quantum Computing Research',
-    description: 'Advancing quantum computing technology for public benefit',
-    image: '/placeholder.svg',
-    category: 'Science & Research',
-    target: 250000,
-    raised: 125000,
-    ...getTimestamps(75), // 75-day campaign
-    backers: 178,
-    avgYield: 8.9
-  },
-  {
-    id: 8,
-    title: 'Urban Farming Initiative',
-    description: 'Creating sustainable urban farming solutions',
-    image: '/placeholder.svg',
-    category: 'Environment',
-    target: 80000,
-    raised: 52000,
-    ...getTimestamps(30), // 30-day campaign
-    backers: 145,
-    avgYield: 8.3
-  },
-  {
-    id: 9,
-    title: 'Digital Literacy Program',
-    description: 'Bringing technology education to underserved communities',
-    image: '/placeholder.svg',
-    category: 'Education',
-    target: 60000,
-    raised: 42000,
-    ...getTimestamps(45, false), // 45-day campaign, not started yet
-    backers: 98,
-    avgYield: 7.6
-  }
-]
+import { Timestamp } from 'firebase/firestore'
 
 export default function CampaignsDiscovery() {
   const router = useRouter()
@@ -183,7 +28,6 @@ export default function CampaignsDiscovery() {
       if (category && typeof category === 'string') {
         setSelectedCategory(category.toLowerCase() === 'all' ? 'all' : category)
       } else {
-        // If no category is specified, default to 'all'
         setSelectedCategory('all')
       }
     }
@@ -205,6 +49,19 @@ export default function CampaignsDiscovery() {
 
   // Filter campaigns based on search query and category
   const filteredCampaigns = campaigns.filter(campaign => {
+    // Skip campaigns without required data
+    if (!campaign.createdAt || !campaign.duration) return false
+
+    // Calculate campaign end date
+    const createdAtDate = campaign.createdAt.seconds * 1000
+
+    const endDate =  createdAtDate + campaign.duration * 24 * 60 * 60 *1000
+
+    const now = Date.now()
+    
+    const isActive =  now < endDate
+
+    // Apply search and category filters
     const matchesSearch =
       campaign.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
       campaign.description.toLowerCase().includes(searchQuery.toLowerCase())
@@ -212,16 +69,17 @@ export default function CampaignsDiscovery() {
     const matchesCategory =
       selectedCategory === 'all' || campaign.category === selectedCategory
 
-    return matchesSearch && matchesCategory
+    // Only include active campaigns that match search and category
+    return isActive && matchesSearch && matchesCategory
   })
 
   // Sort campaigns based on selected sort option
   const sortedCampaigns = [...filteredCampaigns].sort((a, b) => {
     switch (sortBy) {
       case 'newest':
-        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+        return Number(b.createdAt) - Number(a.createdAt)
       case 'endingSoon':
-        return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+        return Number(a.createdAt) - Number(b.createdAt)
       case 'mostFunded':
         return Number(b.totalRaised) - Number(a.totalRaised)
       case 'mostBackers':

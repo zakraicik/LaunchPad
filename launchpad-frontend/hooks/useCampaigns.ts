@@ -1,30 +1,29 @@
 import { useState, useEffect } from 'react'
 import { db } from '../utils/firebase'
-import { collection, query, where, getDocs, orderBy } from 'firebase/firestore'
+import { collection, query, where, getDocs, orderBy, Timestamp } from 'firebase/firestore'
 import { useAccount } from 'wagmi'
 
 export interface Campaign {
   id: string
   title: string
   description: string
-  imageUrl?: string
   category?: string
   targetAmount: string
   totalRaised: string
   status: 'draft' | 'active' | 'completed' | 'cancelled'
-  createdAt: string
+  createdAt: Timestamp
   contributors: number
-  yieldGenerated: string
-  currentAPY: number
   depositedAmount: string
   availableYield: string
-  owner: string
-  ownerAddress: string
+  frontEndAuthID: string
   networkId: string
   goalAmountSmallestUnits: string
   token: string
-  duration: string
+  duration: number
   hasClaimed?: boolean
+  canClaimFunds?: boolean
+  statusText: string
+  statusColor: string
 }
 
 interface UseCampaignsOptions {
@@ -59,24 +58,23 @@ export function useCampaigns ({ filterByOwner = false }: UseCampaignsOptions = {
           id: doc.id,
           title: data.title,
           description: data.description,
-          imageUrl: data.imageUrl,
           category: data.category,
           targetAmount: data.goalAmountSmallestUnits,
           totalRaised: data.totalContributions || '0',
           status: getStatusFromNumber(data.status),
           createdAt: data.createdAt,
           contributors: data.contributors || 0,
-          yieldGenerated: data.yieldGenerated || '0',
-          currentAPY: data.currentAPY || 0,
           depositedAmount: data.depositedAmount || '0',
           availableYield: data.availableYield || '0',
-          owner: data.owner,
-          ownerAddress: data.ownerAddress,
+          frontEndAuthID: data.frontEndAuthID,
           networkId: data.networkId,
           goalAmountSmallestUnits: data.goalAmountSmallestUnits,
           token: data.token,
           duration: data.duration || '',
-          hasClaimed: data.hasClaimed
+          hasClaimed: data.hasClaimed,
+          canClaimFunds: data.canClaimFunds,
+          statusText: data.statusText,
+          statusColor: data.statusColor
         })
       })
 

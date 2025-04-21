@@ -46,7 +46,7 @@ export default function CampaignCard({ campaign, onClick }: CampaignCardProps) {
 
       const endDate = new Date(
         createdAtDate.getTime() +
-          parseInt(campaign.duration) * 24 * 60 * 60 * 1000
+          campaign.duration * 24 * 60 * 60 * 1000
       )
       
       const now = new Date()
@@ -132,9 +132,21 @@ export default function CampaignCard({ campaign, onClick }: CampaignCardProps) {
             </div>
             <div>
               <span className='text-gray-600'>Time Left</span>
-              <p className='font-medium bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent'>
-                {timeLeft}
-              </p>
+              {isEnded ? (
+                progress >= 100 ? (
+                  <div className='inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800'>
+                    Goal Reached
+                  </div>
+                ) : (
+                  <div className='inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800'>
+                    Goal Not Reached
+                  </div>
+                )
+              ) : (
+                <p className='font-medium bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent'>
+                  {timeLeft}
+                </p>
+              )}
             </div>
           </div>
         </div>

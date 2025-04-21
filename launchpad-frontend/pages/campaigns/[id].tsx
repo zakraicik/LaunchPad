@@ -1,6 +1,6 @@
 import { useRouter } from 'next/router'
 import { useState, useEffect } from 'react'
-import { ShareIcon } from '@heroicons/react/24/outline'
+import { ShareIcon, ArrowLeftIcon } from '@heroicons/react/24/outline'
 import Contributors from '../../components/campaigns/Contributors'
 import CampaignDetails from '../../components/campaigns/CampaignDetails'
 import { formatNumber } from '../../utils/format'
@@ -373,6 +373,15 @@ export default function CampaignDetail () {
   return (
     <div className='min-h-screen bg-gray-50 py-8'>
       <div className='container mx-auto px-4'>
+        {/* Back Button */}
+        <button
+          onClick={() => router.back()}
+          className="mb-6 flex items-center text-gray-600 hover:text-gray-900 transition-colors"
+        >
+          <ArrowLeftIcon className="h-5 w-5 mr-2" />
+          Back to Campaigns
+        </button>
+
         {/* Campaign Header */}
         <div className='bg-white rounded-lg shadow-sm overflow-hidden mb-6'>
           {campaign.imageUrl && (
@@ -556,18 +565,33 @@ export default function CampaignDetail () {
                 <div className='bg-gray-50 rounded-lg p-4'>
                   <h3 className='text-sm font-medium text-gray-900 mb-4'>Campaign Token Balances</h3>
                   <div className='space-y-4'>
-                    <div className='flex justify-between items-center'>
-                      <span className='text-sm text-gray-500'>Total Raised</span>
-                      <span className='text-sm font-medium'>{formattedRaised} {token?.symbol}</span>
-                    </div>
-                    <div className='flex justify-between items-center'>
-                      <span className='text-sm text-gray-500'>Available for Claim</span>
-                      <span className='text-sm font-medium'>Coming soon</span>
-                    </div>
-                    <div className='flex justify-between items-center'>
-                      <span className='text-sm text-gray-500'>Claimed Amount</span>
-                      <span className='text-sm font-medium'>Coming soon</span>
-                    </div>
+                    {!isCampaignEnded() ? (
+                      <>
+                        <div className='flex justify-between items-center'>
+                          <span className='text-sm text-gray-500'>Amount in Contract</span>
+                          <span className='text-sm font-medium'>{formattedRaised} {token?.symbol}</span>
+                        </div>
+                        <div className='flex justify-between items-center'>
+                          <span className='text-sm text-gray-500'>Amount in Yield Generation</span>
+                          <span className='text-sm font-medium'>Coming soon</span>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div className='flex justify-between items-center'>
+                          <span className='text-sm text-gray-500'>Amount in Contract</span>
+                          <span className='text-sm font-medium'>{formattedRaised} {token?.symbol}</span>
+                        </div>
+                        <div className='flex justify-between items-center'>
+                          <span className='text-sm text-gray-500'>Amount Claimed</span>
+                          <span className='text-sm font-medium'>{campaign.hasClaimed ? formattedRaised : '0'} {token?.symbol}</span>
+                        </div>
+                        <div className='flex justify-between items-center'>
+                          <span className='text-sm text-gray-500'>Amount Available for Refunds</span>
+                          <span className='text-sm font-medium'>{campaign.hasClaimed ? '0' : formattedRaised} {token?.symbol}</span>
+                        </div>
+                      </>
+                    )}
                   </div>
                 </div>
               </div>
