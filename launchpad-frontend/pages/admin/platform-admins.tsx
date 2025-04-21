@@ -44,40 +44,22 @@ export default function PlatformAdmins() {
     <div className='p-6'>
       <div className='flex justify-between items-center mb-6'>
         <h1 className='text-2xl font-bold'>Platform Administrators</h1>
-        <button className='bg-blue-600 text-white px-4 py-2 rounded-lg flex items-center gap-2'>
+        <button className='bg-blue-600 text-white p-2 md:px-4 md:py-2 rounded-lg flex items-center gap-2'>
           <PlusIcon className='h-5 w-5' />
-          Add Admin
+          <span className='hidden md:inline'>Add Admin</span>
         </button>
       </div>
 
-      <div className='bg-white rounded-lg shadow'>
-        <table className='min-w-full'>
-          <thead>
-            <tr className='border-b'>
-              <th className='px-6 py-3 text-left text-sm font-semibold text-gray-500 uppercase tracking-wider'>
-                Address
-              </th>
-              <th className='px-6 py-3 text-left text-sm font-semibold text-gray-500 uppercase tracking-wider'>
-                Status
-              </th>
-              <th className='px-6 py-3 text-left text-sm font-semibold text-gray-500 uppercase tracking-wider'>
-                Last Operation
-              </th>
-              <th className='px-6 py-3 text-left text-sm font-semibold text-gray-500 uppercase tracking-wider'>
-                Last Updated
-              </th>
-              <th className='px-6 py-3 text-left text-sm font-semibold text-gray-500 uppercase tracking-wider'>
-                Actions
-              </th>
-            </tr>
-          </thead>
-          <tbody className='divide-y divide-gray-200'>
-            {admins.map(admin => (
-              <tr key={admin.address} className='border-b hover:bg-gray-50'>
-                <td className='px-6 py-4 whitespace-nowrap font-mono text-sm'>
+      <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4'>
+        {admins.map(admin => (
+          <div key={admin.address} className='bg-white rounded-lg shadow p-4 space-y-4'>
+            {/* Header with address and remove button */}
+            <div className='flex justify-between items-start'>
+              <div className='space-y-1'>
+                <div className='font-mono text-sm'>
                   {admin.address.slice(0, 6)}...{admin.address.slice(-4)}
-                </td>
-                <td className='px-6 py-4 whitespace-nowrap'>
+                </div>
+                <div>
                   <span
                     className={`px-2 py-1 rounded-full text-xs font-medium ${
                       admin.isActive
@@ -87,34 +69,39 @@ export default function PlatformAdmins() {
                   >
                     {admin.isActive ? 'Active' : 'Inactive'}
                   </span>
-                </td>
-                <td className='px-6 py-4 whitespace-nowrap'>
-                  <span className="text-sm">
-                    {admin.lastOperation}
-                  </span>
-                </td>
-                <td className='px-6 py-4 whitespace-nowrap'>
-                  <span className="text-sm text-gray-600" title={admin.lastUpdated}>
-                    {formatDate(admin.lastUpdated)}
-                  </span>
-                </td>
-                <td className='px-6 py-4 whitespace-nowrap'>
-                  <div className='flex gap-2'>
-                    <button 
-                      className='text-red-600 hover:text-red-800'
-                      title={admin.isActive ? 'Remove Admin' : 'Restore Admin'}
-                    >
-                      <TrashIcon className='h-5 w-5' />
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+                </div>
+              </div>
+              <button 
+                className='text-red-600 hover:text-red-800'
+                title={admin.isActive ? 'Remove Admin' : 'Restore Admin'}
+              >
+                <TrashIcon className='h-5 w-5' />
+              </button>
+            </div>
+
+            {/* Admin details section */}
+            <div className='space-y-3 pt-2 border-t border-gray-100'>
+              {/* Last Operation */}
+              <div className='flex justify-between items-center'>
+                <span className='text-sm text-gray-500'>Last Operation</span>
+                <span className="text-sm font-medium">
+                  {admin.lastOperation}
+                </span>
+              </div>
+
+              {/* Last Updated */}
+              <div className='flex justify-between items-center'>
+                <span className='text-sm text-gray-500'>Last Updated</span>
+                <span className="text-sm font-medium text-gray-600" title={admin.lastUpdated}>
+                  {formatDate(admin.lastUpdated)}
+                </span>
+              </div>
+            </div>
+          </div>
+        ))}
 
         {admins.length === 0 && (
-          <div className="text-center py-8 text-gray-500">
+          <div className="text-center py-8 text-gray-500 bg-white rounded-lg shadow">
             No administrators found.
           </div>
         )}

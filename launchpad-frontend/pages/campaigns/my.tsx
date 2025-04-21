@@ -18,6 +18,7 @@ interface Campaign extends BaseCampaign {
   duration: string
   goalAmountSmallestUnits: string
   token: string
+  hasClaimed: boolean
 }
 
 interface CampaignWithCalculations extends Campaign {
@@ -25,6 +26,7 @@ interface CampaignWithCalculations extends Campaign {
   formattedRaised: string
   formattedTarget: string
   statusColor: string
+  canClaimFunds?: boolean
 }
 
 export default function MyCampaigns () {
@@ -88,15 +90,43 @@ export default function MyCampaigns () {
       }
     }
 
+    const isCampaignEnded = (createdAt: string | Date, duration: string): boolean => {
+      const startDate = new Date(createdAt)
+      const endDate = new Date(startDate.getTime() + parseInt(duration) * 24 * 60 * 60 * 1000)
+      return new Date() > endDate
+    }
+
     const processed = realCampaigns.map(campaign => {
-      // Use default values for missing properties
-      const duration = campaign.duration || '30' // Default duration in days
+      const duration = campaign.duration
       const goalAmountSmallestUnits =
         campaign.goalAmountSmallestUnits || campaign.targetAmount
       const token =
-        campaign.token || '0x0000000000000000000000000000000000000000' // Default token address
-      const statusText =
-        campaign.status.charAt(0).toUpperCase() + campaign.status.slice(1)
+        campaign.token || '0x0000000000000000000000000000000000000000'
+
+      const progress = calculateProgress(
+        campaign.totalRaised,
+        goalAmountSmallestUnits,
+        token
+      )
+      
+      const isEnded = isCampaignEnded(campaign.createdAt, duration)
+      const hasReachedGoal = progress >= 100
+
+      // Determine status based on time and goal progress
+      let statusText = 'Active'
+      let statusColor = 'bg-green-100 text-green-800'
+      
+      if (isEnded) {
+        if (hasReachedGoal) {
+          statusText = 'Goal Reached'
+          statusColor = 'bg-blue-100 text-blue-800'
+        } else {
+          statusText = 'Unsuccessful'
+          statusColor = 'bg-red-100 text-red-800'
+        }
+      }
+
+      const canClaimFunds = isEnded && hasReachedGoal && !campaign.hasClaimed
 
       const processedCampaign = {
         ...campaign,
@@ -104,14 +134,11 @@ export default function MyCampaigns () {
         goalAmountSmallestUnits,
         token,
         statusText,
-        progress: calculateProgress(
-          campaign.totalRaised,
-          goalAmountSmallestUnits,
-          token
-        ),
+        statusColor,
+        progress,
         formattedRaised: formatAmount(campaign.totalRaised, token),
         formattedTarget: formatAmount(goalAmountSmallestUnits, token),
-        statusColor: getStatusColor(statusText)
+        canClaimFunds
       } as CampaignWithCalculations
 
       return processedCampaign
@@ -119,17 +146,6 @@ export default function MyCampaigns () {
 
     setProcessedCampaigns(processed)
   }, [realCampaigns, memoizedGetTokenByAddress])
-
-  const getStatusColor = (statusText: string) => {
-    switch (statusText.toLowerCase()) {
-      case 'active':
-        return 'bg-green-100 text-green-800'
-      case 'completed':
-        return 'bg-blue-100 text-blue-800'
-      default:
-        return 'bg-gray-100 text-gray-800'
-    }
-  }
 
   const handleViewCampaign = (campaignId: string) => {
     router.push(`/campaigns/${campaignId}`)
@@ -218,11 +234,19 @@ export default function MyCampaigns () {
 
         <div className='grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3'>
           {processedCampaigns.map(campaign => (
-            <CampaignCard
-              key={campaign.id}
-              campaign={campaign}
-              onClick={() => handleViewCampaign(campaign.id)}
-            />
+            <div key={campaign.id} className="relative">
+              {campaign.canClaimFunds && (
+                <div className="absolute top-2 right-2 z-10">
+                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                    Ready to Claim
+                  </span>
+                </div>
+              )}
+              <CampaignCard
+                campaign={campaign}
+                onClick={() => handleViewCampaign(campaign.id)}
+              />
+            </div>
           ))}
         </div>
       </div>

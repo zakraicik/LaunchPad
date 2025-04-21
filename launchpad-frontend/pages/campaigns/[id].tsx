@@ -12,6 +12,7 @@ import { useAccount, useWalletClient, usePublicClient } from 'wagmi'
 import toast from 'react-hot-toast'
 import CampaignABI from '../../../artifacts/contracts/Campaign.sol/Campaign.json'
 import CampaignTimer from '../../components/campaigns/CampaignTimer'
+import { useClaimFunds } from '../../hooks/campaigns/useClaimFunds'
 
 interface Campaign {
   id: string
@@ -30,6 +31,8 @@ interface Campaign {
   campaignAddress?: string
   status: number
   statusReason: number
+  owner?: string
+  hasClaimed?: boolean
 }
 
 export default function CampaignDetail () {
@@ -45,6 +48,7 @@ export default function CampaignDetail () {
   const { address, isConnected } = useAccount()
   const { data: walletClient } = useWalletClient()
   const publicClient = usePublicClient()
+  const { claimFunds, isClaiming } = useClaimFunds()
 
   useEffect(() => {
     setMounted(true)
@@ -332,6 +336,39 @@ export default function CampaignDetail () {
     }
   }
 
+  const isCampaignEnded = (): boolean => {
+    if (!campaign?.createdAt || !campaign?.duration) return false
+
+    let createdAtDate: Date
+    if (typeof campaign.createdAt === 'string') {
+      createdAtDate = new Date(campaign.createdAt)
+    } else if (campaign.createdAt instanceof Date) {
+      createdAtDate = campaign.createdAt
+    } else {
+      createdAtDate = campaign.createdAt.toDate()
+    }
+
+    const endDate = new Date(
+      createdAtDate.getTime() + parseInt(campaign.duration) * 24 * 60 * 60 * 1000
+    )
+    return new Date() > endDate
+  }
+
+  const isOwner = address && campaign?.owner && address.toLowerCase() === campaign.owner.toLowerCase()
+  const canClaimFunds = isOwner && isCampaignEnded() && !campaign?.hasClaimed
+
+  const handleClaimFunds = async () => {
+    if (!campaign?.campaignAddress || !canClaimFunds) return
+
+    try {
+      await claimFunds(campaign.campaignAddress)
+      // Refresh campaign data after successful claim
+      await fetchCampaign(campaign.id)
+    } catch (error) {
+      console.error('Error in handleClaimFunds:', error)
+    }
+  }
+
   return (
     <div className='min-h-screen bg-gray-50 py-8'>
       <div className='container mx-auto px-4'>
@@ -356,52 +393,73 @@ export default function CampaignDetail () {
                   </span>
                 )}
                 <div className='flex items-center gap-4'>
-                  <h1 className='text-3xl font-bold'>{campaign.title}</h1>
-                  {campaign.status === 1 ? (
-                    <span className='inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800'>
-                      Active
-                    </span>
-                  ) : campaign.status === 2 && campaign.statusReason === 1 ? (
-                    <span className='inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800'>
-                      Goal Reached
-                    </span>
-                  ) : (
-                    <span className='inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800'>
-                      Unsuccessful
-                    </span>
-                  )}
+                  <h1 className='text-2xl font-bold'>{campaign.title}</h1>
+                  {(() => {
+                    // Handle Firebase Timestamp or Date object
+                    const createdAtDate = typeof campaign.createdAt === 'object' && 'toDate' in campaign.createdAt
+                      ? campaign.createdAt.toDate()
+                      : new Date(campaign.createdAt)
+                    
+                    const isEnded = new Date() > new Date(createdAtDate.getTime() + parseInt(campaign.duration) * 24 * 60 * 60 * 1000)
+                    const progress = campaign.totalRaised && campaign.goalAmountSmallestUnits
+                      ? (Number(campaign.totalRaised) / Number(campaign.goalAmountSmallestUnits)) * 100
+                      : 0
+                    const hasReachedGoal = progress >= 100
+
+                    if (!isEnded) {
+                      return (
+                        <span className='inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800'>
+                          Active
+                        </span>
+                      )
+                    }
+                    
+                    if (hasReachedGoal) {
+                      return (
+                        <span className='inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800'>
+                          Goal Reached
+                        </span>
+                      )
+                    }
+                    
+                    return (
+                      <span className='inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800'>
+                        Unsuccessful
+                      </span>
+                    )
+                  })()}
                 </div>
               </div>
               <button
                 className='p-2 hover:bg-gray-100 rounded-full'
                 aria-label='Share'
               >
-                <ShareIcon className='h-6 w-6 text-gray-600' />
+                <ShareIcon className='h-5 w-5 text-gray-600' />
               </button>
             </div>
 
             {/* Progress Section */}
             <div className='mb-6'>
-              <div className='w-full bg-gray-200 rounded-full h-3'>
+              <div className='w-full bg-gray-200 rounded-full h-2'>
                 <div
-                  className='bg-blue-600 h-3 rounded-full'
+                  className='bg-blue-600 h-2 rounded-full'
                   style={{ width: `${Math.min(100, progress)}%` }}
                 />
               </div>
               <div className='flex justify-between items-center mt-4'>
                 <div>
-                  <p className='text-2xl font-bold'>
+                  <p className='text-lg font-medium'>
                     {formattedRaised} {token?.symbol}
                   </p>
-                  <p className='text-sm text-gray-600'>
+                  <p className='text-sm text-gray-500'>
                     raised of {formattedGoal} {token?.symbol}
                   </p>
                 </div>
                 <div className='text-right'>
-                  <p className='text-2xl font-bold'>
+                  <p className='text-lg font-medium'>
                     {formattedGoal} {token?.symbol}
                   </p>
-                  <p className='text-sm text-gray-600'>Goal Amount</p>
+                  <p className='text-sm text-gray-500'>Goal Amount</p>
                 </div>
               </div>
             </div>
@@ -409,10 +467,10 @@ export default function CampaignDetail () {
             {/* Quick Stats */}
             <div className='grid grid-cols-3 gap-4 py-4 border-t border-b'>
               <div className='text-center'>
-                <p className='text-2xl font-bold'>
+                <p className='text-lg font-medium'>
                   {campaign.contributors || 0}
                 </p>
-                <p className='text-sm text-gray-600'>Contributors</p>
+                <p className='text-sm text-gray-500'>Contributors</p>
               </div>
               <div className='text-center'>
                 <CampaignTimer
@@ -420,15 +478,28 @@ export default function CampaignDetail () {
                   endTime={campaign.createdAt instanceof Date ? campaign.createdAt.getTime() / 1000 + Number(campaign.duration) * 24 * 60 * 60 : typeof campaign.createdAt === 'string' ? new Date(campaign.createdAt).getTime() / 1000 + Number(campaign.duration) * 24 * 60 * 60 : campaign.createdAt.toDate().getTime() / 1000 + Number(campaign.duration) * 24 * 60 * 60}
                   duration={Number(campaign.duration)}
                 />
-                <p className='text-sm text-gray-600'>Time Remaining</p>
+                <p className='text-sm text-gray-500'>Time Remaining</p>
               </div>
               <div className='text-center'>
-                <p className='text-2xl font-bold'>
+                <p className='text-lg font-medium'>
                   {token?.symbol || 'Loading...'}
                 </p>
-                <p className='text-sm text-gray-600'>Target Coin</p>
+                <p className='text-sm text-gray-500'>Target Coin</p>
               </div>
             </div>
+
+            {/* Claim Funds Button */}
+            {canClaimFunds && (
+              <div className='mt-4 flex justify-end'>
+                <button
+                  onClick={handleClaimFunds}
+                  disabled={isClaiming}
+                  className='bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed'
+                >
+                  {isClaiming ? 'Claiming...' : 'Claim Funds'}
+                </button>
+              </div>
+            )}
           </div>
         </div>
 

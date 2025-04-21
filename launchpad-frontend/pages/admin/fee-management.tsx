@@ -1,7 +1,7 @@
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useFeeManager } from '@/hooks/feeManagement/useFeeManager'
 import { formatDistanceToNow, isValid } from 'date-fns'
-import { PencilIcon } from '@heroicons/react/24/outline'
+import { PencilIcon, ClipboardIcon, ClipboardDocumentCheckIcon } from '@heroicons/react/24/outline'
 import { useIsAdmin } from '@/utils/admin'
 import { useAccount } from 'wagmi'
 import { Timestamp } from 'firebase/firestore'
@@ -11,6 +11,33 @@ export default function FeeManagement() {
   const { address } = useAccount()
   const { isAdmin } = useIsAdmin(address)
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
+  const [showAddressPopover, setShowAddressPopover] = useState(false)
+  const [copiedAddress, setCopiedAddress] = useState(false)
+  const popoverRef = useRef<HTMLDivElement>(null)
+
+  // Click outside handler for popover
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (popoverRef.current && !popoverRef.current.contains(event.target as Node)) {
+        setShowAddressPopover(false)
+      }
+    }
+
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [])
+
+  const handleCopyAddress = async (address: string) => {
+    try {
+      await navigator.clipboard.writeText(address)
+      setCopiedAddress(true)
+      setTimeout(() => setCopiedAddress(false), 2000)
+    } catch (err) {
+      console.error('Failed to copy address:', err)
+    }
+  }
 
   const formatDate = (timestamp: Timestamp | string) => {
     try {
@@ -75,9 +102,57 @@ export default function FeeManagement() {
           <div>
             <h3 className='text-sm font-medium text-gray-500 uppercase tracking-wider'>Treasury Address</h3>
             <div className='mt-1 flex items-center justify-between'>
-              <p className='font-mono text-sm'>
-                {feeSettings?.treasuryAddress}
-              </p>
+              <div className='relative'>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setShowAddressPopover(!showAddressPopover)
+                  }}
+                  className='font-mono text-sm text-gray-600 hover:text-gray-800'
+                >
+                  {feeSettings?.treasuryAddress ? 
+                    `${feeSettings.treasuryAddress.slice(0,6)}...${feeSettings.treasuryAddress.slice(-4)}` :
+                    'No address set'
+                  }
+                </button>
+
+                {/* Address Popover */}
+                {showAddressPopover && feeSettings?.treasuryAddress && (
+                  <div 
+                    ref={popoverRef}
+                    className='absolute z-10 mt-2 bg-white rounded-lg shadow-lg border border-gray-200 p-3 w-fit min-w-[300px]'
+                  >
+                    <div className='flex items-start gap-2'>
+                      <div className='font-mono text-sm break-all'>{feeSettings.treasuryAddress}</div>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          handleCopyAddress(feeSettings.treasuryAddress)
+                        }}
+                        className='flex-shrink-0 text-gray-500 hover:text-gray-700'
+                        title="Copy Address"
+                      >
+                        {copiedAddress ? (
+                          <ClipboardDocumentCheckIcon className='h-5 w-5 text-green-600' />
+                        ) : (
+                          <ClipboardIcon className='h-5 w-5' />
+                        )}
+                      </button>
+                    </div>
+                    <div className='mt-2 text-xs text-gray-500'>
+                      <a
+                        href={`https://etherscan.io/address/${feeSettings.treasuryAddress}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className='text-blue-600 hover:text-blue-800'
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        View on Etherscan
+                      </a>
+                    </div>
+                  </div>
+                )}
+              </div>
               {isAdmin && (
                 <button 
                   onClick={() => setIsEditModalOpen(true)}

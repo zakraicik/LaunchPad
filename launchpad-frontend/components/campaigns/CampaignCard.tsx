@@ -5,11 +5,15 @@ import { formatTimeLeft } from '../../utils/format'
 import { Timestamp } from 'firebase/firestore'
 
 interface CampaignCardProps {
-  campaign: Campaign
+  campaign: Campaign & {
+    canClaimFunds?: boolean
+    statusText: string
+    statusColor: string
+  }
   onClick: () => void
 }
 
-export default function CampaignCard ({ campaign, onClick }: CampaignCardProps) {
+export default function CampaignCard({ campaign, onClick }: CampaignCardProps) {
   const { getTokenByAddress } = useTokens()
   const token = getTokenByAddress(campaign.token)
 
@@ -29,8 +33,10 @@ export default function CampaignCard ({ campaign, onClick }: CampaignCardProps) 
       ? (Number(campaign.totalRaised) / Number(campaign.targetAmount)) * 100
       : 0
 
-  const calculateTimeRemaining = (): string => {
-    if (!campaign.createdAt || !campaign.duration) return '0'
+  const isShortOfGoal = progress < 100
+
+  const calculateTimeRemaining = (): { timeLeft: string, isEnded: boolean } => {
+    if (!campaign.createdAt || !campaign.duration) return { timeLeft: '0', isEnded: true }
 
     try {
       // Handle Firebase Timestamp
@@ -44,18 +50,26 @@ export default function CampaignCard ({ campaign, onClick }: CampaignCardProps) 
       )
       
       const now = new Date()
+      const isEnded = now > endDate
+      
+      if (isEnded) {
+        return { timeLeft: 'Ended', isEnded: true }
+      }
+
       const secondsRemaining = Math.floor((endDate.getTime() - now.getTime()) / 1000)
-      return formatTimeLeft(secondsRemaining)
+      return { timeLeft: formatTimeLeft(secondsRemaining), isEnded: false }
     } catch (error) {
       console.error('Error calculating time remaining:', error)
-      return '0'
+      return { timeLeft: '0', isEnded: true }
     }
   }
+
+  const { timeLeft, isEnded } = calculateTimeRemaining()
 
   return (
     <div
       onClick={onClick}
-      className='bg-gradient-to-br from-white to-gray-50 rounded-lg shadow-md overflow-hidden cursor-pointer hover:shadow-lg transition-all duration-300 hover:scale-[1.02] [backface-visibility:hidden] [transform-style:preserve-3d]'
+      className='relative bg-gradient-to-br from-white to-gray-50 rounded-lg shadow-md overflow-hidden cursor-pointer hover:shadow-lg transition-all duration-300 hover:scale-[1.02] [backface-visibility:hidden] [transform-style:preserve-3d]'
     >
       <div className='p-4'>
         <div className='flex justify-between items-start mb-2'>
@@ -119,7 +133,7 @@ export default function CampaignCard ({ campaign, onClick }: CampaignCardProps) 
             <div>
               <span className='text-gray-600'>Time Left</span>
               <p className='font-medium bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent'>
-                {calculateTimeRemaining()}
+                {timeLeft}
               </p>
             </div>
           </div>

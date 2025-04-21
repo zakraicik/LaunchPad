@@ -24,6 +24,7 @@ export interface Campaign {
   goalAmountSmallestUnits: string
   token: string
   duration: string
+  hasClaimed?: boolean
 }
 
 interface UseCampaignsOptions {
@@ -74,7 +75,8 @@ export function useCampaigns ({ filterByOwner = false }: UseCampaignsOptions = {
           networkId: data.networkId,
           goalAmountSmallestUnits: data.goalAmountSmallestUnits,
           token: data.token,
-          duration: data.duration || ''
+          duration: data.duration || '',
+          hasClaimed: data.hasClaimed
         })
       })
 
