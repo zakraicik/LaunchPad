@@ -2,6 +2,7 @@ import { useRouter } from 'next/router'
 import { useState, useEffect } from 'react'
 import { ShareIcon } from '@heroicons/react/24/outline'
 import Contributors from '../../components/campaigns/Contributors'
+import CampaignDetails from '../../components/campaigns/CampaignDetails'
 import { formatNumber } from '../../utils/format'
 import { doc, getDoc, Timestamp } from 'firebase/firestore'
 import { db } from '../../utils/firebase'
@@ -38,7 +39,7 @@ interface Campaign {
 export default function CampaignDetail () {
   const router = useRouter()
   const { id } = router.query
-  const [activeTab, setActiveTab] = useState('details')
+  const [activeTab, setActiveTab] = useState('balances')
   const [campaign, setCampaign] = useState<Campaign | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const { getTokenByAddress } = useTokens()
@@ -55,7 +56,7 @@ export default function CampaignDetail () {
     return () => {
       setCampaign(null)
       setIsLoading(true)
-      setActiveTab('details')
+      setActiveTab('balances')
       setMounted(false)
     }
   }, [])
@@ -64,7 +65,7 @@ export default function CampaignDetail () {
     if (id) {
       setCampaign(null)
       setIsLoading(true)
-      setActiveTab('details')
+      setActiveTab('balances')
     }
   }, [id])
 
@@ -384,16 +385,11 @@ export default function CampaignDetail () {
             </div>
           )}
 
-          <div className='p-6'>
+          <div className='p-4 md:p-6'>
             <div className='flex justify-between items-start mb-4'>
-              <div>
-                {campaign.category && (
-                  <span className='inline-block px-2 py-1 text-sm font-medium text-blue-600 bg-blue-50 rounded-full mb-2'>
-                    {campaign.category}
-                  </span>
-                )}
-                <div className='flex items-center gap-4'>
-                  <h1 className='text-2xl font-bold'>{campaign.title}</h1>
+              <div className='w-full'>
+                <div className='flex flex-col md:flex-row md:items-center gap-2 md:gap-4'>
+                  <h1 className='text-xl md:text-2xl font-bold'>{campaign.title}</h1>
                   {(() => {
                     // Handle Firebase Timestamp or Date object
                     const createdAtDate = typeof campaign.createdAt === 'object' && 'toDate' in campaign.createdAt
@@ -408,7 +404,7 @@ export default function CampaignDetail () {
 
                     if (!isEnded) {
                       return (
-                        <span className='inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800'>
+                        <span className='inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 w-fit'>
                           Active
                         </span>
                       )
@@ -416,22 +412,22 @@ export default function CampaignDetail () {
                     
                     if (hasReachedGoal) {
                       return (
-                        <span className='inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800'>
+                        <span className='inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 w-fit'>
                           Goal Reached
                         </span>
                       )
                     }
                     
                     return (
-                      <span className='inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800'>
-                        Unsuccessful
+                      <span className='inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800 w-fit'>
+                        Goal Not Reached
                       </span>
                     )
                   })()}
                 </div>
               </div>
               <button
-                className='p-2 hover:bg-gray-100 rounded-full'
+                className='p-2 hover:bg-gray-100 rounded-full flex-shrink-0'
                 aria-label='Share'
               >
                 <ShareIcon className='h-5 w-5 text-gray-600' />
@@ -448,29 +444,29 @@ export default function CampaignDetail () {
               </div>
               <div className='flex justify-between items-center mt-4'>
                 <div>
-                  <p className='text-lg font-medium'>
+                  <p className='text-base md:text-lg font-medium'>
                     {formattedRaised} {token?.symbol}
                   </p>
-                  <p className='text-sm text-gray-500'>
+                  <p className='text-xs md:text-sm text-gray-500'>
                     raised of {formattedGoal} {token?.symbol}
                   </p>
                 </div>
                 <div className='text-right'>
-                  <p className='text-lg font-medium'>
+                  <p className='text-base md:text-lg font-medium'>
                     {formattedGoal} {token?.symbol}
                   </p>
-                  <p className='text-sm text-gray-500'>Goal Amount</p>
+                  <p className='text-xs md:text-sm text-gray-500'>Goal Amount</p>
                 </div>
               </div>
             </div>
 
             {/* Quick Stats */}
-            <div className='grid grid-cols-3 gap-4 py-4 border-t border-b'>
+            <div className='grid grid-cols-3 gap-2 md:gap-4 py-4 border-t border-b'>
               <div className='text-center'>
-                <p className='text-lg font-medium'>
+                <p className='text-base md:text-lg font-medium'>
                   {campaign.contributors || 0}
                 </p>
-                <p className='text-sm text-gray-500'>Contributors</p>
+                <p className='text-xs md:text-sm text-gray-500'>Contributors</p>
               </div>
               <div className='text-center'>
                 <CampaignTimer
@@ -478,48 +474,47 @@ export default function CampaignDetail () {
                   endTime={campaign.createdAt instanceof Date ? campaign.createdAt.getTime() / 1000 + Number(campaign.duration) * 24 * 60 * 60 : typeof campaign.createdAt === 'string' ? new Date(campaign.createdAt).getTime() / 1000 + Number(campaign.duration) * 24 * 60 * 60 : campaign.createdAt.toDate().getTime() / 1000 + Number(campaign.duration) * 24 * 60 * 60}
                   duration={Number(campaign.duration)}
                 />
-                <p className='text-sm text-gray-500'>Time Remaining</p>
+                <p className='text-xs md:text-sm text-gray-500'>Time Remaining</p>
               </div>
               <div className='text-center'>
-                <p className='text-lg font-medium'>
+                <p className='text-base md:text-lg font-medium'>
                   {token?.symbol || 'Loading...'}
                 </p>
-                <p className='text-sm text-gray-500'>Target Coin</p>
+                <p className='text-xs md:text-sm text-gray-500'>Target Coin</p>
               </div>
             </div>
+          </div>
+        </div>
 
-            {/* Claim Funds Button */}
-            {canClaimFunds && (
-              <div className='mt-4 flex justify-end'>
-                <button
-                  onClick={handleClaimFunds}
-                  disabled={isClaiming}
-                  className='bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed'
-                >
-                  {isClaiming ? 'Claiming...' : 'Claim Funds'}
-                </button>
-              </div>
-            )}
+        {/* Campaign Details Card */}
+        <div className='bg-white rounded-lg shadow-sm mb-6'>
+          <div className='p-6'>
+            <CampaignDetails
+              description={campaign.description}
+              category={campaign.category}
+              campaignAddress={campaign.campaignAddress}
+              owner={campaign.owner}
+            />
           </div>
         </div>
 
         {/* Navigation Tabs */}
         <div className='bg-white rounded-lg shadow-sm mb-6'>
           <div className='border-b'>
-            <nav className='flex'>
+            <nav className='flex overflow-x-auto scrollbar-hide'>
               <button
-                onClick={() => setActiveTab('details')}
-                className={`px-6 py-4 text-sm font-medium ${
-                  activeTab === 'details'
+                onClick={() => setActiveTab('balances')}
+                className={`flex-1 px-3 md:px-6 py-2.5 md:py-4 text-xs md:text-sm font-medium whitespace-nowrap ${
+                  activeTab === 'balances'
                     ? 'border-b-2 border-blue-600 text-blue-600'
                     : 'text-gray-500 hover:text-gray-700'
                 }`}
               >
-                Details
+                Campaign Balances
               </button>
               <button
                 onClick={() => setActiveTab('contributors')}
-                className={`px-6 py-4 text-sm font-medium ${
+                className={`flex-1 px-3 md:px-6 py-2.5 md:py-4 text-xs md:text-sm font-medium whitespace-nowrap ${
                   activeTab === 'contributors'
                     ? 'border-b-2 border-blue-600 text-blue-600'
                     : 'text-gray-500 hover:text-gray-700'
@@ -527,17 +522,23 @@ export default function CampaignDetail () {
               >
                 Contributors
               </button>
+              {isCampaignEnded() && (
+                <button
+                  onClick={() => setActiveTab('actions')}
+                  className={`flex-1 px-3 md:px-6 py-2.5 md:py-4 text-xs md:text-sm font-medium whitespace-nowrap ${
+                    activeTab === 'actions'
+                      ? 'border-b-2 border-blue-600 text-blue-600'
+                      : 'text-gray-500 hover:text-gray-700'
+                  }`}
+                >
+                  Campaign Actions
+                </button>
+              )}
             </nav>
           </div>
 
           {/* Tab Content */}
-          <div className='p-6'>
-            {activeTab === 'details' && (
-              <div className='prose max-w-none'>
-                <p className='text-gray-600'>{campaign.description}</p>
-              </div>
-            )}
-
+          <div className='p-4 md:p-6'>
             {activeTab === 'contributors' && (
               <div>
                 <p className='text-gray-600'>
@@ -549,51 +550,138 @@ export default function CampaignDetail () {
                 </p>
               </div>
             )}
+
+            {activeTab === 'balances' && (
+              <div className='space-y-6'>
+                <div className='bg-gray-50 rounded-lg p-4'>
+                  <h3 className='text-sm font-medium text-gray-900 mb-4'>Campaign Token Balances</h3>
+                  <div className='space-y-4'>
+                    <div className='flex justify-between items-center'>
+                      <span className='text-sm text-gray-500'>Total Raised</span>
+                      <span className='text-sm font-medium'>{formattedRaised} {token?.symbol}</span>
+                    </div>
+                    <div className='flex justify-between items-center'>
+                      <span className='text-sm text-gray-500'>Available for Claim</span>
+                      <span className='text-sm font-medium'>Coming soon</span>
+                    </div>
+                    <div className='flex justify-between items-center'>
+                      <span className='text-sm text-gray-500'>Claimed Amount</span>
+                      <span className='text-sm font-medium'>Coming soon</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {activeTab === 'actions' && (
+              <div className='space-y-6'>
+                {/* Owner Actions */}
+                {isOwner && (
+                  <div>
+                    <div className='flex items-center justify-between'>
+                      <div>
+                        <h4 className='text-sm font-medium text-gray-900'>Campaign Owner Actions</h4>
+                        <p className='text-sm text-gray-500'>
+                          {progress >= 100 
+                            ? 'Claim raised funds from your successful campaign'
+                            : 'Claim campaign funds to enable contributor refunds'}
+                        </p>
+                      </div>
+                      <button
+                        onClick={handleClaimFunds}
+                        disabled={isClaiming || campaign.hasClaimed}
+                        className='bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed'
+                      >
+                        {isClaiming ? 'Claiming...' : campaign.hasClaimed ? 'Funds Claimed' : 'Claim Funds'}
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Contributor Actions - Only show for unsuccessful campaigns */}
+                {!isOwner && progress < 100 && (
+                  <div>
+                    <div className='flex items-center justify-between'>
+                      <div>
+                        <h4 className='text-sm font-medium text-gray-900'>Contributor Actions</h4>
+                        <p className='text-sm text-gray-500'>
+                          {campaign.hasClaimed 
+                            ? 'Campaign funds have been claimed. You can now request a refund.' 
+                            : 'Refunds will be available after the campaign owner claims funds'}
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => {/* TODO: Implement refund logic */}}
+                        disabled={!campaign.hasClaimed}
+                        className='group relative bg-red-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed'
+                        title={!campaign.hasClaimed ? 'Waiting for campaign owner to claim funds' : 'Request refund'}
+                      >
+                        Request Refund
+                        {!campaign.hasClaimed && (
+                          <div className='absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-1 bg-gray-900 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap'>
+                            Waiting for owner to claim funds
+                          </div>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Message for successful campaigns */}
+                {!isOwner && progress >= 100 && (
+                  <div className='text-center py-4'>
+                    <p className='text-gray-500'>This campaign has successfully reached its goal. No refund actions are available.</p>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
 
         {/* Contribution Form */}
-        <div className='bg-white rounded-lg shadow-sm p-6'>
-          <h2 className='text-xl font-bold mb-4'>Make a Contribution</h2>
-          <div className='space-y-4'>
-            <div>
-              <label className='block text-sm font-medium text-gray-700 mb-1'>
-                Amount ({token?.symbol})
-              </label>
-              <input
-                type='number'
-                min='0'
-                value={contributionAmount}
-                onChange={e => setContributionAmount(e.target.value)}
-                placeholder='Enter amount'
-                className='w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500'
-                disabled={isContributing}
-              />
+        {!isCampaignEnded() && (
+          <div className='bg-white rounded-lg shadow-sm p-6'>
+            <h2 className='text-xl font-bold mb-4'>Make a Contribution</h2>
+            <div className='space-y-4'>
+              <div>
+                <label className='block text-sm font-medium text-gray-700 mb-1'>
+                  Amount ({token?.symbol})
+                </label>
+                <input
+                  type='number'
+                  min='0'
+                  value={contributionAmount}
+                  onChange={e => setContributionAmount(e.target.value)}
+                  placeholder='Enter amount'
+                  className='w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500'
+                  disabled={isContributing}
+                />
+              </div>
+              <button
+                onClick={handleContribute}
+                disabled={
+                  !isConnected ||
+                  isContributing ||
+                  !contributionAmount ||
+                  !campaign?.campaignAddress
+                }
+                className='w-full bg-blue-600 text-white py-3 px-4 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed'
+              >
+                {isContributing ? 'Contributing...' : 'Contribute'}
+              </button>
+              {!isConnected && (
+                <p className='text-sm text-red-600'>
+                  Please connect your wallet to contribute
+                </p>
+              )}
+              {!campaign?.campaignAddress && (
+                <p className='text-sm text-red-600'>
+                  Campaign contract address not found
+                </p>
+              )}
             </div>
-            <button
-              onClick={handleContribute}
-              disabled={
-                !isConnected ||
-                isContributing ||
-                !contributionAmount ||
-                !campaign?.campaignAddress
-              }
-              className='w-full bg-blue-600 text-white py-3 px-4 rounded-lg font-medium hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed'
-            >
-              {isContributing ? 'Contributing...' : 'Contribute'}
-            </button>
-            {!isConnected && (
-              <p className='text-sm text-red-600'>
-                Please connect your wallet to contribute
-              </p>
-            )}
-            {!campaign?.campaignAddress && (
-              <p className='text-sm text-red-600'>
-                Campaign contract address not found
-              </p>
-            )}
           </div>
-        </div>
+        )}
       </div>
     </div>
   )
