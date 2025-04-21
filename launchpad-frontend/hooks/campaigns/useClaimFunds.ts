@@ -89,6 +89,7 @@ export const useClaimFunds = () => {
   }
 
   const claimFunds = async (campaignAddress: string) => {
+
     if (!walletClient || !campaignAddress) {
       toast.error('Please connect your wallet')
       return
@@ -114,13 +115,13 @@ export const useClaimFunds = () => {
       const tx = await campaignContract.claimFunds()
       toast.loading('Waiting for confirmation...', { id: toastId })
 
-      console.log(tx)// Wait for transaction confirmation
       await tx.wait()
 
       toast.success('Funds claimed successfully!', { id: toastId })
       return tx.hash
     } catch (error: any) {
-      console.error('Error claiming funds:', error)
+      console.log(error.data)
+      // console.error('Error claiming funds:', error)
       const errorMessage = parseContractError(error)
       toast.error(errorMessage, { id: toastId })
       throw error
