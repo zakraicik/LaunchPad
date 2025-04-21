@@ -35,13 +35,13 @@ service cloud.firestore {
       // The owner field must match the authenticated user's UID
       allow create: if 
         request.auth != null && 
-        request.resource.data.owner == request.auth.uid;
+        request.resource.data.frontEndAuthID == request.auth.uid;
       
       // Only the campaign owner can update their campaign
       allow update: if 
         request.auth != null && (
-          (resource.data.keys().hasAny(['owner']) && resource.data.owner == request.auth.uid) || 
-          (resource.data.keys().hasAny(['creator']) && resource.data.creator.lower() == request.resource.data.ownerAddress.lower())
+          (resource.data.keys().hasAny(['frontEndAuthID']) && resource.data.frontEndAuthID.lower() == request.auth.uid) || 
+          (resource.data.keys().hasAny(['creator']) && resource.data.creator.lower() == request.auth.uid)
         );
       
       // No one can delete campaigns

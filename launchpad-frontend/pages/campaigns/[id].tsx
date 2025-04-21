@@ -32,7 +32,7 @@ interface Campaign {
   campaignAddress?: string
   status: number
   statusReason: number
-  owner?: string
+  creator?: string
   hasClaimed?: boolean
 }
 
@@ -355,7 +355,7 @@ export default function CampaignDetail () {
     return new Date() > endDate
   }
 
-  const isOwner = address && campaign?.owner && address.toLowerCase() === campaign.owner.toLowerCase()
+  const isOwner = address && campaign?.creator && address.toLowerCase() === campaign.creator.toLowerCase()
   const canClaimFunds = isOwner && isCampaignEnded() && !campaign?.hasClaimed
 
   const handleClaimFunds = async () => {
@@ -493,7 +493,7 @@ export default function CampaignDetail () {
               description={campaign.description}
               category={campaign.category}
               campaignAddress={campaign.campaignAddress}
-              owner={campaign.owner}
+              owner={campaign.creator}
             />
           </div>
         </div>
