@@ -4,18 +4,18 @@ import { useWalletClient } from 'wagmi'
 import CampaignABI from '../../../artifacts/contracts/Campaign.sol/Campaign.json'
 import toast from 'react-hot-toast'
 
-export const useRequestRefund = () => {
+export const useContribute = () => {
   const { data: walletClient } = useWalletClient()
-  const [isRequestingRefund, setIsRequestingRefund] = useState(false)
+  const [isContributing, setIsContributing] = useState(false)
 
-  const requestRefund = async (campaignAddress: string) => {
+  const contribute = async (campaignAddress: string, amount: bigint) => {
     if (!walletClient || !campaignAddress) {
       toast.error('Please connect your wallet')
       return
     }
 
-    setIsRequestingRefund(true)
-    const toastId = toast.loading('Requesting refund...')
+    setIsContributing(true)
+    const toastId = toast.loading('Contributing funds...')
 
     try {
       const provider = new BrowserProvider(walletClient.transport)
@@ -28,22 +28,22 @@ export const useRequestRefund = () => {
         signer
       )
 
-      // Call requestRefund function
-      const tx = await campaignContract.requestRefund({gasLimit: 1000000})
+      // Call contribute function
+      const tx = await campaignContract.contribute(amount, {gasLimit: 1000000})
       toast.loading('Waiting for confirmation...', { id: toastId })
 
       await tx.wait()
 
-      toast.success('Refund requested successfully!', { id: toastId })
+      toast.success('Contribution successful!', { id: toastId })
       return tx.hash
     } catch (error: any) {
-      console.error('Error requesting refund:', error)
+      console.error('Error contributing funds:', error)
       toast.error(error, { id: toastId })
       throw error
     } finally {
-      setIsRequestingRefund(false)
+      setIsContributing(false)
     }
   }
 
-  return { requestRefund, isRequestingRefund }
+  return { contribute, isContributing }
 }
