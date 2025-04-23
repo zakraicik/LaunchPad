@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useMemo } from 'react'
-import { useAccount } from 'wagmi'
+import { useAccount, useChainId } from 'wagmi'
 import { formatUnits } from 'ethers'
 import { useTokens } from '../../hooks/useTokens'
 import Link from 'next/link'
@@ -11,11 +11,13 @@ import {
   useCampaigns,
   Campaign as BaseCampaign
 } from '../../hooks/useCampaigns'
+import { Timestamp } from 'firebase/firestore'
+import { SUPPORTED_NETWORKS } from '../../config/addresses'
 
 interface Campaign extends BaseCampaign {
   statusText: string
   statusReasonText?: string
-  duration: string
+  duration: number
   goalAmountSmallestUnits: string
   token: string
   hasClaimed: boolean
@@ -32,6 +34,7 @@ interface CampaignWithCalculations extends Campaign {
 export default function MyCampaigns () {
   const router = useRouter()
   const { address } = useAccount()
+  const chainId = useChainId()
   const [mounted, setMounted] = useState(false)
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
   const {
@@ -49,12 +52,22 @@ export default function MyCampaigns () {
     setMounted(true)
   }, [])
 
+  // Refresh campaigns when chain ID changes
+  useEffect(() => {
+    if (mounted && SUPPORTED_NETWORKS.includes(chainId as typeof SUPPORTED_NETWORKS[number])) {
+      refreshCampaigns()
+    }
+  }, [chainId, mounted, refreshCampaigns])
+
   // Memoize the token getter
   const memoizedGetTokenByAddress = useCallback(getTokenByAddress, [])
 
   // Process campaigns
   useEffect(() => {
-    if (!realCampaigns.length) return
+    if (!realCampaigns.length) {
+      setProcessedCampaigns([])
+      return
+    }
 
     const formatAmount = (
       amount: string | undefined,
@@ -90,9 +103,9 @@ export default function MyCampaigns () {
       }
     }
 
-    const isCampaignEnded = (createdAt: string | Date, duration: string): boolean => {
-      const startDate = new Date(createdAt)
-      const endDate = new Date(startDate.getTime() + parseInt(duration) * 24 * 60 * 60 * 1000)
+    const isCampaignEnded = (createdAt: Timestamp, duration: number): boolean => {
+      const startDate = createdAt.toDate()
+      const endDate = new Date(startDate.getTime() + duration * 24 * 60 * 60 * 1000)
       return new Date() > endDate
     }
 
@@ -128,7 +141,7 @@ export default function MyCampaigns () {
 
       const canClaimFunds = isEnded && hasReachedGoal && !campaign.hasClaimed
 
-      const processedCampaign = {
+      return {
         ...campaign,
         duration,
         goalAmountSmallestUnits,
@@ -140,8 +153,6 @@ export default function MyCampaigns () {
         formattedTarget: formatAmount(goalAmountSmallestUnits, token),
         canClaimFunds
       } as CampaignWithCalculations
-
-      return processedCampaign
     })
 
     setProcessedCampaigns(processed)

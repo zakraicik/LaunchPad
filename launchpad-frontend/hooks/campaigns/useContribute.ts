@@ -15,7 +15,7 @@ export const useContribute = () => {
     }
 
     setIsContributing(true)
-    const toastId = toast.loading('Contributing funds...')
+    let toastId = toast.loading('Initiating contribution...')
 
     try {
       const provider = new BrowserProvider(walletClient.transport)
@@ -30,15 +30,21 @@ export const useContribute = () => {
 
       // Call contribute function
       const tx = await campaignContract.contribute(amount, {gasLimit: 1000000})
-      toast.loading('Waiting for confirmation...', { id: toastId })
+      toast.dismiss(toastId)
+      toastId = toast.loading('Transaction sent. Waiting for confirmation...')
 
       await tx.wait()
 
-      toast.success('Contribution successful!', { id: toastId })
+      toast.dismiss(toastId)
+      toast.success('Contribution successful!')
       return tx.hash
     } catch (error: any) {
       console.error('Error contributing funds:', error)
-      toast.error(error, { id: toastId })
+      toast.dismiss(toastId)
+      // Don't show toast for user rejections
+      if (error.code !== 'ACTION_REJECTED') {
+        toast.error(error.message || 'Failed to contribute')
+      }
       throw error
     } finally {
       setIsContributing(false)

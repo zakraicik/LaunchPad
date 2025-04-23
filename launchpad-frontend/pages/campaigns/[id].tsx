@@ -210,8 +210,13 @@ export default function CampaignDetail () {
       await fetchCampaign(campaign.id)
       // Reset form
       setContributionAmount('')
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error in handleContribute:', error)
+      if (error.code === 'ACTION_REJECTED') {
+        toast.error('Transaction was cancelled')
+      } else {
+        toast.error('Failed to contribute')
+      }
     }
   }
 
@@ -222,8 +227,13 @@ export default function CampaignDetail () {
       await requestRefund(campaign.campaignAddress)
       // Refresh campaign data after successful refund request
       await fetchCampaign(campaign.id)
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error in handleRequestRefund:', error)
+      if (error.code === 'ACTION_REJECTED') {
+        toast.error('Transaction was cancelled')
+      } else {
+        toast.error('Failed to request refund')
+      }
     }
   }
 
@@ -255,8 +265,13 @@ export default function CampaignDetail () {
       await claimFunds(campaign.campaignAddress)
       // Refresh campaign data after successful claim
       await fetchCampaign(campaign.id)
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error in handleClaimFunds:', error)
+      if (error.code === 'ACTION_REJECTED') {
+        toast.error('Transaction was cancelled')
+      } else {
+        toast.error('Failed to claim funds')
+      }
     }
   }
 

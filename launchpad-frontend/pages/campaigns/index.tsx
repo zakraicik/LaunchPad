@@ -10,9 +10,11 @@ import CreateCampaignModal from '../../components/campaigns/CreateCampaignModal'
 import { useCampaigns } from '../../hooks/useCampaigns'
 import { useRouter } from 'next/router'
 import { Timestamp } from 'firebase/firestore'
+import { useChainId } from 'wagmi'
 
 export default function CampaignsDiscovery() {
   const router = useRouter()
+  const chainId = useChainId()
   const [mounted, setMounted] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedCategory, setSelectedCategory] = useState('all')
@@ -32,6 +34,13 @@ export default function CampaignsDiscovery() {
       }
     }
   }, [router.isReady, router.query])
+
+  // Refresh campaigns when chain ID changes
+  useEffect(() => {
+    if (mounted) {
+      refresh()
+    }
+  }, [chainId, mounted, refresh])
 
   useEffect(() => {
     setMounted(true)

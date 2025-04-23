@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Contract, BrowserProvider } from 'ethers'
+import { Contract, BrowserProvider, ethers } from 'ethers'
 import { useWalletClient } from 'wagmi'
 import CampaignABI from '../../../artifacts/contracts/Campaign.sol/Campaign.json'
 import toast from 'react-hot-toast'
@@ -96,7 +96,7 @@ export const useClaimFunds = () => {
     }
 
     setIsClaiming(true)
-    const toastId = toast.loading('Claiming funds...')
+    let toastId = toast.loading('Initiating claim...')
 
     try {
       const provider = new BrowserProvider(walletClient.transport)
@@ -110,17 +110,27 @@ export const useClaimFunds = () => {
       )
 
       // Call claimFunds function
-      const tx = await campaignContract.claimFunds({gasLimit: 1000000})
-      toast.loading('Waiting for confirmation...', { id: toastId })
+      const tx = await campaignContract.claimFunds(
+        {gasLimit: 1000000,  
+          // maxFeePerGas: 20000000000,  
+          // maxPriorityFeePerGas: 2000000000
+        })
+      toast.dismiss(toastId)
+      toastId = toast.loading('Transaction sent. Waiting for confirmation...')
 
       await tx.wait()
 
-      toast.success('Funds claimed successfully!', { id: toastId })
+      toast.dismiss(toastId)
+      toast.success('Funds claimed successfully!')
       return tx.hash
     } catch (error: any) {
       console.error('Error claiming funds:', error)
-      const errorMessage = parseContractError(error)
-      toast.error(errorMessage, { id: toastId })
+      toast.dismiss(toastId)
+      // Don't show toast for user rejections
+      if (error.code !== 'ACTION_REJECTED') {
+        const errorMessage = parseContractError(error)
+        toast.error(errorMessage)
+      }
       throw error
     } finally {
       setIsClaiming(false)

@@ -1,5 +1,5 @@
 // Contract addresses for different networks
-export const SUPPORTED_NETWORKS = [84532] as const
+export const SUPPORTED_NETWORKS = [84532, 8453] as const
 type SupportedNetwork = typeof SUPPORTED_NETWORKS[number]
 
 export const CONTRACT_ADDRESSES: Record<SupportedNetwork, {
@@ -7,16 +7,26 @@ export const CONTRACT_ADDRESSES: Record<SupportedNetwork, {
   campaignFactory: string
   defiManager: string
   platformAdmin: string
-  feeManager: string
+  feeManager: string,
+  eventCollector: string,
 }> = {
   84532: {
     tokenRegistry: '0x83bEF8918f2c00080dD7aB984B7d22CaF28a5826',
     campaignFactory: '0xeC5828af1995430f6a9c870ba34d8c567bF41C7F',
     defiManager: '0xC857a4B4f1df79efe286d76A68B6c9742B3083Cb',
     platformAdmin: '0xDF41aa9f24165a057CD1bFda93Ca0A7F3ACC7f69',
-    feeManager: '0x597FD4eBb94f2CeA05260025a5fabcc63F69ED69'
+    feeManager: '0x597FD4eBb94f2CeA05260025a5fabcc63F69ED69',
+    eventCollector: "0x160322c719deBf43d92d34B0A05C72E4F4be28aa",
+  },
+  8453: {
+    tokenRegistry: "0xD63D99f60c88eC64AD9c52802319B691b3dF17Ad",
+    campaignFactory: "0x83bEF8918f2c00080dD7aB984B7d22CaF28a5826",
+    defiManager: "0xc49769Bc1bE99967D7496d4EA089B87349F90b31",
+    platformAdmin: "0xE24965D2D6913144d786Ee0FFea80DD088Fe5eA3",
+    feeManager: "0x55082F525152F4fA7bab9f241834d962BFFa0f8b",
+    eventCollector: "0xDF41aa9f24165a057CD1bFda93Ca0A7F3ACC7f69",
+    
   }
-  // Add other networks as needed
 } as const
 
 // Helper function to get contract address for current network

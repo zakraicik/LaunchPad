@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
-import { usePublicClient } from 'wagmi'
-import { CONTRACT_ADDRESSES } from '../config/addresses'
+import { usePublicClient, useChainId } from 'wagmi'
+import { CONTRACT_ADDRESSES, SUPPORTED_NETWORKS } from '../config/addresses'
 import PlatformAdminABI from '../../artifacts/contracts/PlatformAdmin.sol/PlatformAdmin.json'
 
 // Cache for admin status to avoid excessive RPC calls
@@ -11,9 +11,18 @@ export function useIsAdmin(address?: string) {
   const [isAdmin, setIsAdmin] = useState<boolean>(false)
   const [isLoading, setIsLoading] = useState<boolean>(true)
   const publicClient = usePublicClient()
+  const chainId = useChainId()
 
   const checkAdminStatus = useCallback(async () => {
-    if (!address || !publicClient) {
+    if (!address || !publicClient || !chainId) {
+      setIsAdmin(false)
+      setIsLoading(false)
+      return
+    }
+
+    // Ensure chainId is one of our supported networks
+    if (!SUPPORTED_NETWORKS.includes(chainId as typeof SUPPORTED_NETWORKS[number])) {
+      console.error('Unsupported network:', chainId)
       setIsAdmin(false)
       setIsLoading(false)
       return
@@ -31,7 +40,7 @@ export function useIsAdmin(address?: string) {
 
     try {
       const isAdminStatus = await publicClient.readContract({
-        address: CONTRACT_ADDRESSES[84532].platformAdmin as `0x${string}`,
+        address: CONTRACT_ADDRESSES[chainId as typeof SUPPORTED_NETWORKS[number]].platformAdmin as `0x${string}`,
         abi: PlatformAdminABI.abi,
         functionName: 'isPlatformAdmin',
         args: [address]
@@ -50,7 +59,7 @@ export function useIsAdmin(address?: string) {
     } finally {
       setIsLoading(false)
     }
-  }, [address, publicClient])
+  }, [address, publicClient, chainId])
 
   useEffect(() => {
     checkAdminStatus()

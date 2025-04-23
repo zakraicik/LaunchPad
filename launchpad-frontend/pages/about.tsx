@@ -6,8 +6,98 @@ import {
   LockClosedIcon,
   ScaleIcon
 } from '@heroicons/react/24/outline'
+import { Line } from 'react-chartjs-2'
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  Title,
+  Tooltip,
+  Legend
+} from 'chart.js'
+
+// Register ChartJS components
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  Title,
+  Tooltip,
+  Legend
+)
 
 export default function About () {
+  // Chart data and options
+  const chartData = {
+    labels: ['0', '30', '60', '90', '120', '150', '180', '210', '240', '270', '300', '330', '360'],
+    datasets: [
+      {
+        label: 'Platform Fees',
+        data: [10.00, 10.02, 10.04, 10.06, 10.08, 10.10, 10.12, 10.14, 10.17, 10.19, 10.21, 10.23, 10.25],
+        borderColor: 'rgb(59, 130, 246)', // Tailwind blue-600
+        backgroundColor: 'rgba(59, 130, 246, 0.1)',
+        tension: 0.4,
+        borderWidth: 2
+      },
+      {
+        label: 'Net Fees - Creator',
+        data: [10.00, 7.96, 5.92, 3.88, 1.83, 0, 0, 0, 0, 0, 0, 0, 0],
+        borderColor: 'rgb(239, 68, 68)', // Tailwind red-600
+        backgroundColor: 'rgba(239, 68, 68, 0.1)',
+        tension: 0.4,
+        borderWidth: 2
+      }
+    ]
+  }
+
+  const chartOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    scales: {
+      y: {
+        beginAtZero: true,
+        max: 12, // Set max to show a bit of space above the highest value
+        title: {
+          display: true,
+          text: 'Fees ($)',
+          font: {
+            size: 14
+          }
+        },
+        ticks: {
+          callback: (value: any) => `$${value.toFixed(2)}`
+        }
+      },
+      x: {
+        title: {
+          display: true,
+          text: 'Campaign Duration (Days)',
+          font: {
+            size: 14
+          }
+        }
+      }
+    },
+    plugins: {
+      legend: {
+        position: 'top' as const,
+        labels: {
+          font: {
+            size: 12
+          }
+        }
+      },
+      tooltip: {
+        callbacks: {
+          label: (context: any) => `${context.dataset.label}: $${context.parsed.y.toFixed(2)}`
+        }
+      }
+    }
+  }
+
   return (
     <div className='min-h-screen bg-gray-50 py-12'>
       <div className='container mx-auto px-4'>
@@ -17,6 +107,39 @@ export default function About () {
           <p className='text-xl text-gray-600 max-w-3xl mx-auto'>
             Revolutionizing crowdfunding by generating sustainable yields through DeFi integration, making platform fees effectively self-funded.
           </p>
+        </div>
+
+        {/* Fee Structure Chart Section */}
+        <div className='bg-white rounded-lg shadow-sm p-8 mb-8'>
+          <h2 className='text-2xl font-bold mb-6 flex items-center'>
+            <BanknotesIcon className='h-8 w-8 text-blue-600 mr-3' />
+            Fee Structure
+          </h2>
+          <div className='mb-4'>
+            <p className='text-gray-600'>
+              Our innovative fee structure ensures that longer campaigns benefit from reduced net fees through yield generation:
+            </p>
+          </div>
+          <div className='h-[400px] w-full'>
+            <Line data={chartData} options={chartOptions} />
+          </div>
+          <div className='mt-6 bg-blue-50 rounded-lg p-4'>
+            <h3 className='font-semibold mb-2'>Key Points:</h3>
+            <ul className='space-y-2 text-gray-600'>
+              <li className='flex items-center'>
+                <ArrowPathIcon className='h-5 w-5 text-blue-600 mr-2' />
+                <span>Platform fees start at $10 and increase slightly with yield</span>
+              </li>
+              <li className='flex items-center'>
+                <ArrowPathIcon className='h-5 w-5 text-blue-600 mr-2' />
+                <span>Net fees decrease linearly as yield accumulates</span>
+              </li>
+              <li className='flex items-center'>
+                <ArrowPathIcon className='h-5 w-5 text-blue-600 mr-2' />
+                <span>Campaigns running 150+ days achieve zero net fees through yield generation</span>
+              </li>
+            </ul>
+          </div>
         </div>
 
         {/* Core Features Section */}

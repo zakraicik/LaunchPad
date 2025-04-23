@@ -15,7 +15,7 @@ export const useRequestRefund = () => {
     }
 
     setIsRequestingRefund(true)
-    const toastId = toast.loading('Requesting refund...')
+    let toastId = toast.loading('Initiating refund request...')
 
     try {
       const provider = new BrowserProvider(walletClient.transport)
@@ -30,15 +30,21 @@ export const useRequestRefund = () => {
 
       // Call requestRefund function
       const tx = await campaignContract.requestRefund({gasLimit: 1000000})
-      toast.loading('Waiting for confirmation...', { id: toastId })
+      toast.dismiss(toastId)
+      toastId = toast.loading('Transaction sent. Waiting for confirmation...')
 
       await tx.wait()
 
-      toast.success('Refund requested successfully!', { id: toastId })
+      toast.dismiss(toastId)
+      toast.success('Refund requested successfully!')
       return tx.hash
     } catch (error: any) {
       console.error('Error requesting refund:', error)
-      toast.error(error, { id: toastId })
+      toast.dismiss(toastId)
+      // Don't show toast for user rejections
+      if (error.code !== 'ACTION_REJECTED') {
+        toast.error(error.message || 'Failed to request refund')
+      }
       throw error
     } finally {
       setIsRequestingRefund(false)
