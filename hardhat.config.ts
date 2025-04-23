@@ -2,6 +2,7 @@
 import { HardhatUserConfig } from 'hardhat/config'
 import '@nomicfoundation/hardhat-toolbox'
 import 'hardhat-gas-reporter'
+import "@nomicfoundation/hardhat-verify";
 
 import * as dotenv from 'dotenv'
 
@@ -47,6 +48,12 @@ const config: HardhatUserConfig = {
       chainId: 8453,
       accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : []
     }
+  },
+  etherscan: {
+    apiKey: process.env.ETHERSCAN_API_KEY
+  },
+  sourcify: {
+    enabled: true
   },
   gasReporter: {
     enabled: true,
