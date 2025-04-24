@@ -68,6 +68,33 @@ export function useCampaigns ({ filterByOwner = false }: UseCampaignsOptions = {
       
       const fetchedCampaigns: Campaign[] = []
 
+      // Get all campaign IDs for batch querying contribution events
+      const campaignIds = querySnapshot.docs.map(doc => doc.id)
+      
+      // Query contribution events for all campaigns in parallel
+      const contributionEventsRef = collection(db, 'contributionEvents')
+      const contributionQueries = campaignIds.map(campaignId => 
+        query(contributionEventsRef, where('campaignId', '==', campaignId))
+      )
+      
+      const contributionSnapshots = await Promise.all(
+        contributionQueries.map(q => getDocs(q))
+      )
+      
+      // Create a map of campaign ID to unique contributors
+      const campaignContributors = new Map<string, Set<string>>()
+      contributionSnapshots.forEach((snapshot, index) => {
+        const campaignId = campaignIds[index]
+        const uniqueContributors = new Set<string>()
+        snapshot.forEach(doc => {
+          const data = doc.data()
+          if (data.contributor) {
+            uniqueContributors.add(data.contributor.toLowerCase())
+          }
+        })
+        campaignContributors.set(campaignId, uniqueContributors)
+      })
+
       querySnapshot.forEach(doc => {
         const data = doc.data()
         try {
@@ -75,6 +102,7 @@ export function useCampaigns ({ filterByOwner = false }: UseCampaignsOptions = {
           const networkId = parseInt(data.networkId, 10)
 
           if (networkId === chainId) {
+            const uniqueContributors = campaignContributors.get(doc.id) || new Set<string>()
             fetchedCampaigns.push({
               id: doc.id,
               title: data.title || '',
@@ -84,7 +112,7 @@ export function useCampaigns ({ filterByOwner = false }: UseCampaignsOptions = {
               totalRaised: data.totalContributions || '0',
               status: getStatusFromNumber(data.status),
               createdAt: data.createdAt,
-              contributors: data.contributors || 0,
+              contributors: uniqueContributors.size,
               depositedAmount: data.depositedAmount || '0',
               availableYield: data.availableYield || '0',
               frontEndAuthID: data.frontEndAuthID || '',

@@ -4,7 +4,7 @@ import { ShareIcon, ArrowLeftIcon } from '@heroicons/react/24/outline'
 import Contributors from '../../components/campaigns/Contributors'
 import CampaignDetails from '../../components/campaigns/CampaignDetails'
 import { formatNumber } from '../../utils/format'
-import { doc, getDoc, Timestamp } from 'firebase/firestore'
+import { doc, getDoc, Timestamp, collection, query, where, getDocs } from 'firebase/firestore'
 import { db } from '../../utils/firebase'
 import { formatUnits, parseUnits, Contract, BrowserProvider } from 'ethers'
 import { useTokens } from '../../hooks/useTokens'
@@ -36,6 +36,7 @@ interface Campaign {
   creator?: string
   hasClaimed?: boolean
   githubUrl?: string
+  totalContributions?: string
 }
 
 export default function CampaignDetail () {
@@ -81,9 +82,27 @@ export default function CampaignDetail () {
       const campaignSnap = await getDoc(campaignRef)
 
       if (campaignSnap.exists()) {
+        // Get unique contributors count
+        const contributionEventsRef = collection(db, 'contributionEvents')
+        const q = query(
+          contributionEventsRef,
+          where('campaignId', '==', campaignId)
+        )
+        const querySnapshot = await getDocs(q)
+        
+        // Get unique contributors using Set
+        const uniqueContributors = new Set<string>()
+        querySnapshot.forEach(doc => {
+          const data = doc.data()
+          if (data.contributor) {
+            uniqueContributors.add(data.contributor.toLowerCase())
+          }
+        })
+
         const campaignData = {
           id: campaignSnap.id,
-          ...campaignSnap.data()
+          ...campaignSnap.data(),
+          contributors: uniqueContributors.size
         } as Campaign
         console.log(
           'Campaign address from Firestore:',
@@ -155,15 +174,11 @@ export default function CampaignDetail () {
   }
 
   const calculateProgress = (): number => {
-    if (!campaign.totalRaised || !token) return 0
+    if (!campaign.totalContributions || !token) return 0
     try {
-      const raisedAmount = parseFloat(
-        formatUnits(campaign.totalRaised, token.decimals)
-      )
-      const goalAmount = parseFloat(
-        formatUnits(campaign.goalAmountSmallestUnits, token.decimals)
-      )
-      return (raisedAmount / goalAmount) * 100
+      const raisedAmount = BigInt(campaign.totalContributions)
+      const goalAmount = BigInt(campaign.goalAmountSmallestUnits)
+      return Number((raisedAmount * BigInt(100)) / goalAmount)
     } catch (error) {
       console.error('Error calculating progress:', error)
       return 0
@@ -195,7 +210,7 @@ export default function CampaignDetail () {
 
   const progress = calculateProgress()
   const daysLeft = calculateDaysRemaining()
-  const formattedRaised = formatAmount(campaign.totalRaised)
+  const formattedRaised = formatAmount(campaign.totalContributions)
   const formattedGoal = formatAmount(campaign.goalAmountSmallestUnits)
 
   const handleContribute = async () => {
