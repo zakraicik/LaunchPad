@@ -1,7 +1,8 @@
 import { useState } from 'react'
-import { Contract, BrowserProvider } from 'ethers'
+import { Contract, BrowserProvider, Interface } from 'ethers'
 import { useWalletClient } from 'wagmi'
 import CampaignABI from '../../../artifacts/contracts/Campaign.sol/Campaign.json'
+import { erc20Abi } from 'viem'
 import toast from 'react-hot-toast'
 
 export const useContribute = () => {
@@ -27,6 +28,32 @@ export const useContribute = () => {
         CampaignABI.abi,
         signer
       )
+
+      // Get the token address for this campaign
+      const campaignTokenAddress = await campaignContract.campaignToken()
+      
+      // Create token contract instance
+      const tokenContract = new Contract(
+        campaignTokenAddress,
+        erc20Abi,
+        signer
+      )
+
+      // Check current allowance
+      const signerAddress = await signer.getAddress()
+      const currentAllowance = await tokenContract.allowance(signerAddress, campaignAddress)
+      
+      // If allowance is less than amount, request approval
+      if (currentAllowance < amount) {
+        toast.dismiss(toastId)
+        toastId = toast.loading('Approving token transfer...')
+        
+        const approveTx = await tokenContract.approve(campaignAddress, amount)
+        await approveTx.wait()
+        
+        toast.dismiss(toastId)
+        toastId = toast.loading('Approval successful. Processing contribution...')
+      }
 
       // Call contribute function
       const tx = await campaignContract.contribute(amount, {gasLimit: 1000000})

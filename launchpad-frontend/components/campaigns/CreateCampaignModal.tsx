@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { Dialog } from '@headlessui/react'
 import { useCampaignFactory } from '../../hooks/useCampaignFactory'
-import { useTokens } from '../../hooks/useTokens'
+import { useTokenRegistry } from '../../hooks/tokenRegistry'
 import { useAccount } from 'wagmi'
 import toast from 'react-hot-toast'
 import { PlusIcon } from '@heroicons/react/24/outline'
@@ -9,6 +9,9 @@ import { PlusIcon } from '@heroicons/react/24/outline'
 interface Token {
   address: string
   symbol: string
+  decimals: number
+  isSupported: boolean
+  minimumContribution: string
 }
 
 interface CreateCampaignModalProps {
@@ -18,24 +21,16 @@ interface CreateCampaignModalProps {
 }
 
 const categories = [
-  'Medical',
-  'Memorial',
-  'Emergency',
-  'Nonprofit',
-  'Education',
-  'Animal',
-  'Environment',
-  'Business',
-  'Community',
-  'Competition',
-  'Creative',
-  'Event',
-  'Faith',
-  'Family',
-  'Sports',
-  'Travel',
-  'Volunteer',
-  'Wishes'
+  'DeFi',
+  'Infrastructure',
+  'DAOs',
+  'NFTs',
+  'Gaming',
+  'Identity',
+  'RWA',
+  'Public Goods',
+  'Climate',
+  'Enterprise'
 ]
 
 export default function CreateCampaignModal ({
@@ -46,13 +41,14 @@ export default function CreateCampaignModal ({
   const [mounted, setMounted] = useState(false)
   const { address, isConnected } = useAccount()
   const { createCampaign } = useCampaignFactory()
-  const { tokens, isLoading: isLoadingTokens } = useTokens()
+  const { tokens, isLoading: isLoadingTokens } = useTokenRegistry()
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
   const [targetAmount, setTargetAmount] = useState('')
   const [selectedToken, setSelectedToken] = useState('')
   const [duration, setDuration] = useState('')
   const [category, setCategory] = useState('')
+  const [githubUrl, setGithubUrl] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const cancelButtonRef = useRef(null)
@@ -76,6 +72,7 @@ export default function CreateCampaignModal ({
       setSelectedToken('')
       setDuration('')
       setCategory('')
+      setGithubUrl('')
       setError(null)
       setIsSubmitting(false)
     }
@@ -98,9 +95,17 @@ export default function CreateCampaignModal ({
       !targetAmount ||
       !selectedToken ||
       !duration ||
-      !category
+      !category ||
+      !githubUrl
     ) {
       setError('Please fill in all required fields')
+      return
+    }
+
+    // Basic GitHub URL validation
+    const githubUrlPattern = /^https:\/\/github\.com\/[\w-]+\/[\w.-]+\/?$/
+    if (!githubUrlPattern.test(githubUrl)) {
+      setError('Please enter a valid GitHub repository URL')
       return
     }
 
@@ -116,7 +121,8 @@ export default function CreateCampaignModal ({
         targetAmount,
         selectedToken,
         duration,
-        category
+        category,
+        githubUrl
       )
 
       toast.success('Campaign created successfully!', { id: toastId })
@@ -286,6 +292,28 @@ export default function CreateCampaignModal ({
                   </option>
                 ))}
               </select>
+            </div>
+
+            <div>
+              <label
+                htmlFor='githubUrl'
+                className='block text-sm font-medium text-gray-900 mb-1.5'
+              >
+                GitHub Repository URL
+              </label>
+              <input
+                type='url'
+                id='githubUrl'
+                value={githubUrl}
+                onChange={e => setGithubUrl(e.target.value)}
+                placeholder='https://github.com/username/repository'
+                className='w-full rounded-md border-gray-200 shadow-sm focus:border-blue-500 focus:ring-blue-500 bg-gray-50 text-sm px-3 py-2'
+                required
+                pattern='https://github.com/[\w-]+/[\w.-]+/?'
+              />
+              <p className='mt-1 text-sm text-gray-500'>
+                Please provide the URL to your project's GitHub repository
+              </p>
             </div>
           </form>
 

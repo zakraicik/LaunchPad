@@ -1,15 +1,19 @@
 import { useState, useEffect } from 'react'
-import { doc, onSnapshot } from 'firebase/firestore'
+import { doc, onSnapshot, collection, query, where, getDocs } from 'firebase/firestore'
 import { db } from '@/utils/firebase'
+import { useChainId } from 'wagmi'
+import { SUPPORTED_NETWORKS } from '@/config/addresses'
 
 interface FeeSettings {
   lastOperation: string
   lastUpdated: string
   platformFeeShare: number
   treasuryAddress: string
+  networkId: string
 }
 
 export function useFeeManager() {
+  const chainId = useChainId()
   const [feeSettings, setFeeSettings] = useState<FeeSettings | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -18,16 +22,30 @@ export function useFeeManager() {
     setIsLoading(true)
     setError(null)
 
-    // Set up real-time listener for the 'current' document in fees collection
+    // Ensure chainId is one of our supported networks
+    if (!SUPPORTED_NETWORKS.includes(chainId as typeof SUPPORTED_NETWORKS[number])) {
+      console.log('Unsupported network, clearing fee settings')
+      setFeeSettings(null)
+      setIsLoading(false)
+      return
+    }
+
+    // Set up real-time listener for the fee settings
+    const feeConfigRef = collection(db, 'feeConfig')
+    const q = query(feeConfigRef, where('networkId', '==', chainId.toString()))
+
     const unsubscribe = onSnapshot(
-      doc(db, 'feeConfig', 'current'),
+      q,
       (snapshot) => {
         try {
-          if (snapshot.exists()) {
-            const data = snapshot.data() as FeeSettings
+          if (!snapshot.empty) {
+            // Get the first document (should only be one per network)
+            const doc = snapshot.docs[0]
+            const data = doc.data() as FeeSettings
             setFeeSettings(data)
           } else {
-            setError('Fee settings not found')
+            setError('Fee settings not found for this network')
+            setFeeSettings(null)
           }
           setIsLoading(false)
         } catch (err) {
@@ -45,7 +63,7 @@ export function useFeeManager() {
 
     // Cleanup subscription on unmount
     return () => unsubscribe()
-  }, [])
+  }, [chainId])
 
   return {
     feeSettings,

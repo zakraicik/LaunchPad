@@ -30,7 +30,8 @@ export function useCampaignFactory () {
       targetAmount: string,
       selectedToken: string,
       duration: string,
-      category?: string
+      category?: string,
+      githubUrl?: string
     ) => {
       try {
         console.log('useCampaignFactory: Starting campaign creation', {
@@ -202,7 +203,8 @@ export function useCampaignFactory () {
           duration: durationInDays,
           frontEndAuthID: user.uid,
           category: category || null,
-          networkId: network.chainId.toString()
+          networkId: network.chainId.toString(),
+          githubUrl: githubUrl || null
         }
 
         console.log('useCampaignFactory: Saving campaign data to Firebase')

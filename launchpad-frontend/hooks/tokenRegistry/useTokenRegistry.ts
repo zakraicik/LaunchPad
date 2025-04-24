@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react'
-import { collection, onSnapshot } from 'firebase/firestore'
+import { collection, onSnapshot, query, where } from 'firebase/firestore'
 import { db } from '@/utils/firebase'
+import { useChainId } from 'wagmi'
+import { SUPPORTED_NETWORKS } from '@/config/addresses'
 
 interface TokenInfo {
   address: string
@@ -10,9 +12,11 @@ interface TokenInfo {
   minimumContribution: string
   lastOperation: 'TOKEN_ADDED' | 'TOKEN_REMOVED' | string
   lastUpdated: string
+  networkId: string
 }
 
 export function useTokenRegistry() {
+  const chainId = useChainId()
   const [tokens, setTokens] = useState<TokenInfo[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -21,9 +25,20 @@ export function useTokenRegistry() {
     setIsLoading(true)
     setError(null)
 
+    // Ensure chainId is one of our supported networks
+    if (!SUPPORTED_NETWORKS.includes(chainId as typeof SUPPORTED_NETWORKS[number])) {
+      console.log('Unsupported network, clearing tokens')
+      setTokens([])
+      setIsLoading(false)
+      return
+    }
+
     // Set up real-time listener for the tokens collection
+    const tokensRef = collection(db, 'tokens')
+    const q = query(tokensRef, where('networkId', '==', chainId.toString()))
+
     const unsubscribe = onSnapshot(
-      collection(db, 'tokens'),
+      q,
       (snapshot) => {
         try {
           const tokenData: TokenInfo[] = snapshot.docs.map(doc => ({
@@ -53,7 +68,7 @@ export function useTokenRegistry() {
 
     // Cleanup subscription on unmount
     return () => unsubscribe()
-  }, [])
+  }, [chainId])
 
   return {
     tokens,

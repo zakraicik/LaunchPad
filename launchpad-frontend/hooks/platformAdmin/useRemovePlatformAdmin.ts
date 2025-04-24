@@ -7,12 +7,12 @@ import { ethers } from 'ethers'
 export function useRemovePlatformAdmin() {
   const chainId = useChainId()
   const { data: walletClient } = useWalletClient()
-  const [isAdding, setIsAdding] = useState(false)
+  const [isRemoving, setIsRemoving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const removePlatformAdmin = async (adminAddress: string) => {
     try {
-      setIsAdding(true)
+      setIsRemoving(true)
       setError(null)
 
       if (!walletClient) {
@@ -36,9 +36,9 @@ export function useRemovePlatformAdmin() {
         signer
       )
 
-      // Call the addToken function
-      const tx = await platformAdmin.addToken(
-        adminAddress
+      // Call the removePlatformAdmin function
+      const tx = await platformAdmin.removePlatformAdmin(
+        adminAddress, {gasLimit: 1000000}
       )
 
       // Wait for transaction to be mined
@@ -48,18 +48,18 @@ export function useRemovePlatformAdmin() {
         txHash: receipt.hash
       }
     } catch (err) {
-      console.error('Error adding platform admin:', err)
-      const errorMessage = err instanceof Error ? err.message : 'Failed to add platform admin'
+      console.error('Error removing platform admin:', err)
+      const errorMessage = err instanceof Error ? err.message : 'Failed to remove platform admin'
       setError(errorMessage)
       throw err
     } finally {
-      setIsAdding(false)
+      setIsRemoving(false)
     }
   }
 
   return {
     removePlatformAdmin,
-    isAdding,
+    isRemoving,
     error
   }
 } 

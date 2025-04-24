@@ -1,154 +1,133 @@
 import * as React from 'react'
 import Box from '@mui/material/Box'
-import Stepper from '@mui/material/Stepper'
-import Step from '@mui/material/Step'
-import StepLabel from '@mui/material/StepLabel'
-import StepContent from '@mui/material/StepContent'
-import Button from '@mui/material/Button'
-import Paper from '@mui/material/Paper'
 import Typography from '@mui/material/Typography'
 import { styled } from '@mui/material/styles'
+import SecurityIcon from '@mui/icons-material/Security'
+import SavingsIcon from '@mui/icons-material/Savings'
+import VerifiedUserIcon from '@mui/icons-material/VerifiedUser'
+import ShieldIcon from '@mui/icons-material/Shield'
+import Dialog from '@mui/material/Dialog'
+import DialogTitle from '@mui/material/DialogTitle'
+import DialogContent from '@mui/material/DialogContent'
+import DialogActions from '@mui/material/DialogActions'
+import Button from '@mui/material/Button'
+import IconButton from '@mui/material/IconButton'
+import CloseIcon from '@mui/icons-material/Close'
 
-const CustomStepIcon = styled('div')(({ theme }) => ({
-  width: 32,
-  height: 32,
-  borderRadius: '50%',
-  backgroundColor: theme.palette.primary.main,
-  color: theme.palette.primary.contrastText,
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  fontWeight: 600
+const GridContainer = styled(Box)(({ theme }) => ({
+  display: 'grid',
+  gridTemplateColumns: 'repeat(2, 1fr)',
+  gap: theme.spacing(4),
+  width: '100%',
+  maxWidth: '1200px',
+  margin: '0 auto',
 }))
 
-const StepNumber = React.forwardRef<HTMLDivElement>((props, ref) => {
-  const { active, completed, icon } = props as any
-  return (
-    <CustomStepIcon ref={ref}>
-      {icon}
-    </CustomStepIcon>
-  )
-})
-
-StepNumber.displayName = 'StepNumber'
-
-const steps = [
+const values = [
   {
-    label: 'Contribute to Campaigns',
-    description:
-      "Choose a campaign and contribute using the campaign's designated token. Your contribution is securely tracked on-chain, and you're registered as an official contributor."
+    icon: <SecurityIcon className="w-8 h-8 text-blue-600" />,
+    title: 'Blockchain-Powered Transparency',
+    description: 'Smart contracts create immutable records of every transaction, enabling real-time verification of fund movement.',
+    detailedDescription: 'Our platform eliminates traditional intermediaries through blockchain technology. Unlike conventional crowdfunding where third parties control fund distribution, our smart contracts create immutable records of every transaction. Contributors can verify exactly where their money goes in real-time, while campaign creators receive funds directly when goals are met—creating unprecedented transparency and trust.'
   },
   {
-    label: 'Automatic Yield Generation',
-    description:
-      'Your contributions are automatically deployed to established yield protocols, meaning every contribution generates yield while the campaign is active.'
+    icon: <SavingsIcon className="w-8 h-8 text-blue-600" />,
+    title: 'Yield-Integrated Funding',
+    description: 'Automatic yield generation from DeFi protocols while fundraising is active, reducing or eliminating platform fees.',
+    detailedDescription: 'Say goodbye to fixed platform fees. Our innovative yield integration automatically invests campaign funds into secure DeFi protocols while fundraising is active. The earlier and larger the contributions, the more yield generated—potentially reducing or even eliminating platform fees entirely. This means more of every dollar goes directly to the projects you care about.'
   },
   {
-    label: 'Campaign Completion - Goal Reached',
-    description:
-      'If the funding goal is reached, the campaign owner can claim all funds plus generated yield. A portion of the yield will be sent to the platform treasury and the owner is free to keep the rest.'
+    icon: <VerifiedUserIcon className="w-8 h-8 text-blue-600" />,
+    title: 'Built-in Protection',
+    description: 'Automatic refund capabilities if funding goals are not met, ensuring contributor safety and creator accountability.',
+    detailedDescription: 'We\'ve built contributor protection directly into our platform\'s DNA. If a campaign fails to reach its funding goal, our smart contracts automatically enable refund requests—ensuring your contribution never gets stranded in an underfunded project. This creates a safer environment for backers and incentivizes creators to set realistic, achievable goals.'
   },
   {
-    label: 'Campaign Completion - Goal Not Reached',
-    description:
-      'If the deadline passes without reaching the goal, contributors can request refunds of their original contributions. Some generated yield will still be sent to the platform treasury, but never at the expense of refund requests.'
+    icon: <ShieldIcon className="w-8 h-8 text-blue-600" />,
+    title: 'Comprehensive Safeguards',
+    description: 'Multiple security features including administrator oversight and emergency pause functions for maximum protection.',
+    detailedDescription: 'Our platform incorporates multiple safeguards including administrator oversight capabilities for exceptional circumstances, a pause function for emergency situations, and systematic status updates. These features create a balanced ecosystem that protects both creators and contributors throughout the fundraising process.'
   }
 ]
 
 export default function HowItWorks() {
-  const [activeStep, setActiveStep] = React.useState(0)
+  const [selectedValue, setSelectedValue] = React.useState<number | null>(null)
 
-  const handleNext = () => {
-    setActiveStep((prevActiveStep) => prevActiveStep + 1)
+  const handleOpenModal = (index: number) => {
+    setSelectedValue(index)
   }
 
-  const handleBack = () => {
-    setActiveStep((prevActiveStep) => prevActiveStep - 1)
-  }
-
-  const handleReset = () => {
-    setActiveStep(0)
+  const handleCloseModal = () => {
+    setSelectedValue(null)
   }
 
   return (
     <section className='py-16 bg-gradient-to-b from-blue-50 to-white'>
       <div className='container mx-auto px-4'>
         <div className='max-w-3xl mx-auto text-center mb-12'>
-          <h2 className='text-3xl font-bold mb-4'>How It Works</h2>
+          <h2 className='text-3xl font-bold mb-4'>Our Value Propositions</h2>
           <p className='text-xl text-gray-600'>
-            Our innovative yield-generation feature ensures your contribution
-            has a lasting impact
+            Discover how we're revolutionizing crowdfunding through blockchain technology
           </p>
         </div>
 
-        <div className='max-w-2xl mx-auto'>
-          <Box sx={{ maxWidth: 400, margin: 'auto' }}>
-            <Stepper activeStep={activeStep} orientation="vertical">
-              {steps.map((step, index) => (
-                <Step key={step.label}>
-                  <StepLabel
-                    slots={{
-                      stepIcon: StepNumber
-                    }}
-                    optional={
-                      index === steps.length - 1 ? (
-                        <Typography variant="caption">Last step</Typography>
-                      ) : null
-                    }
-                  >
-                    {step.label}
-                  </StepLabel>
-                  <StepContent>
-                    <Typography>{step.description}</Typography>
-                    <Box sx={{ mb: 2 }}>
-                      {index < steps.length - 1 && (
-                        <Button
-                          variant="contained"
-                          onClick={handleNext}
-                          sx={{ mt: 1, mr: 1 }}
-                        >
-                          Continue
-                        </Button>
-                      )}
-                      {index > 0 && (
-                        <Button
-                          onClick={handleBack}
-                          sx={{ mt: 1, mr: 1 }}
-                        >
-                          Back
-                        </Button>
-                      )}
-                    </Box>
-                  </StepContent>
-                </Step>
-              ))}
-            </Stepper>
-            {/* {activeStep === steps.length && (
-              <Paper square elevation={0} sx={{ p: 3 }}>
-                <Typography>All steps completed - you&apos;re finished</Typography>
-                <Button onClick={handleReset} sx={{ mt: 1, mr: 1 }}>
-                  Reset
-                </Button>
-              </Paper>
-            )} */}
-          </Box>
+        <GridContainer>
+          {values.map((value, index) => (
+            <div
+              key={index}
+              onClick={() => handleOpenModal(index)}
+              className="p-4 rounded-lg bg-blue-50 border border-gray-100 transition-all duration-300 hover:scale-105 hover:shadow-md h-full flex flex-col cursor-pointer"
+            >
+              <div className="flex flex-col items-center text-center flex-grow">
+                {value.icon}
+                <h3 className="text-lg font-semibold mb-1 text-gray-900 mt-3">
+                  {value.title}
+                </h3>
+                <p className="text-sm text-gray-600">
+                  {value.description}
+                </p>
+              </div>
+            </div>
+          ))}
+        </GridContainer>
 
-          <div className='mt-12 bg-blue-50 rounded-lg p-6'>
-            <h3 className='text-xl font-semibold mb-4 text-center'>
-              Why Yield Generation Matters
-            </h3>
-            <p className='text-gray-600 mb-4'>
-              Traditional donations are one-time contributions. Our platform
-              leverages DeFi protocols to generate continuous yields from your
-              initial contribution, creating a sustainable source of funding for
-              the causes you care about.
-            </p>
-            <p className='text-gray-600'>
-              Your contribution remains intact while the generated yields provide
-              ongoing support, maximizing the impact of your donation over time.
-            </p>
-          </div>
-        </div>
+        <Dialog
+          open={selectedValue !== null}
+          onClose={handleCloseModal}
+          maxWidth="sm"
+          fullWidth
+        >
+          {selectedValue !== null && (
+            <>
+              <DialogTitle className="flex justify-between items-center pr-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 text-blue-600">
+                    {values[selectedValue].icon}
+                  </div>
+                  {values[selectedValue].title}
+                </div>
+                <IconButton
+                  edge="end"
+                  color="inherit"
+                  onClick={handleCloseModal}
+                  aria-label="close"
+                >
+                  <CloseIcon />
+                </IconButton>
+              </DialogTitle>
+              <DialogContent dividers>
+                <Typography>
+                  {values[selectedValue].detailedDescription}
+                </Typography>
+              </DialogContent>
+              <DialogActions>
+                <Button onClick={handleCloseModal} color="primary">
+                  Close
+                </Button>
+              </DialogActions>
+            </>
+          )}
+        </Dialog>
       </div>
     </section>
   )

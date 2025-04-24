@@ -13,12 +13,10 @@ const db = admin.firestore();
  */
 export const alchemyWebhook = onRequest(async (req, res) => {
   try {
-    // Log the incoming webhook data
     logger.info("Received webhook payload:", JSON.stringify(req.body));
 
     const webhookData = req.body;
 
-    // Store raw event data for debugging
     const writeResult = await db.collection("rawEvents").add({
       timestamp: new Date(),
       data: webhookData,
@@ -26,7 +24,6 @@ export const alchemyWebhook = onRequest(async (req, res) => {
 
     logger.info(`Event stored with ID: ${writeResult.id}`);
 
-    // Respond with success
     res.status(200).send("Webhook received successfully");
   } catch (error) {
     logger.error("Error processing webhook:", error);

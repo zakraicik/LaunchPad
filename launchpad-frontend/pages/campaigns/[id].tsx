@@ -35,6 +35,7 @@ interface Campaign {
   statusReason: number
   creator?: string
   hasClaimed?: boolean
+  githubUrl?: string
 }
 
 export default function CampaignDetail () {
@@ -287,69 +288,41 @@ export default function CampaignDetail () {
           Back to Campaigns
         </button>
 
-        {/* Campaign Header */}
-        <div className='bg-white rounded-lg shadow-sm overflow-hidden mb-6'>
-          {campaign.imageUrl && (
-            <div className='aspect-w-16 aspect-h-9'>
-              <img
-                src={campaign.imageUrl}
-                alt={campaign.title}
-                className='w-full h-96 object-cover'
-              />
-            </div>
-          )}
+        {/* Top level grid for the two main containers */}
+        <div className='grid grid-cols-1 md:grid-cols-2 gap-6 mb-6'>
+          {/* Campaign Description Container */}
+          <div className='bg-white rounded-lg shadow-sm p-6'>
+            <h2 className='text-xl font-semibold mb-4'>Campaign Description</h2>
+            <p className='text-gray-600'>{campaign.description}</p>
+          </div>
 
-          <div className='p-4 md:p-6'>
-            <div className='flex justify-between items-start mb-4'>
-              <div className='w-full'>
-                <div className='flex flex-col md:flex-row md:items-center gap-2 md:gap-4'>
-                  <h1 className='text-xl md:text-2xl font-bold'>{campaign.title}</h1>
-                  {(() => {
-                    // Handle Firebase Timestamp or Date object
-                    const createdAtDate = typeof campaign.createdAt === 'object' && 'toDate' in campaign.createdAt
-                      ? campaign.createdAt.toDate()
-                      : new Date(campaign.createdAt)
-                    
-                    const isEnded = new Date() > new Date(createdAtDate.getTime() + parseInt(campaign.duration) * 24 * 60 * 60 * 1000)
-                    const progress = campaign.totalRaised && campaign.goalAmountSmallestUnits
-                      ? (Number(campaign.totalRaised) / Number(campaign.goalAmountSmallestUnits)) * 100
-                      : 0
-                    const hasReachedGoal = progress >= 100
-
-                    if (!isEnded) {
-                      return (
-                        <span className='inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 w-fit'>
-                          Active
-                        </span>
-                      )
-                    }
-                    
-                    if (hasReachedGoal) {
-                      return (
-                        <span className='inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 w-fit'>
-                          Goal Reached
-                        </span>
-                      )
-                    }
-                    
-                    return (
-                      <span className='inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800 w-fit'>
-                        Goal Not Reached
-                      </span>
-                    )
-                  })()}
-                </div>
+          {/* Quick Stats Container */}
+          <div className='bg-white rounded-lg shadow-sm p-6'>
+            <div className='grid grid-cols-3 gap-4'>
+              <div className='text-center'>
+                <p className='text-base md:text-lg font-medium'>
+                  {campaign.contributors || 0}
+                </p>
+                <p className='text-xs md:text-sm text-gray-500'>Contributors</p>
               </div>
-              <button
-                className='p-2 hover:bg-gray-100 rounded-full flex-shrink-0'
-                aria-label='Share'
-              >
-                <ShareIcon className='h-5 w-5 text-gray-600' />
-              </button>
+              <div className='text-center'>
+                <CampaignTimer
+                  startTime={campaign.createdAt instanceof Date ? campaign.createdAt.getTime() / 1000 : typeof campaign.createdAt === 'string' ? new Date(campaign.createdAt).getTime() / 1000 : campaign.createdAt.toDate().getTime() / 1000}
+                  endTime={campaign.createdAt instanceof Date ? campaign.createdAt.getTime() / 1000 + Number(campaign.duration) * 24 * 60 * 60 : typeof campaign.createdAt === 'string' ? new Date(campaign.createdAt).getTime() / 1000 + Number(campaign.duration) * 24 * 60 * 60 : campaign.createdAt.toDate().getTime() / 1000 + Number(campaign.duration) * 24 * 60 * 60}
+                  duration={Number(campaign.duration)}
+                />
+                <p className='text-xs md:text-sm text-gray-500'>Time Remaining</p>
+              </div>
+              <div className='text-center'>
+                <p className='text-base md:text-lg font-medium'>
+                  {token?.symbol || 'Loading...'}
+                </p>
+                <p className='text-xs md:text-sm text-gray-500'>Target Coin</p>
+              </div>
             </div>
 
             {/* Progress Section */}
-            <div className='mb-6'>
+            <div className='mt-6'>
               <div className='w-full bg-gray-200 rounded-full h-2'>
                 <div
                   className='bg-blue-600 h-2 rounded-full'
@@ -373,30 +346,6 @@ export default function CampaignDetail () {
                 </div>
               </div>
             </div>
-
-            {/* Quick Stats */}
-            <div className='grid grid-cols-3 gap-2 md:gap-4 py-4 border-t border-b'>
-              <div className='text-center'>
-                <p className='text-base md:text-lg font-medium'>
-                  {campaign.contributors || 0}
-                </p>
-                <p className='text-xs md:text-sm text-gray-500'>Contributors</p>
-              </div>
-              <div className='text-center'>
-                <CampaignTimer
-                  startTime={campaign.createdAt instanceof Date ? campaign.createdAt.getTime() / 1000 : typeof campaign.createdAt === 'string' ? new Date(campaign.createdAt).getTime() / 1000 : campaign.createdAt.toDate().getTime() / 1000}
-                  endTime={campaign.createdAt instanceof Date ? campaign.createdAt.getTime() / 1000 + Number(campaign.duration) * 24 * 60 * 60 : typeof campaign.createdAt === 'string' ? new Date(campaign.createdAt).getTime() / 1000 + Number(campaign.duration) * 24 * 60 * 60 : campaign.createdAt.toDate().getTime() / 1000 + Number(campaign.duration) * 24 * 60 * 60}
-                  duration={Number(campaign.duration)}
-                />
-                <p className='text-xs md:text-sm text-gray-500'>Time Remaining</p>
-              </div>
-              <div className='text-center'>
-                <p className='text-base md:text-lg font-medium'>
-                  {token?.symbol || 'Loading...'}
-                </p>
-                <p className='text-xs md:text-sm text-gray-500'>Target Coin</p>
-              </div>
-            </div>
           </div>
         </div>
 
@@ -404,10 +353,10 @@ export default function CampaignDetail () {
         <div className='bg-white rounded-lg shadow-sm mb-6'>
           <div className='p-6'>
             <CampaignDetails
-              description={campaign.description}
               category={campaign.category}
               campaignAddress={campaign.campaignAddress}
               owner={campaign.creator}
+              githubUrl={campaign.githubUrl}
             />
           </div>
         </div>

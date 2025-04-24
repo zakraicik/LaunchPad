@@ -3,6 +3,8 @@ import { getContractAddress } from '@/config/addresses'
 import PlatformAdmin from '../../../artifacts/contracts/PlatformAdmin.sol/PlatformAdmin.json'
 import { useState } from 'react'
 import { ethers } from 'ethers'
+import { collection, doc, setDoc } from 'firebase/firestore'
+import { db } from '@/utils/firebase'
 
 export function useAddPlatformAdmin() {
   const chainId = useChainId()
@@ -37,12 +39,21 @@ export function useAddPlatformAdmin() {
       )
 
       // Call the addToken function
-      const tx = await platformAdmin.addToken(
-        adminAddress
+      const tx = await platformAdmin.addPlatformAdmin(
+        adminAddress, {gasLimit: 1000000}
       )
 
       // Wait for transaction to be mined
       const receipt = await tx.wait()
+
+      // Create/update admin record in Firebase with networkId
+      const adminRef = doc(collection(db, 'admins'), adminAddress.toLowerCase())
+      await setDoc(adminRef, {
+        networkId: chainId.toString(),
+        isActive: true,
+        lastOperation: 'ADMIN_ADDED',
+        lastUpdated: new Date().toISOString()
+      }, { merge: true })
 
       return {
         txHash: receipt.hash

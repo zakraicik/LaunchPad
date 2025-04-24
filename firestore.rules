@@ -71,7 +71,7 @@ service cloud.firestore {
     }
 
     // Fee Manaager Collection rules 
-    match /feeConfig/current {
+    match /feeConfig/{docId} {
       allow read: if true;
     }
 

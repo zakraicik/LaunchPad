@@ -131,6 +131,7 @@ export const processCampaignFactoryEvents = onDocumentCreated(
       }
 
       // Process logs from the Alchemy webhook
+      const networkName = webhookData.event.network;
       const logs = webhookData.event.data.block.logs;
       const blockNumber = webhookData.event.data.block.number;
       const blockTimestamp = webhookData.event.data.block.timestamp;

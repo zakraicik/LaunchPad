@@ -1,145 +1,85 @@
 import {
-  HeartIcon,
-  FireIcon,
-  ShieldExclamationIcon,
-  HandRaisedIcon,
-  AcademicCapIcon,
-  BuildingStorefrontIcon,
-  UsersIcon,
-  TrophyIcon,
-  SunIcon,
-  HomeIcon,
-  FlagIcon,
+  CurrencyDollarIcon,
+  WrenchScrewdriverIcon,
+  UserGroupIcon,
+  PhotoIcon,
+  RocketLaunchIcon,
+  FingerPrintIcon,
+  BuildingLibraryIcon,
   GlobeAmericasIcon,
-  SparklesIcon,
-  CalendarIcon
+  SunIcon,
+  BuildingOfficeIcon
 } from '@heroicons/react/24/outline'
 import Link from 'next/link'
 
 const categories = [
   {
-    name: 'Medical',
-    icon: HeartIcon,
-    description: 'Support medical treatments and healthcare needs',
+    name: 'DeFi',
+    icon: CurrencyDollarIcon,
+    description: 'Lending protocols, DEXs, yield optimization, insurance protocols',
     color: 'bg-blue-50',
     textColor: 'text-blue-600'
   },
   {
-    name: 'Memorial',
-    icon: FireIcon,
-    description: 'Honor and remember loved ones',
+    name: 'Infrastructure',
+    icon: WrenchScrewdriverIcon,
+    description: 'Layer 1/2 solutions, developer tools, oracles, security solutions',
     color: 'bg-blue-50',
     textColor: 'text-blue-600'
   },
   {
-    name: 'Emergency',
-    icon: ShieldExclamationIcon,
-    description: 'Help those facing urgent crises and disasters',
+    name: 'DAOs',
+    icon: UserGroupIcon,
+    description: 'Community organizations, protocol governance, investment DAOs, coordination tools',
     color: 'bg-blue-50',
     textColor: 'text-blue-600'
   },
   {
-    name: 'Nonprofit',
-    icon: HandRaisedIcon,
-    description: 'Support charitable organizations and causes',
+    name: 'NFTs',
+    icon: PhotoIcon,
+    description: 'Marketplaces, creator platforms, metaverse assets, gaming assets',
     color: 'bg-blue-50',
     textColor: 'text-blue-600'
   },
   {
-    name: 'Education',
-    icon: AcademicCapIcon,
-    description: 'Fund educational opportunities and resources',
+    name: 'Gaming',
+    icon: RocketLaunchIcon,
+    description: 'Play-to-earn, virtual worlds, gaming guilds, gaming infrastructure',
     color: 'bg-blue-50',
     textColor: 'text-blue-600'
   },
   {
-    name: 'Animal',
-    icon: HeartIcon,
-    description: 'Help animals in need and support pet care',
+    name: 'Identity',
+    icon: FingerPrintIcon,
+    description: 'Decentralized identity, social platforms, reputation systems, privacy tools',
     color: 'bg-blue-50',
     textColor: 'text-blue-600'
   },
   {
-    name: 'Environment',
-    icon: SunIcon,
-    description: 'Support environmental conservation efforts',
+    name: 'RWA',
+    icon: BuildingLibraryIcon,
+    description: 'Tokenized real estate, carbon credits, commodities, securities',
     color: 'bg-blue-50',
     textColor: 'text-blue-600'
   },
   {
-    name: 'Business',
-    icon: BuildingStorefrontIcon,
-    description: 'Help small businesses grow and succeed',
-    color: 'bg-blue-50',
-    textColor: 'text-blue-600'
-  },
-  {
-    name: 'Community',
-    icon: UsersIcon,
-    description: 'Support local community initiatives',
-    color: 'bg-blue-50',
-    textColor: 'text-blue-600'
-  },
-  {
-    name: 'Competition',
-    icon: TrophyIcon,
-    description: 'Fund competitive events and tournaments',
-    color: 'bg-blue-50',
-    textColor: 'text-blue-600'
-  },
-  {
-    name: 'Creative',
-    icon: SparklesIcon,
-    description: 'Support artists and creative projects',
-    color: 'bg-blue-50',
-    textColor: 'text-blue-600'
-  },
-  {
-    name: 'Event',
-    icon: CalendarIcon,
-    description: 'Fund events and gatherings',
-    color: 'bg-blue-50',
-    textColor: 'text-blue-600'
-  },
-  {
-    name: 'Faith',
-    icon: HomeIcon,
-    description: 'Support religious and spiritual causes',
-    color: 'bg-blue-50',
-    textColor: 'text-blue-600'
-  },
-  {
-    name: 'Family',
-    icon: UsersIcon,
-    description: 'Help families in need',
-    color: 'bg-blue-50',
-    textColor: 'text-blue-600'
-  },
-  {
-    name: 'Sports',
-    icon: TrophyIcon,
-    description: 'Support athletes and sports programs',
-    color: 'bg-blue-50',
-    textColor: 'text-blue-600'
-  },
-  {
-    name: 'Travel',
+    name: 'Public Goods',
     icon: GlobeAmericasIcon,
-    description: 'Fund travel and exploration',
+    description: 'Protocol research, open-source infrastructure, education initiatives',
     color: 'bg-blue-50',
     textColor: 'text-blue-600'
   },
   {
-    name: 'Volunteer',
-    icon: HandRaisedIcon,
-    description: 'Support volunteer initiatives',
+    name: 'Climate',
+    icon: SunIcon,
+    description: 'Regenerative finance (ReFi), climate tech, impact measurement, green crypto',
     color: 'bg-blue-50',
     textColor: 'text-blue-600'
   },
   {
-    name: 'Wishes',
-    icon: SparklesIcon,
-    description: 'Help make wishes come true',
+    name: 'Enterprise',
+    icon: BuildingOfficeIcon,
+    description: 'Enterprise and institutional blockchain solutions',
     color: 'bg-blue-50',
     textColor: 'text-blue-600'
   }
@@ -152,7 +92,7 @@ export default function CampaignCategories () {
         <h2 className='text-3xl font-bold mb-8 text-center'>
           Campaign Categories
         </h2>
-        <div className='grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-4'>
+        <div className='grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4'>
           {categories.map(category => (
             <Link
               key={category.name}

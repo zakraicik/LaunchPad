@@ -2,17 +2,19 @@ import React, { useState, useRef, useEffect } from 'react'
 import { ClipboardIcon, ClipboardDocumentCheckIcon } from '@heroicons/react/24/outline'
 
 interface CampaignDetailsProps {
-  description: string
+  description?: string
   category?: string
   campaignAddress?: string
   owner?: string
+  githubUrl?: string
 }
 
 export default function CampaignDetails({
   description,
   category,
   campaignAddress,
-  owner
+  owner,
+  githubUrl
 }: CampaignDetailsProps) {
   const [showAddressPopover, setShowAddressPopover] = useState(false)
   const [showOwnerPopover, setShowOwnerPopover] = useState(false)
@@ -50,10 +52,12 @@ export default function CampaignDetails({
 
   return (
     <div className='space-y-6'>
-      {/* Main Description */}
-      <div className='prose max-w-none'>
-        <p className='text-gray-600'>{description}</p>
-      </div>
+      {/* Main Description - Only render if description is provided */}
+      {description && (
+        <div className='prose max-w-none'>
+          <p className='text-gray-600'>{description}</p>
+        </div>
+      )}
 
       {/* Additional Details */}
       <div className='bg-gray-50 rounded-lg p-3 md:p-4'>
@@ -67,6 +71,19 @@ export default function CampaignDetails({
                   {category}
                 </span>
               </div>
+            </div>
+          )}
+          {githubUrl && (
+            <div className='flex flex-col md:flex-row md:items-center md:justify-between gap-1 md:gap-0'>
+              <span className='text-xs md:text-sm text-gray-500'>GitHub Repository</span>
+              <a
+                href={githubUrl}
+                target='_blank'
+                rel='noopener noreferrer'
+                className='text-xs md:text-sm font-medium text-blue-600 hover:text-blue-800'
+              >
+                View on GitHub →
+              </a>
             </div>
           )}
           {campaignAddress && (

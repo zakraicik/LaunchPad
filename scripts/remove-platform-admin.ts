@@ -12,7 +12,7 @@ async function main () {
   // Connect to the PlatformAdmin contract
   const platformAdmin = (await ethers.getContractAt(
     'PlatformAdmin',
-    deployedAddresses.PlatformAdmin
+    deployedAddresses['baseMainnet'].PlatformAdmin
   )) as PlatformAdmin
 
   // Check if the deployer is a platform admin
@@ -25,7 +25,7 @@ async function main () {
   }
 
   // Address of the admin to remove
-  const adminToRemove = '0x4de20fcbe8f5c9a029cb014d27e40a1b72e8d7f9'
+  const adminToRemove = '0xC03763a357d8174521cedD54a396184F9FCBfC51'
 
   // Prevent removing yourself accidentally
   if (adminToRemove.toLowerCase() === deployer.address.toLowerCase()) {

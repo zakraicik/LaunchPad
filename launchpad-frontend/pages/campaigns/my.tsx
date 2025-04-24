@@ -220,6 +220,16 @@ export default function MyCampaigns () {
             </div>
           </div>
         </div>
+        {mounted && (
+          <CreateCampaignModal
+            isOpen={isCreateModalOpen}
+            onClose={() => setIsCreateModalOpen(false)}
+            onSuccess={() => {
+              setIsCreateModalOpen(false)
+              refreshCampaigns()
+            }}
+          />
+        )}
       </div>
     )
   }

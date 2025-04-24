@@ -170,10 +170,10 @@ export default function CampaignsDiscovery() {
         ) : (
           <div className='text-center py-12'>
             <h3 className='text-xl font-semibold mb-4'>
-              No campaigns found in this category
+              No campaigns found
             </h3>
             <p className='text-gray-600 mb-6'>
-              Be the first to create a campaign in the {selectedCategory} category!
+              Be the first to create a campaign!
             </p>
             <button
               onClick={() => setIsCreateModalOpen(true)}

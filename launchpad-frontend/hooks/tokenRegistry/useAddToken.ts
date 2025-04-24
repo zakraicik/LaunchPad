@@ -25,7 +25,7 @@ export function useAddToken() {
 
       // Get the correct contract address for this network
       const registryAddress = getContractAddress(
-        (chainId || 84532) as 84532,
+        (chainId || 8453) as 8453,
         'tokenRegistry'
       )
 

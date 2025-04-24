@@ -21,6 +21,7 @@ export interface Campaign {
   goalAmountSmallestUnits: string
   token: string
   duration: number
+  githubUrl?: string
   hasClaimed?: boolean
   canClaimFunds?: boolean
   statusText: string
@@ -55,10 +56,8 @@ export function useCampaigns ({ filterByOwner = false }: UseCampaignsOptions = {
       const campaignsRef = collection(db, 'campaigns')
       let q = query(campaignsRef, orderBy('createdAt', 'desc'))
 
-      // Add network filter - convert chainId to string to match Firestore data type
       q = query(q, where('networkId', '==', chainId.toString()))
 
-      // Add owner filter if requested and address is available
       if (filterByOwner && address) {
         q = query(q, where('creator', '==', address.toLowerCase()))
       }
@@ -93,6 +92,7 @@ export function useCampaigns ({ filterByOwner = false }: UseCampaignsOptions = {
               goalAmountSmallestUnits: data.goalAmountSmallestUnits || '0',
               token: data.token || '0x0000000000000000000000000000000000000000',
               duration: data.duration || 0,
+              githubUrl: data.githubUrl,
               hasClaimed: data.hasClaimed || false,
               canClaimFunds: data.canClaimFunds || false,
               statusText: data.statusText || '',

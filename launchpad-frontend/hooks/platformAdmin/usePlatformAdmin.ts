@@ -1,15 +1,19 @@
 import { useState, useEffect } from 'react'
-import { collection, getDocs, onSnapshot } from 'firebase/firestore'
+import { collection, getDocs, onSnapshot, query, where } from 'firebase/firestore'
 import { db } from '@/utils/firebase'
+import { useChainId } from 'wagmi'
+import { SUPPORTED_NETWORKS } from '@/config/addresses'
 
 interface PlatformAdmin {
   address: string
   isActive: boolean
   lastOperation: 'ADMIN_ADDED' | 'ADMIN_REMOVED' | string
   lastUpdated: string
+  networkId: string
 }
 
 export function usePlatformAdmin() {
+  const chainId = useChainId()
   const [admins, setAdmins] = useState<PlatformAdmin[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -18,9 +22,24 @@ export function usePlatformAdmin() {
     setIsLoading(true)
     setError(null)
 
+    // Ensure chainId is one of our supported networks
+    if (!SUPPORTED_NETWORKS.includes(chainId as typeof SUPPORTED_NETWORKS[number])) {
+      console.log('Unsupported network, clearing admins')
+      setAdmins([])
+      setIsLoading(false)
+      return
+    }
+
     // Set up real-time listener for the admins collection
+    const adminsRef = collection(db, 'admins')
+    const q = query(
+      adminsRef, 
+      where('networkId', '==', chainId.toString()),
+      where('isActive', '==', true)
+    )
+
     const unsubscribe = onSnapshot(
-      collection(db, 'admins'),
+      q,
       (snapshot) => {
         try {
           const adminData: PlatformAdmin[] = snapshot.docs.map(doc => ({
@@ -50,7 +69,7 @@ export function usePlatformAdmin() {
 
     // Cleanup subscription on unmount
     return () => unsubscribe()
-  }, [])
+  }, [chainId])
 
   return {
     admins,

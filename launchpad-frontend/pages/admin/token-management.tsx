@@ -148,6 +148,17 @@ export default function TokenManagement() {
     try {
       setAddTokenError(null)
       const { txHash } = await addToken(newTokenAddress, minContribution)
+      
+      // Create/update token record in Firebase with networkId
+      const tokenRef = doc(collection(db, 'tokens'), newTokenAddress.toLowerCase())
+      await setDoc(tokenRef, {
+        networkId: chainId.toString(),
+        lastOperation: 'TOKEN_ADDED',
+        lastUpdated: new Date().toISOString(),
+        isSupported: true,
+        minimumContribution: minContribution
+      }, { merge: true })
+
       toast.success('Token added successfully!', { id: toastId })
       setIsAddModalOpen(false)
       setNewTokenAddress('')
@@ -382,8 +393,20 @@ export default function TokenManagement() {
         ))}
 
         {tokens?.length === 0 && (
-          <div className="text-center py-8 text-gray-500 bg-white rounded-lg shadow">
-            No tokens found.
+          <div className="col-span-full text-center py-12">
+            <h3 className='text-xl font-semibold mb-4'>
+              No tokens found
+            </h3>
+            <p className='text-gray-600 mb-6'>
+              Add your first token to get started!
+            </p>
+            <button 
+              onClick={() => setIsAddModalOpen(true)}
+              className='bg-blue-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 mx-auto'
+            >
+              <PlusIcon className='h-5 w-5' />
+              Add Token
+            </button>
           </div>
         )}
       </div>
