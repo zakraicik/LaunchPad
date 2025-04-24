@@ -15,6 +15,8 @@ import CampaignTimer from '../../components/campaigns/CampaignTimer'
 import { useClaimFunds } from '../../hooks/campaigns/useClaimFunds'
 import { useContribute } from '../../hooks/campaigns/useContribute'
 import { useRequestRefund } from '../../hooks/campaigns/useRequestRefund'
+import { useUpdatePlatformFeeShare } from '../../hooks/defiManager/useGetATokenAddress'
+import { ERC20_ABI } from '../../config/abis/erc20'
 
 interface Campaign {
   id: string
@@ -54,6 +56,11 @@ export default function CampaignDetail () {
   const { address, isConnected } = useAccount()
   const { data: walletClient } = useWalletClient()
   const publicClient = usePublicClient()
+  const { getATokenAddress } = useUpdatePlatformFeeShare()
+  const [aTokenBalance, setATokenBalance] = useState<string>('0')
+  const [isLoadingYield, setIsLoadingYield] = useState(false)
+  const [tokenBalance, setTokenBalance] = useState<string>('0')
+  const [isLoadingBalance, setIsLoadingBalance] = useState(false)
 
   useEffect(() => {
     setMounted(true)
@@ -128,6 +135,59 @@ export default function CampaignDetail () {
       fetchCampaign(currentId)
     }
   }, [router.isReady, router.query.id, mounted])
+
+  // New useEffect to fetch aToken balance
+  useEffect(() => {
+    const fetchATokenBalance = async () => {
+      if (!campaign?.token || !campaign?.campaignAddress || !walletClient) return
+
+      try {
+        setIsLoadingYield(true)
+        // Get the aToken address for the campaign token
+        const aTokenAddress = await getATokenAddress(campaign.token)
+        
+        // Create provider and contract instances
+        const provider = new BrowserProvider(walletClient.transport)
+        const aTokenContract = new Contract(aTokenAddress, ERC20_ABI, provider)
+        
+        // Get the balance of aTokens held by the campaign
+        const balance = await aTokenContract.balanceOf(campaign.campaignAddress)
+        setATokenBalance(balance.toString())
+      } catch (error) {
+        console.error('Error fetching aToken balance:', error)
+        setATokenBalance('0')
+      } finally {
+        setIsLoadingYield(false)
+      }
+    }
+
+    fetchATokenBalance()
+  }, [campaign?.token, campaign?.campaignAddress, walletClient])
+
+  // New useEffect to fetch token balance
+  useEffect(() => {
+    const fetchTokenBalance = async () => {
+      if (!campaign?.token || !campaign?.campaignAddress || !walletClient) return
+
+      try {
+        setIsLoadingBalance(true)
+        // Create provider and contract instances
+        const provider = new BrowserProvider(walletClient.transport)
+        const tokenContract = new Contract(campaign.token, ERC20_ABI, provider)
+        
+        // Get the balance of tokens held by the campaign
+        const balance = await tokenContract.balanceOf(campaign.campaignAddress)
+        setTokenBalance(balance.toString())
+      } catch (error) {
+        console.error('Error fetching token balance:', error)
+        setTokenBalance('0')
+      } finally {
+        setIsLoadingBalance(false)
+      }
+    }
+
+    fetchTokenBalance()
+  }, [campaign?.token, campaign?.campaignAddress, walletClient])
 
   if (!mounted || !router.isReady) {
     return (
@@ -419,13 +479,7 @@ export default function CampaignDetail () {
           <div className='p-4 md:p-6'>
             {activeTab === 'contributors' && (
               <div>
-                <p className='text-gray-600'>
-                  {campaign.contributors
-                    ? `This campaign has ${campaign.contributors} contributor${
-                        campaign.contributors !== 1 ? 's' : ''
-                      }.`
-                    : 'No contributors yet'}
-                </p>
+                <Contributors campaignId={campaign.id} />
               </div>
             )}
 
@@ -438,26 +492,44 @@ export default function CampaignDetail () {
                       <>
                         <div className='flex justify-between items-center'>
                           <span className='text-sm text-gray-500'>Amount in Contract</span>
-                          <span className='text-sm font-medium'>{formattedRaised} {token?.symbol}</span>
+                          <span className='text-sm font-medium'>
+                            {isLoadingBalance ? (
+                              'Loading...'
+                            ) : (
+                              `${formatAmount(tokenBalance)} ${token?.symbol}`
+                            )}
+                          </span>
                         </div>
                         <div className='flex justify-between items-center'>
                           <span className='text-sm text-gray-500'>Amount in Yield Generation</span>
-                          <span className='text-sm font-medium'>Coming soon</span>
+                          <span className='text-sm font-medium'>
+                            {isLoadingYield ? (
+                              'Loading...'
+                            ) : (
+                              `${formatAmount(aTokenBalance)} ${token?.symbol}`
+                            )}
+                          </span>
                         </div>
                       </>
                     ) : (
                       <>
                         <div className='flex justify-between items-center'>
                           <span className='text-sm text-gray-500'>Amount in Contract</span>
-                          <span className='text-sm font-medium'>{formattedRaised} {token?.symbol}</span>
+                          <span className='text-sm font-medium'>
+                            {isLoadingBalance ? (
+                              'Loading...'
+                            ) : (
+                              `${formatAmount(tokenBalance)} ${token?.symbol}`
+                            )}
+                          </span>
                         </div>
                         <div className='flex justify-between items-center'>
                           <span className='text-sm text-gray-500'>Amount Claimed</span>
-                          <span className='text-sm font-medium'>{campaign.hasClaimed ? formattedRaised : '0'} {token?.symbol}</span>
+                          <span className='text-sm font-medium'>{campaign.hasClaimed ? formatAmount(tokenBalance) : '0'} {token?.symbol}</span>
                         </div>
                         <div className='flex justify-between items-center'>
                           <span className='text-sm text-gray-500'>Amount Available for Refunds</span>
-                          <span className='text-sm font-medium'>{campaign.hasClaimed ? '0' : formattedRaised} {token?.symbol}</span>
+                          <span className='text-sm font-medium'>{campaign.hasClaimed ? '0' : formatAmount(tokenBalance)} {token?.symbol}</span>
                         </div>
                       </>
                     )}

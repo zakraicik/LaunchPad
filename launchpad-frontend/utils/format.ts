@@ -3,7 +3,7 @@
  * @param value The number to format
  * @returns The formatted number as a string
  */
-export function formatNumber (value: number): string {
+export function formatNumber(value: number): string {
   return new Intl.NumberFormat('en-US').format(value)
 }
 
@@ -12,7 +12,7 @@ export function formatNumber (value: number): string {
  * @param timestamp Unix timestamp in seconds
  * @returns Formatted date string
  */
-export function formatDate (timestamp: number): string {
+export function formatDate(timestamp: number): string {
   return new Date(timestamp * 1000).toLocaleDateString('en-US', {
     year: 'numeric',
     month: 'long',
@@ -25,7 +25,7 @@ export function formatDate (timestamp: number): string {
  * @param days Number of days
  * @returns Formatted duration string
  */
-export function formatDuration (days: number): string {
+export function formatDuration(days: number): string {
   if (days < 7) {
     return `${days} day${days === 1 ? '' : 's'}`
   } else if (days < 30) {
@@ -42,7 +42,7 @@ export function formatDuration (days: number): string {
  * @param seconds Number of seconds
  * @returns Formatted time string
  */
-export function formatTimeLeft (seconds: number): string {
+export function formatTimeLeft(seconds: number): string {
   if (seconds <= 0) {
     return 'Ended'
   }
@@ -61,4 +61,16 @@ export function formatTimeLeft (seconds: number): string {
   } else {
     return `${secs}s`
   }
+}
+
+/**
+ * Shortens an Ethereum address to a more readable format
+ * @param address Full Ethereum address
+ * @param chars Number of characters to show at start and end (default: 4)
+ * @returns Shortened address string
+ */
+export function shortenAddress(address: string, chars: number = 4): string {
+  if (!address) return ''
+  if (address.length < chars * 2) return address
+  return `${address.slice(0, chars)}...${address.slice(-chars)}`
 }
