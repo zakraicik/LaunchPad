@@ -175,7 +175,7 @@ export default function CampaignDetail () {
         const provider = new BrowserProvider(walletClient.transport)
         const tokenContract = new Contract(campaign.token, ERC20_ABI, provider)
         
-        // Get the balance of tokens held by the campaign
+        // Get the balance of tokens held by the campaigngit
         const balance = await tokenContract.balanceOf(campaign.campaignAddress)
         setTokenBalance(balance.toString())
       } catch (error) {
@@ -479,7 +479,7 @@ export default function CampaignDetail () {
           <div className='p-4 md:p-6'>
             {activeTab === 'contributors' && (
               <div>
-                <Contributors campaignId={campaign.id} />
+                <Contributors campaignId={campaign.id} tokenAddress={campaign.token} />
               </div>
             )}
 

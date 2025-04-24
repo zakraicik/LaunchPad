@@ -1,132 +1,174 @@
 import { useEffect, useState } from 'react'
-import { collection, query, where, getDocs } from 'firebase/firestore'
+import { collection, query, where, getDocs, orderBy } from 'firebase/firestore'
 import { db } from '../../utils/firebase'
 import { generateAvatar } from '../../utils/avatar'
-import { shortenAddress } from '../../utils/format'
+import { shortenAddress, formatNumber } from '../../utils/format'
 import { ClipboardIcon, ClipboardDocumentCheckIcon } from '@heroicons/react/24/outline'
+import { formatDistanceToNow } from 'date-fns'
+import { formatUnits } from 'ethers'
+import { useTokens } from '../../hooks/useTokens'
 import toast from 'react-hot-toast'
 
 interface ContributorsProps {
   campaignId: string
+  tokenAddress: string
 }
 
-interface Contributor {
-  address: string
+interface ContributionEvent {
+  contributor: string
+  amount: string
+  blockNumber: number
+  blockTimestamp: Date
+  transactionHash: string
   avatarUrl: string
 }
 
-export default function Contributors({ campaignId }: ContributorsProps) {
-  const [contributors, setContributors] = useState<Contributor[]>([])
+export default function Contributors({ campaignId, tokenAddress }: ContributorsProps) {
+  const [contributionEvents, setContributionEvents] = useState<ContributionEvent[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [copiedAddress, setCopiedAddress] = useState<string | null>(null)
+  const { getTokenByAddress } = useTokens()
+  const token = getTokenByAddress(tokenAddress)
 
   useEffect(() => {
-    const fetchContributors = async () => {
+    const fetchContributionEvents = async () => {
       if (!campaignId) return
 
       try {
         setIsLoading(true)
         const contributionEventsRef = collection(db, 'contributionEvents')
-        const q = query(contributionEventsRef, where('campaignId', '==', campaignId))
+        const q = query(
+          contributionEventsRef, 
+          where('campaignId', '==', campaignId),
+          orderBy('blockTimestamp', 'desc')
+        )
         const querySnapshot = await getDocs(q)
 
-        // Get unique contributors
-        const uniqueContributors = new Set<string>()
-        querySnapshot.forEach(doc => {
+        const events = querySnapshot.docs.map(doc => {
           const data = doc.data()
-          if (data.contributor) {
-            uniqueContributors.add(data.contributor.toLowerCase())
+          return {
+            contributor: data.contributor.toLowerCase(),
+            amount: data.amount,
+            blockNumber: data.blockNumber,
+            blockTimestamp: data.blockTimestamp.toDate(),
+            transactionHash: data.transactionHash,
+            avatarUrl: generateAvatar(data.contributor.toLowerCase())
           }
         })
 
-        // Convert to array and add avatar URLs
-        const contributorsArray = Array.from(uniqueContributors).map(address => ({
-          address,
-          avatarUrl: generateAvatar(address)
-        }))
-
-        setContributors(contributorsArray)
+        setContributionEvents(events)
       } catch (error) {
-        console.error('Error fetching contributors:', error)
+        console.error('Error fetching contribution events:', error)
       } finally {
         setIsLoading(false)
       }
     }
 
-    fetchContributors()
+    fetchContributionEvents()
   }, [campaignId])
 
-  const handleCopy = async (address: string) => {
+  const handleCopy = async (text: string) => {
     try {
-      await navigator.clipboard.writeText(address)
-      setCopiedAddress(address)
-      toast.success('Address copied!')
+      await navigator.clipboard.writeText(text)
+      setCopiedAddress(text)
+      toast.success('Copied to clipboard!')
       setTimeout(() => setCopiedAddress(null), 2000)
     } catch (error) {
       console.error('Failed to copy:', error)
-      toast.error('Failed to copy address')
+      toast.error('Failed to copy to clipboard')
+    }
+  }
+
+  const formatAmount = (amount: string) => {
+    if (!token) return '0'
+    try {
+      const formattedAmount = formatUnits(amount, token.decimals)
+      return formatNumber(Number(formattedAmount))
+    } catch (error) {
+      console.error('Error formatting amount:', error)
+      return '0'
     }
   }
 
   if (isLoading) {
-    return <div className="animate-pulse">Loading contributors...</div>
+    return (
+      <div className="flex items-center justify-center p-8">
+        <div className="animate-pulse text-gray-500">Loading contribution history...</div>
+      </div>
+    )
   }
 
-  if (contributors.length === 0) {
-    return <div className="text-gray-500">No contributors yet</div>
+  if (contributionEvents.length === 0) {
+    return (
+      <div className="flex items-center justify-center p-8">
+        <div className="text-gray-500">No contributions yet</div>
+      </div>
+    )
   }
 
   return (
-    <div className="flex flex-wrap gap-4 items-center justify-center">
-      {contributors.map((contributor) => (
-        <div 
-          key={contributor.address}
-          className="flex flex-col items-center space-y-2 group relative"
-        >
-          <div className="relative">
-            <img
-              src={contributor.avatarUrl}
-              alt={`Contributor ${shortenAddress(contributor.address)}`}
-              className="w-16 h-16 rounded-full border-2 border-gray-200"
-            />
-          </div>
-          <span className="text-sm text-gray-600">
-            {shortenAddress(contributor.address)}
-          </span>
-          {/* Tooltip */}
-          <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 bg-white shadow-lg rounded-lg opacity-0 group-hover:opacity-100 transition-opacity">
-            <div className="p-4">
-              <h3 className="text-sm font-medium text-gray-900 mb-1">Contributor Address</h3>
-              <div className="flex items-center gap-2">
-                <span className="text-sm text-gray-600 font-mono">{contributor.address}</span>
-                <button
-                  onClick={(e) => {
-                    e.preventDefault()
-                    e.stopPropagation()
-                    handleCopy(contributor.address)
-                  }}
-                  className="text-gray-400 hover:text-gray-600 transition-colors focus:outline-none"
-                  title="Copy address"
-                >
-                  {copiedAddress === contributor.address ? (
-                    <ClipboardDocumentCheckIcon className="h-5 w-5" />
-                  ) : (
-                    <ClipboardIcon className="h-5 w-5" />
-                  )}
-                </button>
+    <div className="flow-root px-4">
+      <ul role="list" className="-mb-8">
+        {contributionEvents.map((event, eventIdx) => (
+          <li key={event.transactionHash}>
+            <div className="relative pb-8">
+              {eventIdx !== contributionEvents.length - 1 ? (
+                <span
+                  className="absolute left-5 top-5 -ml-px h-full w-0.5 bg-gray-200"
+                  aria-hidden="true"
+                />
+              ) : null}
+              <div className="relative flex items-start space-x-3">
+                <div className="relative">
+                  <img
+                    className="flex h-10 w-10 items-center justify-center rounded-full bg-gray-400 ring-8 ring-white"
+                    src={event.avatarUrl}
+                    alt={`Contributor ${shortenAddress(event.contributor)}`}
+                  />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="text-sm">
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium text-gray-900">
+                        {shortenAddress(event.contributor)}
+                      </span>
+                      <button
+                        onClick={() => handleCopy(event.contributor)}
+                        className="text-gray-400 hover:text-gray-600"
+                        title="Copy address"
+                      >
+                        {copiedAddress === event.contributor ? (
+                          <ClipboardDocumentCheckIcon className="h-4 w-4" />
+                        ) : (
+                          <ClipboardIcon className="h-4 w-4" />
+                        )}
+                      </button>
+                    </div>
+                    <p className="mt-0.5 text-sm text-gray-500">
+                      Contributed {formatAmount(event.amount)} {token?.symbol || 'tokens'} • {formatDistanceToNow(event.blockTimestamp, { addSuffix: true })}
+                    </p>
+                    <div className="mt-2 text-sm text-gray-500">
+                      <a
+                        href={`https://basescan.org/tx/${event.transactionHash}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-blue-600 hover:text-blue-800"
+                      >
+                        View transaction →
+                      </a>
+                    </div>
+                  </div>
+                </div>
+                <div className="flex-shrink-0 self-center">
+                  <div className="text-sm text-gray-500">
+                    Block #{event.blockNumber}
+                  </div>
+                </div>
               </div>
-              <a
-                href={`https://basescan.org/address/${contributor.address}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-sm text-blue-600 hover:text-blue-800 mt-2 inline-block"
-              >
-                View on Basescan →
-              </a>
             </div>
-          </div>
-        </div>
-      ))}
+          </li>
+        ))}
+      </ul>
     </div>
   )
 }
