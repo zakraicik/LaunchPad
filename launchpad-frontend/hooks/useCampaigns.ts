@@ -10,7 +10,7 @@ export interface Campaign {
   description: string
   category?: string
   targetAmount: string
-  totalRaised: string
+  totalContributions: string
   status: 'draft' | 'active' | 'completed' | 'cancelled'
   createdAt: Timestamp
   contributors: number
@@ -109,7 +109,7 @@ export function useCampaigns ({ filterByOwner = false }: UseCampaignsOptions = {
               description: data.description || '',
               category: data.category,
               targetAmount: data.goalAmountSmallestUnits || '0',
-              totalRaised: data.totalContributions || '0',
+              totalContributions: data.totalContributions || '0',
               status: getStatusFromNumber(data.status),
               createdAt: data.createdAt,
               contributors: uniqueContributors.size,

@@ -29,8 +29,9 @@ export default function CampaignCard({ campaign, onClick }: CampaignCardProps) {
   }
 
   const progress =
-    campaign.totalRaised && campaign.targetAmount
-      ? (Number(campaign.totalRaised) / Number(campaign.targetAmount)) * 100
+    campaign.totalContributions && campaign.goalAmountSmallestUnits
+      ? (Number(formatUnits(campaign.totalContributions, token?.decimals || 18)) / 
+         Number(formatUnits(campaign.goalAmountSmallestUnits, token?.decimals || 18))) * 100
       : 0
 
   const isShortOfGoal = progress < 100
@@ -112,13 +113,13 @@ export default function CampaignCard({ campaign, onClick }: CampaignCardProps) {
             <div>
               <span className='text-gray-600'>Raised</span>
               <p className='font-medium bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent'>
-                {formatAmount(campaign.totalRaised)} {token?.symbol}
+                {formatAmount(campaign.totalContributions)} {token?.symbol}
               </p>
             </div>
             <div>
               <span className='text-gray-600'>Target</span>
               <p className='font-medium bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent'>
-                {formatAmount(campaign.targetAmount)} {token?.symbol}
+                {formatAmount(campaign.goalAmountSmallestUnits)} {token?.symbol}
               </p>
             </div>
           </div>
@@ -131,21 +132,21 @@ export default function CampaignCard({ campaign, onClick }: CampaignCardProps) {
               </p>
             </div>
             <div>
-              <span className='text-gray-600'>Time Left</span>
-              {isEnded ? (
-                progress >= 100 ? (
-                  <div className='inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800'>
-                    Goal Reached
-                  </div>
-                ) : (
-                  <div className='inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800'>
-                    Goal Not Reached
-                  </div>
-                )
+              {progress >= 100 ? (
+                <div className='inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800'>
+                  Successful
+                </div>
+              ) : isEnded ? (
+                <div className='inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800'>
+                  Goal Not Reached
+                </div>
               ) : (
-                <p className='font-medium bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent'>
-                  {timeLeft}
-                </p>
+                <>
+                  <span className='text-gray-600'>Time Left</span>
+                  <p className='font-medium bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent'>
+                    {timeLeft}
+                  </p>
+                </>
               )}
             </div>
           </div>

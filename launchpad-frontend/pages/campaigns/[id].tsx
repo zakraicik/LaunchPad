@@ -1,6 +1,6 @@
 import { useRouter } from 'next/router'
 import { useState, useEffect } from 'react'
-import { ShareIcon, ArrowLeftIcon } from '@heroicons/react/24/outline'
+import { ShareIcon, ArrowLeftIcon, RocketLaunchIcon, BanknotesIcon } from '@heroicons/react/24/outline'
 import Contributors from '../../components/campaigns/Contributors'
 import CampaignDetails from '../../components/campaigns/CampaignDetails'
 import { formatNumber } from '../../utils/format'
@@ -42,7 +42,7 @@ interface Campaign {
 export default function CampaignDetail () {
   const router = useRouter()
   const { id } = router.query
-  const [activeTab, setActiveTab] = useState('balances')
+  const [activeTab, setActiveTab] = useState('contributors')
   const [campaign, setCampaign] = useState<Campaign | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const { getTokenByAddress } = useTokens()
@@ -51,6 +51,7 @@ export default function CampaignDetail () {
   const { claimFunds, isClaiming } = useClaimFunds()
   const { contribute, isContributing } = useContribute()
   const { requestRefund, isRequestingRefund } = useRequestRefund()
+  const { hasClaimed, isChecking } = useHasClaimedFunds(campaign?.campaignAddress)
   const { address, isConnected } = useAccount()
   const { data: walletClient } = useWalletClient()
   const publicClient = usePublicClient()
@@ -65,7 +66,7 @@ export default function CampaignDetail () {
     return () => {
       setCampaign(null)
       setIsLoading(true)
-      setActiveTab('balances')
+      setActiveTab('contributors')
       setMounted(false)
     }
   }, [])
@@ -74,7 +75,7 @@ export default function CampaignDetail () {
     if (id) {
       setCampaign(null)
       setIsLoading(true)
-      setActiveTab('balances')
+      setActiveTab('contributors')
     }
   }, [id])
 
@@ -243,8 +244,6 @@ export default function CampaignDetail () {
     }
   }
 
-
-
   const canContribute = (): boolean => {
     return !isCampaignEnded() && !isSuccessful()
   }
@@ -348,14 +347,14 @@ export default function CampaignDetail () {
   }
 
   const isOwner = address && campaign?.creator && address.toLowerCase() === campaign.creator.toLowerCase()
-  const canClaimFunds = isOwner && (isCampaignEnded() || isSuccessful()) && !campaign?.hasClaimed
+  const canClaimFunds = isOwner && (isCampaignEnded() || isSuccessful()) && !hasClaimed
 
   const handleClaimFunds = async () => {
     if (!campaign?.campaignAddress || !canClaimFunds) return
 
     try {
       await claimFunds(campaign.campaignAddress)
-      // Refresh campaign data after successful claim
+      // No need to manually set hasClaimed - React Query will handle the cache invalidation
       await fetchCampaign(campaign.id)
     } catch (error: any) {
       console.error('Error in handleClaimFunds:', error)
@@ -373,9 +372,9 @@ export default function CampaignDetail () {
         {/* Back Button */}
         <button
           onClick={() => router.back()}
-          className="mb-6 flex items-center text-gray-600 hover:text-gray-900 transition-colors"
+          className="mb-6 flex items-center text-sm text-gray-600 hover:text-gray-900 transition-colors"
         >
-          <ArrowLeftIcon className="h-5 w-5 mr-2" />
+          <ArrowLeftIcon className="h-4 w-4 mr-2" />
           Back to Campaigns
         </button>
 
@@ -383,32 +382,43 @@ export default function CampaignDetail () {
         <div className='grid grid-cols-1 md:grid-cols-2 gap-6 mb-6'>
           {/* Campaign Description Container */}
           <div className='bg-white rounded-lg shadow-sm p-6'>
-            <h2 className='text-xl font-semibold mb-4'>Campaign Description</h2>
-            <p className='text-gray-600'>{campaign.description}</p>
+            <h2 className='text-base font-semibold mb-4'>Campaign Description</h2>
+            <p className='text-sm text-gray-600'>{campaign.description}</p>
           </div>
 
           {/* Quick Stats Container */}
           <div className='bg-white rounded-lg shadow-sm p-6'>
             <div className='grid grid-cols-3 gap-4'>
               <div className='text-center'>
-                <p className='text-base md:text-lg font-medium'>
+                <p className='text-base font-medium'>
                   {campaign.contributors || 0}
                 </p>
-                <p className='text-xs md:text-sm text-gray-500'>Contributors</p>
+                <p className='text-xs text-gray-500'>Contributors</p>
               </div>
               <div className='text-center'>
-                <CampaignTimer
-                  startTime={campaign.createdAt instanceof Date ? campaign.createdAt.getTime() / 1000 : typeof campaign.createdAt === 'string' ? new Date(campaign.createdAt).getTime() / 1000 : campaign.createdAt.toDate().getTime() / 1000}
-                  endTime={campaign.createdAt instanceof Date ? campaign.createdAt.getTime() / 1000 + Number(campaign.duration) * 24 * 60 * 60 : typeof campaign.createdAt === 'string' ? new Date(campaign.createdAt).getTime() / 1000 + Number(campaign.duration) * 24 * 60 * 60 : campaign.createdAt.toDate().getTime() / 1000 + Number(campaign.duration) * 24 * 60 * 60}
-                  duration={Number(campaign.duration)}
-                />
-                <p className='text-xs md:text-sm text-gray-500'>Time Remaining</p>
+                {isSuccessful() ? (
+                  <>
+                    <p className='text-base font-medium text-green-600'>
+                      Successful
+                    </p>
+                    <p className='text-xs text-gray-500'>Campaign Status</p>
+                  </>
+                ) : (
+                  <>
+                    <CampaignTimer
+                      startTime={campaign.createdAt instanceof Date ? campaign.createdAt.getTime() / 1000 : typeof campaign.createdAt === 'string' ? new Date(campaign.createdAt).getTime() / 1000 : campaign.createdAt.toDate().getTime() / 1000}
+                      endTime={campaign.createdAt instanceof Date ? campaign.createdAt.getTime() / 1000 + Number(campaign.duration) * 24 * 60 * 60 : typeof campaign.createdAt === 'string' ? new Date(campaign.createdAt).getTime() / 1000 + Number(campaign.duration) * 24 * 60 * 60 : campaign.createdAt.toDate().getTime() / 1000 + Number(campaign.duration) * 24 * 60 * 60}
+                      duration={Number(campaign.duration)}
+                    />
+                    <p className='text-xs text-gray-500'>Time Remaining</p>
+                  </>
+                )}
               </div>
               <div className='text-center'>
-                <p className='text-base md:text-lg font-medium'>
+                <p className='text-base font-medium'>
                   {token?.symbol || 'Loading...'}
                 </p>
-                <p className='text-xs md:text-sm text-gray-500'>Target Coin</p>
+                <p className='text-xs text-gray-500'>Target Coin</p>
               </div>
             </div>
 
@@ -422,18 +432,18 @@ export default function CampaignDetail () {
               </div>
               <div className='flex justify-between items-center mt-4'>
                 <div>
-                  <p className='text-base md:text-lg font-medium'>
+                  <p className='text-base font-medium'>
                     {formattedRaised} {token?.symbol}
                   </p>
-                  <p className='text-xs md:text-sm text-gray-500'>
+                  <p className='text-xs text-gray-500'>
                     raised of {formattedGoal} {token?.symbol}
                   </p>
                 </div>
                 <div className='text-right'>
-                  <p className='text-base md:text-lg font-medium'>
+                  <p className='text-base font-medium'>
                     {formattedGoal} {token?.symbol}
                   </p>
-                  <p className='text-xs md:text-sm text-gray-500'>Goal Amount</p>
+                  <p className='text-xs text-gray-500'>Goal Amount</p>
                 </div>
               </div>
             </div>
@@ -442,38 +452,39 @@ export default function CampaignDetail () {
 
         {/* Campaign Details and Contribution Section */}
         <div className='grid grid-cols-1 md:grid-cols-2 gap-6 mb-6'>
-          {/* Campaign Details Card */}
-          <div className='bg-white rounded-lg shadow-sm'>
-            <div className='p-6'>
-              <h2 className='text-xl font-semibold mb-4'>Campaign Details</h2>
-              <CampaignDetails
-                category={campaign.category}
-                campaignAddress={campaign.campaignAddress}
-                owner={campaign.creator}
-                githubUrl={campaign.githubUrl}
-              />
-            </div>
-          </div>
-
           {/* Contribution Form */}
           {canContribute() ? (
-            <div className='bg-white rounded-lg shadow-sm p-6'>
-              <h2 className='text-xl font-bold mb-4'>Make a Contribution</h2>
-              <div className='space-y-4'>
-                <div>
-                  <label className='block text-sm font-medium text-gray-700 mb-1'>
-                    Amount ({token?.symbol})
-                  </label>
-                  <input
-                    type='number'
-                    min='0'
-                    value={contributionAmount}
-                    onChange={e => setContributionAmount(e.target.value)}
-                    placeholder='Enter amount'
-                    className='w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500'
-                    disabled={isContributing}
-                  />
+            <div className='bg-white rounded-lg shadow-sm flex flex-col justify-center p-8'>
+              <div className='flex items-center gap-8 mb-6'>
+                <div className='flex-1'>
+                  <div className='flex flex-col items-center text-center'>
+                    <RocketLaunchIcon className='h-8 w-8 text-blue-600 mb-2' />
+                    <h2 className='text-xl font-bold text-gray-900'>Make a Contribution</h2>
+                    <p className='text-sm text-gray-600'>Support this campaign and help make it a reality</p>
+                  </div>
                 </div>
+                <div className='flex-1'>
+                  <label htmlFor="amount" className='block text-sm font-medium text-gray-700 mb-1'>
+                    Amount
+                  </label>
+                  <div className='relative mt-1'>
+                    <input
+                      id="amount"
+                      type='number'
+                      min='0'
+                      value={contributionAmount}
+                      onChange={e => setContributionAmount(e.target.value)}
+                      placeholder='Enter amount'
+                      className='w-full px-4 py-2.5 bg-white border-2 border-gray-200 rounded-lg text-base font-medium focus:outline-none focus:ring-2 focus:ring-gray-100 focus:border-gray-400 transition-all'
+                      disabled={isContributing}
+                    />
+                    <div className='absolute inset-y-0 right-0 flex items-center pr-4 pointer-events-none'>
+                      <span className='text-gray-900 font-medium'>{token?.symbol}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div className='relative'>
                 <button
                   onClick={handleContribute}
                   disabled={
@@ -482,48 +493,128 @@ export default function CampaignDetail () {
                     !contributionAmount ||
                     !campaign?.campaignAddress
                   }
-                  className='w-full bg-blue-600 text-white py-3 px-4 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed'
+                  className='w-full bg-blue-600 text-white py-2.5 px-6 rounded-full text-base font-medium hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 group'
                 >
-                  {isContributing ? 'Contributing...' : 'Contribute'}
+                  {isContributing ? (
+                    <>
+                      <div className='animate-spin rounded-full h-4 w-4 border-b-2 border-white'></div>
+                      <span>Contributing...</span>
+                    </>
+                  ) : (
+                    <>
+                      <RocketLaunchIcon className='h-4 w-4' />
+                      <span>Contribute</span>
+                    </>
+                  )}
+                  {/* Tooltip - only show when button is disabled and has an error message */}
+                  {(!isConnected || !contributionAmount || !campaign?.campaignAddress) && (
+                    <div className='absolute -top-12 left-1/2 -translate-x-1/2 px-3 py-2 bg-gray-900 text-white text-sm rounded-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all pointer-events-none whitespace-nowrap'>
+                      {!isConnected ? (
+                        "Please connect your wallet to contribute"
+                      ) : !contributionAmount ? (
+                        "Please enter an amount"
+                      ) : !campaign?.campaignAddress ? (
+                        "Campaign contract address not found"
+                      ) : null}
+                      {/* Tooltip arrow */}
+                      <div className='absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-full w-0 h-0 border-l-8 border-l-transparent border-r-8 border-r-transparent border-t-8 border-t-gray-900'></div>
+                    </div>
+                  )}
                 </button>
-                {!isConnected && (
-                  <p className='text-sm text-red-600'>
-                    Please connect your wallet to contribute
-                  </p>
-                )}
-                {!campaign?.campaignAddress && (
-                  <p className='text-sm text-red-600'>
-                    Campaign contract address not found
-                  </p>
-                )}
               </div>
             </div>
           ) : (
-            <div className='bg-white rounded-lg shadow-sm p-6'>
-              <h2 className='text-xl font-bold mb-4'>{isSuccessful() ? 'Campaign Successful' : 'Campaign Ended'}</h2>
-              <p className='text-gray-600'>
-                {isSuccessful() 
-                  ? 'This campaign has reached its goal and is no longer accepting contributions.'
-                  : 'This campaign has ended and is no longer accepting contributions.'}
-              </p>
+            <div className='bg-white rounded-lg shadow-sm p-8'>              
+              {/* Campaign Owner Actions */}
+              {isOwner && (isSuccessful() || isCampaignEnded()) && (
+                <div className='mb-6'>
+                  {hasClaimed ? (
+                    <div className='text-center py-8'>
+                      <RocketLaunchIcon className='h-12 w-12 mx-auto mb-4 text-blue-600 animate-bounce' />
+                      <h3 className='text-xl font-bold text-gray-900 mb-2'>
+                        Funds Successfully Claimed!
+                      </h3>
+                      <p className='text-sm text-gray-600'>
+                        You have the funds. Now go build something amazing! 🚀
+                      </p>
+                    </div>
+                  ) : (
+                    <div className='flex flex-col items-center justify-center py-6'>
+                      <div className='flex flex-col items-center text-center'>
+                        <BanknotesIcon className='h-8 w-8 text-blue-600 mb-3' />
+                        <h2 className='text-xl font-bold text-gray-900 mb-1.5'>Claim Campaign Funds</h2>
+                        <p className='text-sm text-gray-600 mb-4'>The campaign was successful! Claim your funds to start building.</p>
+                        <button
+                          onClick={handleClaimFunds}
+                          disabled={isClaiming}
+                          className='w-64 bg-blue-600 text-white py-2.5 px-4 rounded-full text-sm font-medium hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2'
+                        >
+                          {isClaiming ? (
+                            <>
+                              <div className='animate-spin rounded-full h-4 w-4 border-b-2 border-white'></div>
+                              <span>Claiming...</span>
+                            </>
+                          ) : (
+                            <span>Claim Funds</span>
+                          )}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Contributor Actions */}
+              {!isOwner && (
+                <div>
+                  {isSuccessful() ? (
+                    <div className='text-center py-8'>
+                      <RocketLaunchIcon className='h-12 w-12 mx-auto mb-4 text-blue-600 animate-bounce' />
+                      <h3 className='text-xl font-bold text-gray-900 mb-2'>
+                        Owner is Building! 🚀
+                      </h3>
+                      <p className='text-sm text-gray-600'>
+                        Campaign was successful, which means it was no longer accepting contributions.
+                      </p>
+                    </div>
+                  ) : isCampaignEnded() && (
+                    <>
+                      <p className='text-sm text-gray-600 mb-4'>
+                        {hasClaimed 
+                          ? 'Campaign funds have been claimed. You can now request a refund.' 
+                          : 'Refunds will be available after the campaign owner claims funds'}
+                      </p>
+                      <button
+                        onClick={handleRequestRefund}
+                        disabled={!hasClaimed || isRequestingRefund}
+                        className='w-full bg-red-600 text-white py-2.5 px-4 rounded-full text-sm font-medium hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed'
+                      >
+                        {isRequestingRefund ? 'Requesting...' : 'Request Refund'}
+                      </button>
+                    </>
+                  )}
+                </div>
+              )}
             </div>
           )}
+
+          {/* Campaign Details Card */}
+          <div className='bg-white rounded-lg shadow-sm'>
+            <div className='p-6'>
+              <CampaignDetails
+                category={campaign.category}
+                campaignAddress={campaign.campaignAddress}
+                owner={campaign.creator}
+                githubUrl={campaign.githubUrl}
+              />
+            </div>
+          </div>
         </div>
 
         {/* Navigation Tabs */}
         <div className='bg-white rounded-lg shadow-sm mb-6'>
           <div className='border-b'>
             <nav className='flex overflow-x-auto scrollbar-hide'>
-              <button
-                onClick={() => setActiveTab('balances')}
-                className={`flex-1 px-3 md:px-6 py-2.5 md:py-4 text-xs md:text-sm font-medium whitespace-nowrap ${
-                  activeTab === 'balances'
-                    ? 'border-b-2 border-blue-600 text-blue-600'
-                    : 'text-gray-500 hover:text-gray-700'
-                }`}
-              >
-                Campaign Balances
-              </button>
               <button
                 onClick={() => setActiveTab('contributors')}
                 className={`flex-1 px-3 md:px-6 py-2.5 md:py-4 text-xs md:text-sm font-medium whitespace-nowrap ${
@@ -534,18 +625,16 @@ export default function CampaignDetail () {
               >
                 Contributors
               </button>
-              {(isCampaignEnded() || isSuccessful()) && (
-                <button
-                  onClick={() => setActiveTab('actions')}
-                  className={`flex-1 px-3 md:px-6 py-2.5 md:py-4 text-xs md:text-sm font-medium whitespace-nowrap ${
-                    activeTab === 'actions'
-                      ? 'border-b-2 border-blue-600 text-blue-600'
-                      : 'text-gray-500 hover:text-gray-700'
-                  }`}
-                >
-                  Campaign Actions
-                </button>
-              )}
+              <button
+                onClick={() => setActiveTab('balances')}
+                className={`flex-1 px-3 md:px-6 py-2.5 md:py-4 text-xs md:text-sm font-medium whitespace-nowrap ${
+                  activeTab === 'balances'
+                    ? 'border-b-2 border-blue-600 text-blue-600'
+                    : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                Campaign Balances
+              </button>
             </nav>
           </div>
 
@@ -571,111 +660,37 @@ export default function CampaignDetail () {
                               'Loading...'
                             ) : (
                               `${formatAmount(tokenBalance)} ${token?.symbol}`
-                            )}
-                          </span>
-                        </div>
-                        <div className='flex justify-between items-center'>
-                          <span className='text-sm text-gray-500'>Amount in Yield Generation</span>
-                          <span className='text-sm font-medium'>
-                            {isLoadingYield ? (
-                              'Loading...'
-                            ) : (
-                              `${formatAmount(aTokenBalance)} ${token?.symbol}`
-                            )}
-                          </span>
-                        </div>
-                      </>
-                    ) : (
-                      <>
-                        <div className='flex justify-between items-center'>
-                          <span className='text-sm text-gray-500'>Amount in Contract</span>
-                          <span className='text-sm font-medium'>
-                            {isLoadingBalance ? (
-                              'Loading...'
-                            ) : (
-                              `${formatAmount(tokenBalance)} ${token?.symbol}`
-                            )}
-                          </span>
-                        </div>
-                        <div className='flex justify-between items-center'>
-                          <span className='text-sm text-gray-500'>Amount Claimed</span>
-                          <span className='text-sm font-medium'>{campaign.hasClaimed ? formatAmount(tokenBalance) : '0'} {token?.symbol}</span>
-                        </div>
-                        <div className='flex justify-between items-center'>
-                          <span className='text-sm text-gray-500'>Amount Available for Refunds</span>
-                          <span className='text-sm font-medium'>{campaign.hasClaimed ? '0' : formatAmount(tokenBalance)} {token?.symbol}</span>
-                        </div>
-                      </>
-                    )}
+                            )
+                          }
+                        </span>
+                      </div>
+                      <div className='flex justify-between items-center'>
+                        <span className='text-sm text-gray-500'>Amount in aTokens</span>
+                        <span className='text-sm font-medium'>
+                          {isLoadingYield ? (
+                            'Loading...'
+                          ) : (
+                            `${formatAmount(aTokenBalance)} ${token?.symbol}`
+                          )
+                        }
+                        </span>
+                      </div>
+                    </>
+                  ) : (
+                    <div className='flex justify-between items-center'>
+                      <span className='text-sm text-gray-500'>Amount in Contract</span>
+                      <span className='text-sm font-medium'>
+                        {isLoadingBalance ? (
+                          'Loading...'
+                        ) : (
+                          `${formatAmount(tokenBalance)} ${token?.symbol}`
+                        )
+                      }
+                      </span>
+                    </div>
+                  )}
                   </div>
                 </div>
-              </div>
-            )}
-
-            {activeTab === 'actions' && (
-              <div className='space-y-6'>
-                {/* Owner Actions */}
-                {isOwner && (
-                  <div>
-                    <div className='flex items-center justify-between'>
-                      <div>
-                        <h4 className='text-sm font-medium text-gray-900'>Campaign Owner Actions</h4>
-                        <p className='text-sm text-gray-500'>
-                          {isSuccessful() 
-                            ? 'Claim raised funds from your successful campaign'
-                            : isCampaignEnded()
-                              ? 'Claim campaign funds to enable contributor refunds'
-                              : 'Campaign is still active'}
-                        </p>
-                      </div>
-                      {(isSuccessful() || isCampaignEnded()) && (
-                        <button
-                          onClick={handleClaimFunds}
-                          disabled={isClaiming || campaign.hasClaimed}
-                          className='bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed'
-                        >
-                          {isClaiming ? 'Claiming...' : campaign.hasClaimed ? 'Funds Claimed' : 'Claim Funds'}
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                {/* Success Message for Contributors */}
-                {!isOwner && isSuccessful() && (
-                  <div className='text-center py-4'>
-                    <p className='text-gray-500'>This campaign has successfully reached its goal. No refund actions are available.</p>
-                  </div>
-                )}
-
-                {/* Contributor Actions - Only show for unsuccessful campaigns */}
-                {!isOwner && !isSuccessful() && isCampaignEnded() && (
-                  <div>
-                    <div className='flex items-center justify-between'>
-                      <div>
-                        <h4 className='text-sm font-medium text-gray-900'>Contributor Actions</h4>
-                        <p className='text-sm text-gray-500'>
-                          {campaign.hasClaimed 
-                            ? 'Campaign funds have been claimed. You can now request a refund.' 
-                            : 'Refunds will be available after the campaign owner claims funds'}
-                        </p>
-                      </div>
-                      <button
-                        onClick={handleRequestRefund}
-                        disabled={!campaign.hasClaimed || isRequestingRefund}
-                        className='group relative bg-red-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed'
-                        title={!campaign.hasClaimed ? 'Waiting for campaign owner to claim funds' : 'Request refund'}
-                      >
-                        {isRequestingRefund ? 'Requesting...' : 'Request Refund'}
-                        {!campaign.hasClaimed && (
-                          <div className='absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-1 bg-gray-900 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap'>
-                            Waiting for owner to claim funds
-                          </div>
-                        )}
-                      </button>
-                    </div>
-                  </div>
-                )}
               </div>
             )}
           </div>

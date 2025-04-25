@@ -64,11 +64,24 @@ export default function CampaignsDiscovery() {
     // Calculate campaign end date
     const createdAtDate = campaign.createdAt.seconds * 1000
 
-    const endDate =  createdAtDate + campaign.duration * 24 * 60 * 60 *1000
+    const endDate = createdAtDate + campaign.duration * 24 * 60 * 60 * 1000
 
     const now = Date.now()
     
-    const isActive =  now < endDate
+    const isActive = now < endDate
+
+    // Check if campaign is successful (raised amount >= goal amount)
+    const isSuccessful = campaign.totalContributions && campaign.goalAmountSmallestUnits && 
+      BigInt(campaign.totalContributions) >= BigInt(campaign.goalAmountSmallestUnits)
+
+    // Debug logging
+    console.log('Campaign filtering:', {
+      title: campaign.title,
+      totalContributions: campaign.totalContributions,
+      goalAmount: campaign.goalAmountSmallestUnits,
+      isSuccessful,
+      isActive
+    })
 
     // Apply search and category filters
     const matchesSearch =
@@ -78,8 +91,8 @@ export default function CampaignsDiscovery() {
     const matchesCategory =
       selectedCategory === 'all' || campaign.category === selectedCategory
 
-    // Only include active campaigns that match search and category
-    return isActive && matchesSearch && matchesCategory
+    // Only include active campaigns that are not successful and match search and category
+    return isActive && !isSuccessful && matchesSearch && matchesCategory
   })
 
   // Sort campaigns based on selected sort option
@@ -90,7 +103,9 @@ export default function CampaignsDiscovery() {
       case 'endingSoon':
         return Number(a.createdAt) - Number(b.createdAt)
       case 'mostFunded':
-        return Number(b.totalRaised) - Number(a.totalRaised)
+        const bContrib = b.totalContributions ? BigInt(b.totalContributions) : BigInt(0)
+        const aContrib = a.totalContributions ? BigInt(a.totalContributions) : BigInt(0)
+        return bContrib > aContrib ? 1 : bContrib < aContrib ? -1 : 0
       case 'mostBackers':
         return (b.contributors || 0) - (a.contributors || 0)
       default:

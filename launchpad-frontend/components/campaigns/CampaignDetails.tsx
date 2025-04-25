@@ -61,7 +61,7 @@ export default function CampaignDetails({
 
       {/* Additional Details */}
       <div className='bg-gray-50 rounded-lg p-3 md:p-4'>
-        <h3 className='text-sm font-medium text-gray-900 mb-3 md:mb-4'>Campaign Information</h3>
+        <h3 className='text-sm font-medium text-gray-900 mb-3 md:mb-4'>Campaign MetaData</h3>
         <div className='space-y-3 md:space-y-4'>
           {category && (
             <div className='flex flex-col md:flex-row md:items-center md:justify-between gap-1 md:gap-0'>
