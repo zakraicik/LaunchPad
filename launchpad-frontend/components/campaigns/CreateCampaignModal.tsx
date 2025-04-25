@@ -52,12 +52,13 @@ export default function CreateCampaignModal ({
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const cancelButtonRef = useRef(null)
-
   const formRef = useRef<HTMLFormElement>(null)
 
   // Handle hydration
   useEffect(() => {
-    setMounted(true)
+    requestAnimationFrame(() => {
+      setMounted(true)
+    })
     return () => {
       setMounted(false)
     }
@@ -65,16 +66,24 @@ export default function CreateCampaignModal ({
 
   // Reset form when modal is opened
   useEffect(() => {
-    if (isOpen && mounted) {
-      setTitle('')
-      setDescription('')
-      setTargetAmount('')
-      setSelectedToken('')
-      setDuration('')
-      setCategory('')
-      setGithubUrl('')
-      setError(null)
-      setIsSubmitting(false)
+    if (!mounted) return
+
+    const resetForm = () => {
+      requestAnimationFrame(() => {
+        setTitle('')
+        setDescription('')
+        setTargetAmount('')
+        setSelectedToken('')
+        setDuration('')
+        setCategory('')
+        setGithubUrl('')
+        setError(null)
+        setIsSubmitting(false)
+      })
+    }
+
+    if (isOpen) {
+      resetForm()
     }
   }, [isOpen, mounted])
 
@@ -82,10 +91,14 @@ export default function CreateCampaignModal ({
     e.preventDefault()
     if (!mounted) return
 
-    setError(null)
+    requestAnimationFrame(() => {
+      setError(null)
+    })
 
     if (!isConnected) {
-      setError('Please connect your wallet')
+      requestAnimationFrame(() => {
+        setError('Please connect your wallet')
+      })
       return
     }
 
@@ -98,23 +111,28 @@ export default function CreateCampaignModal ({
       !category ||
       !githubUrl
     ) {
-      setError('Please fill in all required fields')
+      requestAnimationFrame(() => {
+        setError('Please fill in all required fields')
+      })
       return
     }
 
     // Basic GitHub URL validation
     const githubUrlPattern = /^https:\/\/github\.com\/[\w-]+\/[\w.-]+\/?$/
     if (!githubUrlPattern.test(githubUrl)) {
-      setError('Please enter a valid GitHub repository URL')
+      requestAnimationFrame(() => {
+        setError('Please enter a valid GitHub repository URL')
+      })
       return
     }
 
     const toastId = toast.loading('Creating your campaign...')
-    setIsSubmitting(true)
+    requestAnimationFrame(() => {
+      setIsSubmitting(true)
+    })
 
     try {
       toast.loading('Deploying campaign contract...', { id: toastId })
-      console.log(selectedToken)
       await createCampaign(
         title,
         description,
@@ -134,10 +152,14 @@ export default function CreateCampaignModal ({
       console.error('Error creating campaign:', err)
       const errorMessage =
         err instanceof Error ? err.message : 'Failed to create campaign'
-      setError(errorMessage)
+      requestAnimationFrame(() => {
+        setError(errorMessage)
+      })
       toast.error(errorMessage, { id: toastId })
     } finally {
-      setIsSubmitting(false)
+      requestAnimationFrame(() => {
+        setIsSubmitting(false)
+      })
     }
   }
 

@@ -1,6 +1,7 @@
-import { useState, useEffect } from 'react'
+import { useQuery, UseQueryOptions } from '@tanstack/react-query'
 import { collection, getDocs } from 'firebase/firestore'
 import { db } from '../utils/firebase'
+import { useChainId } from 'wagmi'
 
 export interface Token {
   address: string
@@ -19,45 +20,46 @@ const TOKEN_MAPPINGS: { [address: string]: Partial<Token> } = {
   }
 }
 
-export function useTokens () {
-  const [tokens, setTokens] = useState<Token[]>([])
-  const [isLoading, setIsLoading] = useState(true)
-  const [error, setError] = useState<Error | null>(null)
-
-  useEffect(() => {
-    const fetchTokens = async () => {
-      try {
-        const tokensCollection = collection(db, 'tokens')
-        const snapshot = await getDocs(tokensCollection)
-        const tokensData = snapshot.docs.map(doc => {
-          const address = doc.id
-          const data = doc.data()
-          // Merge Firebase data with hardcoded mapping if it exists
-          const mappedData = TOKEN_MAPPINGS[address.toLowerCase()]
-          return {
-            ...data,
-            ...mappedData,
-            address
-          }
-        }) as Token[]
-        setTokens(tokensData)
-      } catch (err) {
-        setError(err as Error)
-      } finally {
-        setIsLoading(false)
+const fetchTokens = async (): Promise<Token[]> => {
+  try {
+    const tokensCollection = collection(db, 'tokens')
+    const snapshot = await getDocs(tokensCollection)
+    const tokensData = snapshot.docs.map(doc => {
+      const address = doc.id
+      const data = doc.data()
+      // Merge Firebase data with hardcoded mapping if it exists
+      const mappedData = TOKEN_MAPPINGS[address.toLowerCase()]
+      return {
+        ...data,
+        ...mappedData,
+        address
       }
-    }
+    }) as Token[]
+    return tokensData
+  } catch (error) {
+    console.error('Error fetching tokens:', error)
+    return []
+  }
+}
 
-    fetchTokens()
-  }, [])
+export function useTokens() {
+  const chainId = useChainId()
 
-  const getTokenByAddress = (address: string) => {
-    const token = tokens.find(
-      token => token.address.toLowerCase() === address.toLowerCase()
-    )
-    if (token) return token
+  const queryOptions: UseQueryOptions<Token[], Error, Token[], [string, number]> = {
+    queryKey: ['tokens', chainId],
+    queryFn: fetchTokens,
+    staleTime: 30000,
+    gcTime: 5 * 60 * 1000,
+    retry: 2,
+    retryDelay: 1000
+  }
 
-    // Return hardcoded mapping if token not found in Firebase
+  const { data: tokens = [], isLoading } = useQuery(queryOptions)
+
+  const getTokenByAddress = (address: string): Token | null => {
+    if (!address) return null
+
+    // First check hardcoded mappings
     const mappedToken = TOKEN_MAPPINGS[address.toLowerCase()]
     if (mappedToken) {
       return {
@@ -65,13 +67,19 @@ export function useTokens () {
         address
       } as Token
     }
+
+    // Then check fetched tokens
+    const token = tokens.find(
+      (token: Token) => token.address.toLowerCase() === address.toLowerCase()
+    )
+    if (token) return token
+
     return null
   }
 
   return {
     tokens,
     isLoading,
-    error,
     getTokenByAddress
   }
 }

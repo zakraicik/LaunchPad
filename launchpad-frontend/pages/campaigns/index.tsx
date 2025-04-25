@@ -9,7 +9,6 @@ import CampaignFilters from '../../components/campaigns/CampaignFilters'
 import CreateCampaignModal from '../../components/campaigns/CreateCampaignModal'
 import { useCampaigns } from '../../hooks/useCampaigns'
 import { useRouter } from 'next/router'
-import { Timestamp } from 'firebase/firestore'
 import { useChainId } from 'wagmi'
 
 export default function CampaignsDiscovery() {
@@ -43,7 +42,9 @@ export default function CampaignsDiscovery() {
   }, [chainId, mounted, refresh])
 
   useEffect(() => {
-    setMounted(true)
+    requestAnimationFrame(() => {
+      setMounted(true)
+    })
   }, [])
 
   const handleCategoryChange = (category: string) => {
@@ -178,7 +179,20 @@ export default function CampaignsDiscovery() {
         )}
 
         {/* Campaign Grid */}
-        {sortedCampaigns.length > 0 ? (
+        {isLoading ? (
+          <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6'>
+            {[...Array(6)].map((_, i) => (
+              <div key={i} className='bg-white rounded-lg shadow-sm p-6 animate-pulse'>
+                <div className='h-4 bg-gray-200 rounded w-3/4 mb-4'></div>
+                <div className='h-20 bg-gray-200 rounded mb-4'></div>
+                <div className='space-y-3'>
+                  <div className='h-3 bg-gray-200 rounded'></div>
+                  <div className='h-3 bg-gray-200 rounded w-5/6'></div>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : sortedCampaigns.length > 0 ? (
           <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6'>
             {sortedCampaigns.map(campaign => (
               <CampaignCard

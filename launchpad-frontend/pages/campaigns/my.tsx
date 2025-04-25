@@ -3,7 +3,7 @@ import { useAccount, useChainId } from 'wagmi'
 import { formatUnits } from 'ethers'
 import { useTokens } from '../../hooks/useTokens'
 import Link from 'next/link'
-import { PlusIcon } from '@heroicons/react/24/outline'
+import { PlusIcon, RocketLaunchIcon } from '@heroicons/react/24/outline'
 import { useRouter } from 'next/router'
 import CreateCampaignModal from '../../components/campaigns/CreateCampaignModal'
 import CampaignCard from '../../components/campaigns/CampaignCard'
@@ -21,6 +21,7 @@ interface Campaign extends BaseCampaign {
   goalAmountSmallestUnits: string
   token: string
   hasClaimed: boolean
+  totalRaised?: string
 }
 
 interface CampaignWithCalculations extends Campaign {
@@ -35,21 +36,20 @@ export default function MyCampaigns () {
   const router = useRouter()
   const { address } = useAccount()
   const chainId = useChainId()
-  const [mounted, setMounted] = useState(false)
-  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
   const {
     campaigns: realCampaigns,
     isLoading: isLoadingCampaigns,
     refresh: refreshCampaigns
   } = useCampaigns({ filterByOwner: true })
   const { getTokenByAddress } = useTokens()
-  const [processedCampaigns, setProcessedCampaigns] = useState<
-    CampaignWithCalculations[]
-  >([])
+  const [mounted, setMounted] = useState(false)
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
 
   // Handle hydration
   useEffect(() => {
-    setMounted(true)
+    requestAnimationFrame(() => {
+      setMounted(true)
+    })
   }, [])
 
   // Refresh campaigns when chain ID changes
@@ -60,56 +60,54 @@ export default function MyCampaigns () {
   }, [chainId, mounted, refreshCampaigns])
 
   // Memoize the token getter
-  const memoizedGetTokenByAddress = useCallback(getTokenByAddress, [])
+  const memoizedGetTokenByAddress = useCallback(getTokenByAddress, [getTokenByAddress])
 
-  // Process campaigns
-  useEffect(() => {
-    if (!realCampaigns.length) {
-      setProcessedCampaigns([])
-      return
+  // Memoize helper functions
+  const formatAmount = useCallback((
+    amount: string | undefined,
+    tokenAddress: string
+  ): string => {
+    if (!amount) return '0'
+    try {
+      const token = memoizedGetTokenByAddress(tokenAddress)
+      if (!token) return '0'
+      const formatted = formatUnits(amount, token.decimals)
+      return Math.floor(parseFloat(formatted)).toLocaleString()
+    } catch (error) {
+      console.error('Error formatting amount:', error)
+      return '0'
     }
+  }, [memoizedGetTokenByAddress])
 
-    const formatAmount = (
-      amount: string | undefined,
-      tokenAddress: string
-    ): string => {
-      if (!amount) return '0'
-      try {
-        const token = memoizedGetTokenByAddress(tokenAddress)
-        if (!token) return '0'
-        const formatted = formatUnits(amount, token.decimals)
-        return Math.floor(parseFloat(formatted)).toLocaleString()
-      } catch (error) {
-        console.error('Error formatting amount:', error)
-        return '0'
-      }
+  const calculateProgress = useCallback((
+    raised: string | undefined,
+    goal: string,
+    tokenAddress: string
+  ) => {
+    if (!raised) return 0
+    try {
+      const token = memoizedGetTokenByAddress(tokenAddress)
+      if (!token) return 0
+      const raisedAmount = parseFloat(formatUnits(raised, token.decimals))
+      const goalAmount = parseFloat(formatUnits(goal, token.decimals))
+      return (raisedAmount / goalAmount) * 100
+    } catch (error) {
+      console.error('Error calculating progress:', error)
+      return 0
     }
+  }, [memoizedGetTokenByAddress])
 
-    const calculateProgress = (
-      raised: string | undefined,
-      goal: string,
-      tokenAddress: string
-    ) => {
-      if (!raised) return 0
-      try {
-        const token = memoizedGetTokenByAddress(tokenAddress)
-        if (!token) return 0
-        const raisedAmount = parseFloat(formatUnits(raised, token.decimals))
-        const goalAmount = parseFloat(formatUnits(goal, token.decimals))
-        return (raisedAmount / goalAmount) * 100
-      } catch (error) {
-        console.error('Error calculating progress:', error)
-        return 0
-      }
-    }
+  const isCampaignEnded = useCallback((createdAt: Timestamp, duration: number): boolean => {
+    const startDate = createdAt.toDate()
+    const endDate = new Date(startDate.getTime() + duration * 24 * 60 * 60 * 1000)
+    return new Date() > endDate
+  }, [])
 
-    const isCampaignEnded = (createdAt: Timestamp, duration: number): boolean => {
-      const startDate = createdAt.toDate()
-      const endDate = new Date(startDate.getTime() + duration * 24 * 60 * 60 * 1000)
-      return new Date() > endDate
-    }
+  // Process campaigns directly
+  const processedCampaigns = useMemo(() => {
+    if (!realCampaigns.length) return []
 
-    const processed = realCampaigns.map(campaign => {
+    return realCampaigns.map(campaign => {
       const duration = campaign.duration
       const goalAmountSmallestUnits =
         campaign.goalAmountSmallestUnits || campaign.targetAmount
@@ -117,7 +115,7 @@ export default function MyCampaigns () {
         campaign.token || '0x0000000000000000000000000000000000000000'
 
       const progress = calculateProgress(
-        campaign.totalRaised,
+        campaign.totalContributions,
         goalAmountSmallestUnits,
         token
       )
@@ -149,14 +147,12 @@ export default function MyCampaigns () {
         statusText,
         statusColor,
         progress,
-        formattedRaised: formatAmount(campaign.totalRaised, token),
+        formattedRaised: formatAmount(campaign.totalContributions, token),
         formattedTarget: formatAmount(goalAmountSmallestUnits, token),
         canClaimFunds
       } as CampaignWithCalculations
     })
-
-    setProcessedCampaigns(processed)
-  }, [realCampaigns, memoizedGetTokenByAddress])
+  }, [realCampaigns, formatAmount, calculateProgress, isCampaignEnded])
 
   const handleViewCampaign = (campaignId: string) => {
     router.push(`/campaigns/${campaignId}`)
@@ -168,7 +164,7 @@ export default function MyCampaigns () {
 
   if (!address) {
     return (
-      <div className='min-h-screen bg-gray-50 py-8'>
+      <div className='min-h-screen bg-gradient-to-b from-blue-50 to-white py-8'>
         <div className='mx-auto max-w-7xl px-4 sm:px-6 lg:px-8'>
           <div className='text-center'>
             <p className='text-base font-semibold text-blue-600'>
@@ -185,7 +181,7 @@ export default function MyCampaigns () {
 
   if (isLoadingCampaigns) {
     return (
-      <div className='min-h-screen bg-gray-50 py-8'>
+      <div className='min-h-screen bg-gradient-to-b from-blue-50 to-white py-8'>
         <div className='mx-auto max-w-7xl px-4 sm:px-6 lg:px-8'>
           <div className='text-center'>
             <p className='text-base font-semibold text-blue-600'>Loading</p>
@@ -200,7 +196,7 @@ export default function MyCampaigns () {
 
   if (processedCampaigns.length === 0) {
     return (
-      <div className='min-h-screen bg-gray-50 py-8'>
+      <div className='min-h-screen bg-gradient-to-b from-blue-50 to-white py-8'>
         <div className='mx-auto max-w-7xl px-4 sm:px-6 lg:px-8'>
           <div className='text-center'>
             <h1 className='text-3xl font-bold tracking-tight text-gray-900 sm:text-4xl'>
@@ -212,31 +208,29 @@ export default function MyCampaigns () {
             <div className='mt-8'>
               <button
                 onClick={() => setIsCreateModalOpen(true)}
-                className='inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500'
+                className='inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-lg shadow-sm text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-colors'
               >
-                <PlusIcon className='w-5 h-5 mr-2' />
+                <RocketLaunchIcon className='w-5 h-5 mr-2' />
                 Create Your First Campaign
               </button>
             </div>
           </div>
         </div>
-        {mounted && (
-          <CreateCampaignModal
-            isOpen={isCreateModalOpen}
-            onClose={() => setIsCreateModalOpen(false)}
-            onSuccess={() => {
-              setIsCreateModalOpen(false)
-              refreshCampaigns()
-            }}
-          />
-        )}
+        <CreateCampaignModal
+          isOpen={isCreateModalOpen}
+          onClose={() => setIsCreateModalOpen(false)}
+          onSuccess={() => {
+            setIsCreateModalOpen(false)
+            refreshCampaigns()
+          }}
+        />
       </div>
     )
   }
 
   return (
-    <div className='min-h-screen bg-gray-50 py-8'>
-      <div className='mx-auto max-w-7xl px-4 sm:px-6 lg:px-8'>
+    <div className='min-h-screen bg-gradient-to-b from-blue-50 to-white py-8'>
+      <div className='container mx-auto px-4 sm:px-6 lg:px-8'>
         <div className='flex justify-between items-center mb-8'>
           <div>
             <h1 className='text-3xl font-bold text-gray-900'>My Campaigns</h1>
@@ -246,9 +240,9 @@ export default function MyCampaigns () {
           </div>
           <button
             onClick={() => setIsCreateModalOpen(true)}
-            className='inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500'
+            className='inline-flex items-center px-4 py-2 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-colors'
           >
-            <PlusIcon className='w-5 h-5 mr-2' />
+            <RocketLaunchIcon className='w-5 h-5 mr-2' />
             Create Campaign
           </button>
         </div>
@@ -271,16 +265,14 @@ export default function MyCampaigns () {
           ))}
         </div>
       </div>
-      {mounted && (
-        <CreateCampaignModal
-          isOpen={isCreateModalOpen}
-          onClose={() => setIsCreateModalOpen(false)}
-          onSuccess={() => {
-            setIsCreateModalOpen(false)
-            refreshCampaigns()
-          }}
-        />
-      )}
+      <CreateCampaignModal
+        isOpen={isCreateModalOpen}
+        onClose={() => setIsCreateModalOpen(false)}
+        onSuccess={() => {
+          setIsCreateModalOpen(false)
+          refreshCampaigns()
+        }}
+      />
     </div>
   )
 }
