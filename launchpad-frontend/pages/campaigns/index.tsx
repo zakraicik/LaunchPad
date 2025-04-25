@@ -134,42 +134,48 @@ export default function CampaignsDiscovery() {
         </div>
 
         {/* Search and Filter Bar */}
-        <div className='bg-white rounded-lg shadow-sm p-4 mb-6'>
-          <div className='flex flex-col md:flex-row gap-4'>
-            {/* Search Input */}
-            <div className='flex-1 relative'>
-              <MagnifyingGlassIcon className='absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400' />
+        <div className='flex flex-col md:flex-row gap-4 mb-6'>
+          {/* Search Input */}
+          <div className='flex-1 relative'>
+            {/* <label htmlFor="search" className='block text-sm font-medium text-gray-700 mb-1'>
+              Search
+            </label> */}
+            <div className='relative'>
+              <MagnifyingGlassIcon className='absolute left-4 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400' />
               <input
                 type='text'
+                id="search"
                 placeholder='Search campaigns...'
-                className='w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500'
+                className='w-full pl-12 pr-4 py-2.5 bg-white border-2 border-gray-200 rounded-lg text-base font-medium focus:outline-none focus:ring-2 focus:ring-gray-100 focus:border-gray-400 transition-all'
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
               />
             </div>
+          </div>
 
-            {/* Filter Toggle Button */}
+          {/* Filter Toggle Button */}
+          <div className='flex items-end'>
             <button
               onClick={() => setShowFilters(!showFilters)}
-              className='inline-flex items-center px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50'
+              className='px-4 py-2.5 border-2 border-gray-200 rounded-lg hover:border-gray-300 hover:bg-gray-50 transition-all text-base font-medium'
             >
-              <FunnelIcon className='h-5 w-5 mr-2' />
+              <FunnelIcon className='h-5 w-5 mr-2 inline-block' />
               Filters
             </button>
           </div>
-
-          {/* Filters Panel */}
-          {showFilters && (
-            <div className='mt-4'>
-              <CampaignFilters
-                selectedCategory={selectedCategory}
-                setSelectedCategory={handleCategoryChange}
-                sortBy={sortBy}
-                setSortBy={setSortBy}
-              />
-            </div>
-          )}
         </div>
+
+        {/* Filters Panel */}
+        {showFilters && (
+          <div className='mt-4 bg-white rounded-lg shadow-sm p-6 mb-6'>
+            <CampaignFilters
+              selectedCategory={selectedCategory}
+              setSelectedCategory={handleCategoryChange}
+              sortBy={sortBy}
+              setSortBy={setSortBy}
+            />
+          </div>
+        )}
 
         {/* Campaign Grid */}
         {sortedCampaigns.length > 0 ? (

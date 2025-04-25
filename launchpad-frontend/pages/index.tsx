@@ -15,7 +15,7 @@ export default function Home () {
         <div className='container mx-auto px-4'>
           <div className='max-w-4xl mx-auto text-center'>
             <h1 className='text-5xl font-bold mb-6'>
-            Powering Web3 Innovation Through DeFi-Enhanced Seed Funding
+            Powering Web3 Innovation Through Community Contributions
             </h1>
             <p className='text-xl text-gray-600 mb-8'>
             Projects launch with minimal fees thanks to integrated yield generation, while investors receive full refund protection if funding goals aren't met—our blockchain-native platform creates a safer, more efficient fundraising environment for the next generation of web3 builders
