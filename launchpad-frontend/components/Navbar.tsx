@@ -45,7 +45,11 @@ export default function Navbar () {
       href: '/campaigns/my',
       icon: RocketLaunchIcon
     },
-    { name: 'Contributions', href: '/contributions', icon: WalletIcon }
+    { 
+      name: 'My Contributions', 
+      href: '/account/contributions', 
+      icon: WalletIcon 
+    }
   ]
 
   const adminNavigation = [
