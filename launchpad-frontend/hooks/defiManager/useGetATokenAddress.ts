@@ -4,7 +4,7 @@ import DefiIntegrationManager from '../../../artifacts/contracts/DefiIntegration
 import { useState } from 'react'
 import { ethers } from 'ethers'
 
-export function useUpdatePlatformFeeShare() {
+export function useGetATokenAddress() {
   const chainId = useChainId()
   const { data: walletClient } = useWalletClient()
   const [isUpdating, setIsUpdating] = useState(false)

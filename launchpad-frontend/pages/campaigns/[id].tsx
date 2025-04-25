@@ -12,10 +12,8 @@ import { differenceInDays } from 'date-fns'
 import { useAccount, useWalletClient, usePublicClient } from 'wagmi'
 import toast from 'react-hot-toast'
 import CampaignTimer from '../../components/campaigns/CampaignTimer'
-import { useClaimFunds } from '../../hooks/campaigns/useClaimFunds'
-import { useContribute } from '../../hooks/campaigns/useContribute'
-import { useRequestRefund } from '../../hooks/campaigns/useRequestRefund'
-import { useUpdatePlatformFeeShare } from '../../hooks/defiManager/useGetATokenAddress'
+import { useClaimFunds, useContribute, useRequestRefund, useHasClaimedFunds } from '@/hooks/campaigns'
+import { useGetATokenAddress } from '@/hooks/defiManager/useGetATokenAddress'
 import { ERC20_ABI } from '../../config/abis/erc20'
 
 interface Campaign {
@@ -56,7 +54,7 @@ export default function CampaignDetail () {
   const { address, isConnected } = useAccount()
   const { data: walletClient } = useWalletClient()
   const publicClient = usePublicClient()
-  const { getATokenAddress } = useUpdatePlatformFeeShare()
+  const { getATokenAddress, isUpdating } = useGetATokenAddress()
   const [aTokenBalance, setATokenBalance] = useState<string>('0')
   const [isLoadingYield, setIsLoadingYield] = useState(false)
   const [tokenBalance, setTokenBalance] = useState<string>('0')
@@ -222,15 +220,33 @@ export default function CampaignDetail () {
   const token = getTokenByAddress(campaign.token)
 
   const formatAmount = (amount: string | undefined): string => {
-    if (!amount || !token) return '0'
+    if (!amount || !token) return '0.0'
     try {
       const rawAmount = formatUnits(amount, token.decimals)
-      // Round to remove decimals, then format with commas
-      return formatNumber(Math.round(parseFloat(rawAmount)))
+      // Format with 1 decimal place
+      return formatNumber(Number(parseFloat(rawAmount).toFixed(1)))
     } catch (error) {
       console.error('Error formatting amount:', error)
-      return '0'
+      return '0.0'
     }
+  }
+
+  const isSuccessful = (): boolean => {
+    if (!campaign?.totalContributions || !campaign?.goalAmountSmallestUnits) return false
+    try {
+      const totalContributions = BigInt(campaign.totalContributions)
+      const goalAmount = BigInt(campaign.goalAmountSmallestUnits)
+      return totalContributions >= goalAmount
+    } catch (error) {
+      console.error('Error checking if campaign is successful:', error)
+      return false
+    }
+  }
+
+
+
+  const canContribute = (): boolean => {
+    return !isCampaignEnded() && !isSuccessful()
   }
 
   const calculateProgress = (): number => {
@@ -332,7 +348,7 @@ export default function CampaignDetail () {
   }
 
   const isOwner = address && campaign?.creator && address.toLowerCase() === campaign.creator.toLowerCase()
-  const canClaimFunds = isOwner && isCampaignEnded() && !campaign?.hasClaimed
+  const canClaimFunds = isOwner && (isCampaignEnded() || isSuccessful()) && !campaign?.hasClaimed
 
   const handleClaimFunds = async () => {
     if (!campaign?.campaignAddress || !canClaimFunds) return
@@ -424,16 +440,74 @@ export default function CampaignDetail () {
           </div>
         </div>
 
-        {/* Campaign Details Card */}
-        <div className='bg-white rounded-lg shadow-sm mb-6'>
-          <div className='p-6'>
-            <CampaignDetails
-              category={campaign.category}
-              campaignAddress={campaign.campaignAddress}
-              owner={campaign.creator}
-              githubUrl={campaign.githubUrl}
-            />
+        {/* Campaign Details and Contribution Section */}
+        <div className='grid grid-cols-1 md:grid-cols-2 gap-6 mb-6'>
+          {/* Campaign Details Card */}
+          <div className='bg-white rounded-lg shadow-sm'>
+            <div className='p-6'>
+              <h2 className='text-xl font-semibold mb-4'>Campaign Details</h2>
+              <CampaignDetails
+                category={campaign.category}
+                campaignAddress={campaign.campaignAddress}
+                owner={campaign.creator}
+                githubUrl={campaign.githubUrl}
+              />
+            </div>
           </div>
+
+          {/* Contribution Form */}
+          {canContribute() ? (
+            <div className='bg-white rounded-lg shadow-sm p-6'>
+              <h2 className='text-xl font-bold mb-4'>Make a Contribution</h2>
+              <div className='space-y-4'>
+                <div>
+                  <label className='block text-sm font-medium text-gray-700 mb-1'>
+                    Amount ({token?.symbol})
+                  </label>
+                  <input
+                    type='number'
+                    min='0'
+                    value={contributionAmount}
+                    onChange={e => setContributionAmount(e.target.value)}
+                    placeholder='Enter amount'
+                    className='w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500'
+                    disabled={isContributing}
+                  />
+                </div>
+                <button
+                  onClick={handleContribute}
+                  disabled={
+                    !isConnected ||
+                    isContributing ||
+                    !contributionAmount ||
+                    !campaign?.campaignAddress
+                  }
+                  className='w-full bg-blue-600 text-white py-3 px-4 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed'
+                >
+                  {isContributing ? 'Contributing...' : 'Contribute'}
+                </button>
+                {!isConnected && (
+                  <p className='text-sm text-red-600'>
+                    Please connect your wallet to contribute
+                  </p>
+                )}
+                {!campaign?.campaignAddress && (
+                  <p className='text-sm text-red-600'>
+                    Campaign contract address not found
+                  </p>
+                )}
+              </div>
+            </div>
+          ) : (
+            <div className='bg-white rounded-lg shadow-sm p-6'>
+              <h2 className='text-xl font-bold mb-4'>{isSuccessful() ? 'Campaign Successful' : 'Campaign Ended'}</h2>
+              <p className='text-gray-600'>
+                {isSuccessful() 
+                  ? 'This campaign has reached its goal and is no longer accepting contributions.'
+                  : 'This campaign has ended and is no longer accepting contributions.'}
+              </p>
+            </div>
+          )}
         </div>
 
         {/* Navigation Tabs */}
@@ -460,7 +534,7 @@ export default function CampaignDetail () {
               >
                 Contributors
               </button>
-              {isCampaignEnded() && (
+              {(isCampaignEnded() || isSuccessful()) && (
                 <button
                   onClick={() => setActiveTab('actions')}
                   className={`flex-1 px-3 md:px-6 py-2.5 md:py-4 text-xs md:text-sm font-medium whitespace-nowrap ${
@@ -547,24 +621,35 @@ export default function CampaignDetail () {
                       <div>
                         <h4 className='text-sm font-medium text-gray-900'>Campaign Owner Actions</h4>
                         <p className='text-sm text-gray-500'>
-                          {progress >= 100 
+                          {isSuccessful() 
                             ? 'Claim raised funds from your successful campaign'
-                            : 'Claim campaign funds to enable contributor refunds'}
+                            : isCampaignEnded()
+                              ? 'Claim campaign funds to enable contributor refunds'
+                              : 'Campaign is still active'}
                         </p>
                       </div>
-                      <button
-                        onClick={handleClaimFunds}
-                        disabled={isClaiming || campaign.hasClaimed}
-                        className='bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed'
-                      >
-                        {isClaiming ? 'Claiming...' : campaign.hasClaimed ? 'Funds Claimed' : 'Claim Funds'}
-                      </button>
+                      {(isSuccessful() || isCampaignEnded()) && (
+                        <button
+                          onClick={handleClaimFunds}
+                          disabled={isClaiming || campaign.hasClaimed}
+                          className='bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed'
+                        >
+                          {isClaiming ? 'Claiming...' : campaign.hasClaimed ? 'Funds Claimed' : 'Claim Funds'}
+                        </button>
+                      )}
                     </div>
                   </div>
                 )}
 
+                {/* Success Message for Contributors */}
+                {!isOwner && isSuccessful() && (
+                  <div className='text-center py-4'>
+                    <p className='text-gray-500'>This campaign has successfully reached its goal. No refund actions are available.</p>
+                  </div>
+                )}
+
                 {/* Contributor Actions - Only show for unsuccessful campaigns */}
-                {!isOwner && progress < 100 && (
+                {!isOwner && !isSuccessful() && isCampaignEnded() && (
                   <div>
                     <div className='flex items-center justify-between'>
                       <div>
@@ -591,62 +676,10 @@ export default function CampaignDetail () {
                     </div>
                   </div>
                 )}
-
-                {/* Message for successful campaigns */}
-                {!isOwner && progress >= 100 && (
-                  <div className='text-center py-4'>
-                    <p className='text-gray-500'>This campaign has successfully reached its goal. No refund actions are available.</p>
-                  </div>
-                )}
               </div>
             )}
           </div>
         </div>
-
-        {/* Contribution Form */}
-        {!isCampaignEnded() && (
-          <div className='bg-white rounded-lg shadow-sm p-6'>
-            <h2 className='text-xl font-bold mb-4'>Make a Contribution</h2>
-            <div className='space-y-4'>
-              <div>
-                <label className='block text-sm font-medium text-gray-700 mb-1'>
-                  Amount ({token?.symbol})
-                </label>
-                <input
-                  type='number'
-                  min='0'
-                  value={contributionAmount}
-                  onChange={e => setContributionAmount(e.target.value)}
-                  placeholder='Enter amount'
-                  className='w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500'
-                  disabled={isContributing}
-                />
-              </div>
-              <button
-                onClick={handleContribute}
-                disabled={
-                  !isConnected ||
-                  isContributing ||
-                  !contributionAmount ||
-                  !campaign?.campaignAddress
-                }
-                className='w-full bg-blue-600 text-white py-3 px-4 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed'
-              >
-                {isContributing ? 'Contributing...' : 'Contribute'}
-              </button>
-              {!isConnected && (
-                <p className='text-sm text-red-600'>
-                  Please connect your wallet to contribute
-                </p>
-              )}
-              {!campaign?.campaignAddress && (
-                <p className='text-sm text-red-600'>
-                  Campaign contract address not found
-                </p>
-              )}
-            </div>
-          </div>
-        )}
       </div>
     </div>
   )
