@@ -77,6 +77,13 @@ export default function Navbar () {
     // For the Discover page
     if (path.startsWith('/campaigns?') && router.pathname === '/campaigns') return true
     
+    // For nested routes (e.g., /campaigns/my, /account/contributions)
+    if (path === '/campaigns/my' && router.pathname === '/campaigns/my') return true
+    if (path === '/account/contributions' && router.pathname === '/account/contributions') return true
+    if (path === '/admin/token-management' && router.pathname === '/admin/token-management') return true
+    if (path === '/admin/platform-admins' && router.pathname === '/admin/platform-admins') return true
+    if (path === '/admin/fee-management' && router.pathname === '/admin/fee-management') return true
+    
     return false
   }
 
@@ -137,8 +144,7 @@ export default function Navbar () {
     requestAnimationFrame(() => {
       if (mountedRef.current) {
         setIsMobileMenuOpen(false)
-        setIsDropdownOpen(false)
-        setIsAdminDropdownOpen(false)
+        // Don't automatically close dropdowns here
       }
     })
   }, [router.pathname, mounted])
@@ -169,12 +175,38 @@ export default function Navbar () {
 
   // Keep relevant dropdown open if on one of its pages
   useEffect(() => {
-    if (mounted) {
-      const isOnAccountPage = accountNavigation.some(item => isActive(item.href))
-      const isOnAdminPage = adminNavigation.some(item => isActive(item.href))
+    if (!mounted) return
+    
+    // On first mount only (which includes page refreshes), close all dropdowns
+    // but don't touch them on subsequent route changes
+    if (typeof window !== 'undefined') {
+      // Check if this is a fresh page load
+      const isPageRefresh = performance.navigation && 
+        performance.navigation.type === performance.navigation.TYPE_RELOAD
       
-      setIsDropdownOpen(isOnAccountPage)
-      setIsAdminDropdownOpen(isOnAdminPage)
+      // On refresh, always close dropdowns
+      if (isPageRefresh || !sessionStorage.getItem('navInitialized')) {
+        setIsDropdownOpen(false)
+        setIsAdminDropdownOpen(false)
+        // Mark that navigation has been initialized in this session
+        sessionStorage.setItem('navInitialized', 'true')
+        return
+      }
+    }
+    
+    // On subsequent route changes (not refreshes), we could keep the appropriate dropdown open
+    const isOnAccountPage = accountNavigation.some(item => isActive(item.href))
+    const isOnAdminPage = adminNavigation.some(item => isActive(item.href))
+    
+    if (isOnAccountPage) {
+      setIsDropdownOpen(true)
+      setIsAdminDropdownOpen(false)
+    } else if (isOnAdminPage) {
+      setIsAdminDropdownOpen(true)
+      setIsDropdownOpen(false)
+    } else {
+      setIsDropdownOpen(false)
+      setIsAdminDropdownOpen(false)
     }
   }, [router.pathname, mounted])
 
@@ -246,7 +278,10 @@ export default function Navbar () {
                             ? 'bg-blue-50 text-blue-600 font-medium'
                             : 'text-gray-700 hover:bg-gray-50'
                         } flex items-center`}
-                        onClick={() => setIsDropdownOpen(false)}
+                        onClick={() => {
+                          setIsDropdownOpen(false)
+                          setIsAdminDropdownOpen(false)
+                        }}
                       >
                         <item.icon className={`w-4 h-4 mr-2 ${isActive(item.href) ? 'text-blue-600' : ''}`} />
                         {item.name}
@@ -284,7 +319,10 @@ export default function Navbar () {
                             ? 'bg-purple-50 text-purple-600 font-medium'
                             : 'text-gray-700 hover:bg-gray-50'
                         } flex items-center`}
-                        onClick={() => setIsAdminDropdownOpen(false)}
+                        onClick={() => {
+                          setIsDropdownOpen(false)
+                          setIsAdminDropdownOpen(false)
+                        }}
                       >
                         <item.icon className={`w-4 h-4 mr-2 ${isActive(item.href) ? 'text-purple-600' : ''}`} />
                         {item.name}

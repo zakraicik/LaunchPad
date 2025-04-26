@@ -164,8 +164,8 @@ export default function MyCampaigns () {
 
   if (!address) {
     return (
-      <div className='min-h-screen bg-gradient-to-b from-blue-50 to-white py-8'>
-        <div className='mx-auto max-w-7xl px-4 sm:px-6 lg:px-8'>
+      <div className='min-h-screen bg-gradient-to-b from-blue-50 to-white pt-32 pb-20'>
+        <div className='container mx-auto px-4 sm:px-6 lg:px-8'>
           <div className='text-center'>
             <p className='text-base font-semibold text-blue-600'>
               Connect Wallet
@@ -181,8 +181,8 @@ export default function MyCampaigns () {
 
   if (isLoadingCampaigns) {
     return (
-      <div className='min-h-screen bg-gradient-to-b from-blue-50 to-white py-8'>
-        <div className='mx-auto max-w-7xl px-4 sm:px-6 lg:px-8'>
+      <div className='min-h-screen bg-gradient-to-b from-blue-50 to-white pt-32 pb-20'>
+        <div className='container mx-auto px-4 sm:px-6 lg:px-8'>
           <div className='text-center'>
             <p className='text-base font-semibold text-blue-600'>Loading</p>
             <h1 className='mt-2 text-3xl font-bold tracking-tight text-gray-900 sm:text-4xl'>
@@ -196,8 +196,8 @@ export default function MyCampaigns () {
 
   if (processedCampaigns.length === 0) {
     return (
-      <div className='min-h-screen bg-gradient-to-b from-blue-50 to-white py-8'>
-        <div className='mx-auto max-w-7xl px-4 sm:px-6 lg:px-8'>
+      <div className='min-h-screen bg-gradient-to-b from-blue-50 to-white pt-32 pb-20'>
+        <div className='container mx-auto px-4 sm:px-6 lg:px-8'>
           <div className='text-center'>
             <h1 className='text-3xl font-bold tracking-tight text-gray-900 sm:text-4xl'>
               No Campaigns Yet
@@ -208,10 +208,10 @@ export default function MyCampaigns () {
             <div className='mt-8'>
               <button
                 onClick={() => setIsCreateModalOpen(true)}
-                className='inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-lg shadow-sm text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-colors'
+                className='inline-flex items-center px-4 py-2 bg-green-600 text-white hover:bg-green-700 rounded-lg font-medium transition-colors'
               >
                 <RocketLaunchIcon className='w-5 h-5 mr-2' />
-                Create Your First Campaign
+                Create Campaign
               </button>
             </div>
           </div>
@@ -229,9 +229,9 @@ export default function MyCampaigns () {
   }
 
   return (
-    <div className='min-h-screen bg-gradient-to-b from-blue-50 to-white py-8'>
+    <div className='min-h-screen bg-gradient-to-b from-blue-50 to-white pt-32 pb-20'>
       <div className='container mx-auto px-4 sm:px-6 lg:px-8'>
-        <div className='flex justify-between items-center mb-8'>
+        <div className='flex justify-between items-start mb-8'>
           <div>
             <h1 className='text-3xl font-bold text-gray-900'>My Campaigns</h1>
             <p className='mt-2 text-sm text-gray-500'>
@@ -240,7 +240,7 @@ export default function MyCampaigns () {
           </div>
           <button
             onClick={() => setIsCreateModalOpen(true)}
-            className='inline-flex items-center px-4 py-2 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-colors'
+            className='inline-flex items-center px-4 py-2 bg-green-600 text-white hover:bg-green-700 rounded-lg font-medium transition-colors'
           >
             <RocketLaunchIcon className='w-5 h-5 mr-2' />
             Create Campaign

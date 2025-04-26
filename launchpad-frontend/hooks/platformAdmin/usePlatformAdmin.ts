@@ -1,8 +1,8 @@
-import { useState, useEffect } from 'react'
-import { collection, getDocs, onSnapshot, query, where } from 'firebase/firestore'
+import { collection, onSnapshot, query, where } from 'firebase/firestore'
 import { db } from '@/utils/firebase'
 import { useChainId } from 'wagmi'
 import { SUPPORTED_NETWORKS } from '@/config/addresses'
+import { useQuery } from '@tanstack/react-query'
 
 interface PlatformAdmin {
   address: string
@@ -14,66 +14,62 @@ interface PlatformAdmin {
 
 export function usePlatformAdmin() {
   const chainId = useChainId()
-  const [admins, setAdmins] = useState<PlatformAdmin[]>([])
-  const [isLoading, setIsLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
 
-  useEffect(() => {
-    setIsLoading(true)
-    setError(null)
-
-    // Ensure chainId is one of our supported networks
-    if (!SUPPORTED_NETWORKS.includes(chainId as typeof SUPPORTED_NETWORKS[number])) {
-      console.log('Unsupported network, clearing admins')
-      setAdmins([])
-      setIsLoading(false)
-      return
-    }
-
-    // Set up real-time listener for the admins collection
-    const adminsRef = collection(db, 'admins')
-    const q = query(
-      adminsRef, 
-      where('networkId', '==', chainId.toString()),
-      where('isActive', '==', true)
-    )
-
-    const unsubscribe = onSnapshot(
-      q,
-      (snapshot) => {
-        try {
-          const adminData: PlatformAdmin[] = snapshot.docs.map(doc => ({
-            address: doc.id, // Use document ID as the address
-            ...doc.data() as Omit<PlatformAdmin, 'address'>
-          }))
-          
-          // Sort admins by lastUpdated date, most recent first
-          adminData.sort((a, b) => 
-            new Date(b.lastUpdated).getTime() - new Date(a.lastUpdated).getTime()
-          )
-          
-          setAdmins(adminData)
-          setIsLoading(false)
-        } catch (err) {
-          console.error('Error processing admin data:', err)
-          setError('Failed to process admin data')
-          setIsLoading(false)
-        }
-      },
-      (err) => {
-        console.error('Error fetching admins:', err)
-        setError('Failed to fetch admin data')
-        setIsLoading(false)
+  const { data: admins = [], isLoading, error, refetch } = useQuery({
+    queryKey: ['platformAdmins', chainId],
+    queryFn: () => {
+      if (!SUPPORTED_NETWORKS.includes(chainId as typeof SUPPORTED_NETWORKS[number])) {
+        console.log('Unsupported network, returning empty array')
+        return []
       }
-    )
 
-    // Cleanup subscription on unmount
-    return () => unsubscribe()
-  }, [chainId])
+      return new Promise<PlatformAdmin[]>((resolve, reject) => {
+        const adminsRef = collection(db, 'admins')
+        const q = query(
+          adminsRef, 
+          where('networkId', '==', chainId.toString()),
+          where('isActive', '==', true)
+        )
+
+        const unsubscribe = onSnapshot(
+          q,
+          (snapshot) => {
+            try {
+              const adminData: PlatformAdmin[] = snapshot.docs.map(doc => ({
+                address: doc.id,
+                ...doc.data() as Omit<PlatformAdmin, 'address'>
+              }))
+              
+              // Sort admins by lastUpdated date, most recent first
+              adminData.sort((a, b) => 
+                new Date(b.lastUpdated).getTime() - new Date(a.lastUpdated).getTime()
+              )
+              
+              resolve(adminData)
+            } catch (err) {
+              console.error('Error processing admin data:', err)
+              reject(new Error('Failed to process admin data'))
+            }
+          },
+          (err) => {
+            console.error('Error fetching admins:', err)
+            reject(new Error('Failed to fetch admin data'))
+          }
+        )
+
+        // Cleanup subscription when the query is cancelled
+        return () => unsubscribe()
+      })
+    },
+    enabled: SUPPORTED_NETWORKS.includes(chainId as typeof SUPPORTED_NETWORKS[number]),
+    staleTime: 5 * 60 * 1000, // Consider data fresh for 5 minutes
+    gcTime: 10 * 60 * 1000, // Keep unused data in cache for 10 minutes
+  })
 
   return {
     admins,
     isLoading,
-    error
+    error: error as Error | null,
+    refetch
   }
 }

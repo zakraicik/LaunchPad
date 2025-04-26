@@ -1,13 +1,13 @@
 import { useState, useRef, useEffect } from 'react'
 import { useFeeManager } from '@/hooks/feeManagement/useFeeManager'
 import { formatDistanceToNow, isValid } from 'date-fns'
-import { PencilIcon, ClipboardIcon, ClipboardDocumentCheckIcon } from '@heroicons/react/24/outline'
+import { PencilIcon, ClipboardIcon, ClipboardDocumentCheckIcon, ArrowPathIcon } from '@heroicons/react/24/outline'
 import { useIsAdmin } from '@/utils/admin'
 import { useAccount } from 'wagmi'
 import { Timestamp } from 'firebase/firestore'
 
 export default function FeeManagement() {
-  const { feeSettings, isLoading, error } = useFeeManager()
+  const { feeSettings, isLoading, error, refetch } = useFeeManager()
   const { address } = useAccount()
   const { isAdmin } = useIsAdmin(address)
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
@@ -56,103 +56,71 @@ export default function FeeManagement() {
 
   if (isLoading) {
     return (
-      <div className="p-6 flex justify-center items-center">
-        <div className="text-gray-600">Loading fee settings...</div>
+      <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white pt-32 pb-20">
+        <div className="container mx-auto px-4">
+          <div className="flex justify-between items-center mb-6">
+            <h1 className="text-2xl font-bold">Fee Management</h1>
+          </div>
+          <div className="bg-white rounded-lg shadow p-6">
+            <div className="flex justify-center items-center h-32">
+              <div className="text-gray-600">Loading fee settings...</div>
+            </div>
+          </div>
+        </div>
       </div>
     )
   }
 
   if (error) {
     return (
-      <div className="p-6">
-        <div className="bg-red-50 text-red-600 p-4 rounded-lg">
-          Error loading fee settings: {error}
+      <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white pt-32 pb-20">
+        <div className="container mx-auto px-4">
+          <div className="flex justify-between items-center mb-6">
+            <h1 className="text-2xl font-bold">Fee Management</h1>
+            <button
+              onClick={() => refetch()}
+              className="text-blue-600 hover:text-blue-800 flex items-center gap-2"
+            >
+              <ArrowPathIcon className="h-5 w-5" />
+              Retry
+            </button>
+          </div>
+          <div className="bg-white rounded-lg shadow">
+            <div className="p-6">
+              <div className="bg-red-50 text-red-600 p-4 rounded-lg">
+                Error loading fee settings: {error instanceof Error ? error.message : 'Unknown error'}
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     )
   }
 
   return (
-    <div className='p-6'>
-      <div className='flex justify-between items-center mb-6'>
-        <h1 className='text-2xl font-bold'>Fee Management</h1>
-      </div>
+    <div className='min-h-screen bg-gradient-to-b from-blue-50 to-white pt-32 pb-20'>
+      <div className='container mx-auto px-4'>
+        <div className='flex justify-between items-center mb-6'>
+          <h1 className='text-2xl font-bold'>Fee Management</h1>
+          <button
+            onClick={() => refetch()}
+            className="text-blue-600 hover:text-blue-800"
+            title="Refresh"
+          >
+            <ArrowPathIcon className="h-5 w-5" />
+          </button>
+        </div>
 
-      <div className='bg-white rounded-lg shadow'>
-        {feeSettings ? (
-          <div className='p-6 space-y-6'>
-            {/* Platform Fee Share */}
-            <div className='flex items-center justify-between'>
-              <div>
-                <h3 className='text-sm font-medium text-gray-500 uppercase tracking-wider'>Platform Fee Share</h3>
-                <p className='mt-1 text-2xl font-semibold'>{feeSettings?.platformFeeShare}
-                  <span className='text-sm text-gray-500 ml-1'>basis points</span>
-                </p>
-              </div>
-              {isAdmin && (
-                <button 
-                  onClick={() => setIsEditModalOpen(true)}
-                  className='text-blue-600 hover:text-blue-800'
-                >
-                  <PencilIcon className='h-5 w-5' />
-                </button>
-              )}
-            </div>
-
-            {/* Treasury Address */}
-            <div>
-              <h3 className='text-sm font-medium text-gray-500 uppercase tracking-wider'>Treasury Address</h3>
-              <div className='mt-1 flex items-center justify-between'>
-                <div className='relative'>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      setShowAddressPopover(!showAddressPopover)
-                    }}
-                    className='font-mono text-sm text-gray-600 hover:text-gray-800'
-                  >
-                    {feeSettings?.treasuryAddress ? 
-                      `${feeSettings.treasuryAddress.slice(0,6)}...${feeSettings.treasuryAddress.slice(-4)}` :
-                      'No address set'
-                    }
-                  </button>
-
-                  {/* Address Popover */}
-                  {showAddressPopover && feeSettings?.treasuryAddress && (
-                    <div 
-                      ref={popoverRef}
-                      className='absolute z-10 mt-2 bg-white rounded-lg shadow-lg border border-gray-200 p-3 w-fit min-w-[300px]'
-                    >
-                      <div className='flex items-start gap-2'>
-                        <div className='font-mono text-sm break-all'>{feeSettings.treasuryAddress}</div>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            handleCopyAddress(feeSettings.treasuryAddress)
-                          }}
-                          className='flex-shrink-0 text-gray-500 hover:text-gray-700'
-                          title="Copy Address"
-                        >
-                          {copiedAddress ? (
-                            <ClipboardDocumentCheckIcon className='h-5 w-5 text-green-600' />
-                          ) : (
-                            <ClipboardIcon className='h-5 w-5' />
-                          )}
-                        </button>
-                      </div>
-                      <div className='mt-2 text-xs text-gray-500'>
-                        <a
-                          href={`https://etherscan.io/address/${feeSettings.treasuryAddress}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className='text-blue-600 hover:text-blue-800'
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          View on Etherscan
-                        </a>
-                      </div>
-                    </div>
-                  )}
+        <div className='bg-white rounded-lg shadow'>
+          {feeSettings ? (
+            <div className='p-6 space-y-6'>
+              {/* Platform Fee Share */}
+              <div className='flex items-center justify-between'>
+                <div>
+                  <h3 className='text-sm font-medium text-gray-500 uppercase tracking-wider'>Platform Fee Share</h3>
+                  <p className='mt-1 text-2xl font-semibold'>{feeSettings?.platformFeeShare}
+                    <span className='text-sm text-gray-500 ml-1'>basis points</span>
+                  </p>
                 </div>
                 {isAdmin && (
                   <button 
@@ -163,60 +131,126 @@ export default function FeeManagement() {
                   </button>
                 )}
               </div>
-            </div>
 
-            {/* Last Updated */}
-            <div>
-              <h3 className='text-sm font-medium text-gray-500 uppercase tracking-wider'>Last Updated</h3>
-              <p className='mt-1 text-sm text-gray-600'>
-                {feeSettings?.lastUpdated && formatDate(feeSettings.lastUpdated)}
-              </p>
-              <p className='mt-1 text-sm text-gray-600'>
-                Operation: {feeSettings?.lastOperation}
-              </p>
+              {/* Treasury Address */}
+              <div>
+                <h3 className='text-sm font-medium text-gray-500 uppercase tracking-wider'>Treasury Address</h3>
+                <div className='mt-1 flex items-center justify-between'>
+                  <div className='relative'>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setShowAddressPopover(!showAddressPopover)
+                      }}
+                      className='font-mono text-sm text-gray-600 hover:text-gray-800'
+                    >
+                      {feeSettings?.treasuryAddress ? 
+                        `${feeSettings.treasuryAddress.slice(0,6)}...${feeSettings.treasuryAddress.slice(-4)}` :
+                        'No address set'
+                      }
+                    </button>
+
+                    {/* Address Popover */}
+                    {showAddressPopover && feeSettings?.treasuryAddress && (
+                      <div 
+                        ref={popoverRef}
+                        className='absolute z-10 mt-2 bg-white rounded-lg shadow-lg border border-gray-200 p-3 w-fit min-w-[300px]'
+                      >
+                        <div className='flex items-start gap-2'>
+                          <div className='font-mono text-sm break-all'>{feeSettings.treasuryAddress}</div>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              handleCopyAddress(feeSettings.treasuryAddress)
+                            }}
+                            className='flex-shrink-0 text-gray-500 hover:text-gray-700'
+                            title="Copy Address"
+                          >
+                            {copiedAddress ? (
+                              <ClipboardDocumentCheckIcon className='h-5 w-5 text-green-600' />
+                            ) : (
+                              <ClipboardIcon className='h-5 w-5' />
+                            )}
+                          </button>
+                        </div>
+                        <div className='mt-2 text-xs text-gray-500'>
+                          <a
+                            href={`https://etherscan.io/address/${feeSettings.treasuryAddress}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className='text-blue-600 hover:text-blue-800'
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            View on Etherscan
+                          </a>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  {isAdmin && (
+                    <button 
+                      onClick={() => setIsEditModalOpen(true)}
+                      className='text-blue-600 hover:text-blue-800'
+                    >
+                      <PencilIcon className='h-5 w-5' />
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Last Updated */}
+              <div>
+                <h3 className='text-sm font-medium text-gray-500 uppercase tracking-wider'>Last Updated</h3>
+                <p className='mt-1 text-sm text-gray-600'>
+                  {feeSettings?.lastUpdated && formatDate(feeSettings.lastUpdated)}
+                </p>
+                <p className='mt-1 text-sm text-gray-600'>
+                  Operation: {feeSettings?.lastOperation}
+                </p>
+              </div>
             </div>
-          </div>
-        ) : (
-          <div className="text-center py-12">
-            <h3 className='text-xl font-semibold mb-4'>
-              No fee settings found
-            </h3>
-            <p className='text-gray-600 mb-6'>
-              Configure your platform's fee settings to get started!
-            </p>
-            <button 
-              onClick={() => setIsEditModalOpen(true)}
-              className='bg-blue-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 mx-auto'
-            >
-              <PencilIcon className='h-5 w-5' />
-              Configure Fees
-            </button>
+          ) : (
+            <div className="text-center py-12">
+              <h3 className='text-xl font-semibold mb-4'>
+                No fee settings found
+              </h3>
+              <p className='text-gray-600 mb-6'>
+                Configure your platform's fee settings to get started!
+              </p>
+              <button 
+                onClick={() => setIsEditModalOpen(true)}
+                className='bg-blue-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 mx-auto'
+              >
+                <PencilIcon className='h-5 w-5' />
+                Configure Fees
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Edit Modal placeholder - implement actual modal based on your needs */}
+        {isEditModalOpen && (
+          <div className="fixed inset-0 bg-black/30 flex items-center justify-center p-4">
+            <div className="bg-white rounded-lg p-6 max-w-sm w-full">
+              <h2 className="text-lg font-medium mb-4">Edit Fee Settings</h2>
+              {/* Add your form fields here */}
+              <div className="flex justify-end gap-2">
+                <button
+                  onClick={() => setIsEditModalOpen(false)}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 rounded-md"
+                >
+                  Cancel
+                </button>
+                <button
+                  className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md"
+                >
+                  Save
+                </button>
+              </div>
+            </div>
           </div>
         )}
       </div>
-
-      {/* Edit Modal placeholder - implement actual modal based on your needs */}
-      {isEditModalOpen && (
-        <div className="fixed inset-0 bg-black/30 flex items-center justify-center p-4">
-          <div className="bg-white rounded-lg p-6 max-w-sm w-full">
-            <h2 className="text-lg font-medium mb-4">Edit Fee Settings</h2>
-            {/* Add your form fields here */}
-            <div className="flex justify-end gap-2">
-              <button
-                onClick={() => setIsEditModalOpen(false)}
-                className="px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 rounded-md"
-              >
-                Cancel
-              </button>
-              <button
-                className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md"
-              >
-                Save
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   )
 }

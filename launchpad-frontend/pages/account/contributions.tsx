@@ -35,6 +35,12 @@ export default function UserContributions() {
   const [campaigns, setCampaigns] = useState<Record<string, Campaign>>({})
   const [isLoading, setIsLoading] = useState(true)
   const { getTokenByAddress } = useTokens()
+  const [mounted, setMounted] = useState(false)
+
+  // Handle hydration mismatch
+  useEffect(() => {
+    setMounted(true)
+  }, [])
 
   useEffect(() => {
     const fetchContributions = async () => {
@@ -96,8 +102,10 @@ export default function UserContributions() {
       }
     }
 
-    fetchContributions()
-  }, [address])
+    if (mounted) {
+      fetchContributions()
+    }
+  }, [address, mounted])
 
   const formatAmount = (amount: string, tokenAddress: string) => {
     const token = getTokenByAddress(tokenAddress)
@@ -112,6 +120,8 @@ export default function UserContributions() {
   }
 
   const calculateStats = () => {
+    if (!mounted) return { totalContributions: 0, uniqueCampaigns: 0, tokenStats: [] }
+    
     const uniqueCampaigns = new Set(contributionEvents.map(event => event.campaignId))
     
     // Group contributions by token to sum amounts correctly
@@ -154,14 +164,17 @@ export default function UserContributions() {
     return {
       totalContributions: contributionEvents.length,
       uniqueCampaigns: uniqueCampaigns.size,
-      averageContribution: (contributionEvents.length / uniqueCampaigns.size).toFixed(1),
       tokenStats
     }
   }
 
+  if (!mounted) {
+    return null // Prevent flash of incorrect content during hydration
+  }
+
   if (!isConnected) {
     return (
-      <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white py-8">
+      <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white pt-32 pb-20">
         <div className="container mx-auto px-4">
           <div className="text-center">Please connect your wallet to view your contributions</div>
         </div>
@@ -171,7 +184,7 @@ export default function UserContributions() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white py-8">
+      <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white pt-32 pb-20">
         <div className="container mx-auto px-4">
           <div className="text-center">Loading your contributions...</div>
         </div>
@@ -179,8 +192,10 @@ export default function UserContributions() {
     )
   }
 
+  const stats = calculateStats()
+
   return (
-    <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white py-8">
+    <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white pt-32 pb-20">
       <div className="container mx-auto px-4">
         <div className="mb-6">
           <div className="flex items-center gap-4 mb-6">
@@ -192,18 +207,18 @@ export default function UserContributions() {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               <div className="bg-white rounded-lg shadow-sm p-6">
                 <dt className="text-sm font-medium text-gray-500">Total Contributions</dt>
-                <dd className="mt-1 text-2xl font-semibold text-gray-900">{calculateStats().totalContributions}</dd>
+                <dd className="mt-1 text-2xl font-semibold text-gray-900">{stats.totalContributions}</dd>
               </div>
               
               <div className="bg-white rounded-lg shadow-sm p-6">
                 <dt className="text-sm font-medium text-gray-500">Unique Campaigns</dt>
-                <dd className="mt-1 text-2xl font-semibold text-gray-900">{calculateStats().uniqueCampaigns}</dd>
+                <dd className="mt-1 text-2xl font-semibold text-gray-900">{stats.uniqueCampaigns}</dd>
               </div>
 
               <div className="bg-white rounded-lg shadow-sm p-6">
                 <dt className="text-sm font-medium text-gray-500">Contributions by Token</dt>
                 <dd className="mt-1">
-                  {calculateStats().tokenStats.map(({ symbol, total, count }) => (
+                  {stats.tokenStats.map(({ symbol, total, count }) => (
                     <div key={symbol} className="mb-2 last:mb-0">
                       <div className="text-2xl font-semibold text-gray-900">
                         {total} {symbol}
@@ -246,7 +261,11 @@ export default function UserContributions() {
                               </svg>
                             </Link>
                             <p className="mt-0.5 text-sm text-gray-500">
-                              Contributed {formatAmount(event.amount, campaign?.token || '')} {token?.symbol || 'tokens'} • {formatDistanceToNow(event.blockTimestamp, { addSuffix: true })}
+                              {mounted && (
+                                <>
+                                  Contributed {formatAmount(event.amount, campaign?.token || '')} {token?.symbol || 'tokens'} • {formatDistanceToNow(event.blockTimestamp, { addSuffix: true })}
+                                </>
+                              )}
                             </p>
                             <div className="mt-2 text-sm text-gray-500">
                               <a

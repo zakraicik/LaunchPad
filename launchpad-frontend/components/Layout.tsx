@@ -1,14 +1,18 @@
 import Navbar from './Navbar'
+import Footer from './Footer'
 
 interface LayoutProps {
   children: React.ReactNode
 }
 
-export default function Layout ({ children }: LayoutProps) {
+export default function Layout({ children }: LayoutProps) {
   return (
-    <div className='min-h-screen flex flex-col bg-gradient-to-b from-blue-50 to-white'>
+    <div className="min-h-screen flex flex-col">
       <Navbar />
-      <main className='flex-grow pt-16'>{children}</main>
+      <main className="flex-grow">
+        {children}
+      </main>
+      <Footer />
     </div>
   )
 }

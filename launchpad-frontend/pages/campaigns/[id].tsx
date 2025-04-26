@@ -190,7 +190,7 @@ export default function CampaignDetail () {
 
   if (!mounted || !router.isReady) {
     return (
-      <div className='min-h-screen bg-gray-50 py-8'>
+      <div className='min-h-screen bg-gradient-to-b from-blue-50 to-white py-20'>
         <div className='container mx-auto px-4'>
           <div className='text-center'>Loading...</div>
         </div>
@@ -200,7 +200,7 @@ export default function CampaignDetail () {
 
   if (isLoading) {
     return (
-      <div className='min-h-screen bg-gray-50 py-8'>
+      <div className='min-h-screen bg-gradient-to-b from-blue-50 to-white py-20'>
         <div className='container mx-auto px-4'>
           <div className='text-center'>Loading campaign...</div>
         </div>
@@ -210,7 +210,7 @@ export default function CampaignDetail () {
 
   if (!campaign) {
     return (
-      <div className='min-h-screen bg-gray-50 py-8'>
+      <div className='min-h-screen bg-gradient-to-b from-blue-50 to-white py-20'>
         <div className='container mx-auto px-4'>
           <div className='text-center'>Campaign not found</div>
         </div>
@@ -367,7 +367,7 @@ export default function CampaignDetail () {
   }
 
   return (
-    <div className='min-h-screen bg-gray-50 py-8'>
+    <div className='min-h-screen bg-gradient-to-b from-blue-50 to-white py-20'>
       <div className='container mx-auto px-4'>
         {/* Back Button */}
         <button

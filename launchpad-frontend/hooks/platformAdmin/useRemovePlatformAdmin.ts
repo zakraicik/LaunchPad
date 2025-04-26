@@ -1,20 +1,16 @@
 import { useWalletClient, useChainId } from 'wagmi'
 import { getContractAddress } from '@/config/addresses'
 import PlatformAdmin from '../../../artifacts/contracts/PlatformAdmin.sol/PlatformAdmin.json'
-import { useState } from 'react'
 import { ethers } from 'ethers'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 
 export function useRemovePlatformAdmin() {
   const chainId = useChainId()
   const { data: walletClient } = useWalletClient()
-  const [isRemoving, setIsRemoving] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const queryClient = useQueryClient()
 
-  const removePlatformAdmin = async (adminAddress: string) => {
-    try {
-      setIsRemoving(true)
-      setError(null)
-
+  const mutation = useMutation({
+    mutationFn: async (adminAddress: string) => {
       if (!walletClient) {
         throw new Error('Please connect your wallet')
       }
@@ -47,19 +43,16 @@ export function useRemovePlatformAdmin() {
       return {
         txHash: receipt.hash
       }
-    } catch (err) {
-      console.error('Error removing platform admin:', err)
-      const errorMessage = err instanceof Error ? err.message : 'Failed to remove platform admin'
-      setError(errorMessage)
-      throw err
-    } finally {
-      setIsRemoving(false)
+    },
+    onSuccess: () => {
+      // Invalidate the platform admins query to trigger a refetch
+      queryClient.invalidateQueries({ queryKey: ['platformAdmins', chainId] })
     }
-  }
+  })
 
   return {
-    removePlatformAdmin,
-    isRemoving,
-    error
+    removePlatformAdmin: mutation.mutateAsync,
+    isRemoving: mutation.isPending,
+    error: mutation.error ? (mutation.error as Error).message : null
   }
 } 

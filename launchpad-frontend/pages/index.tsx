@@ -11,7 +11,7 @@ export default function Home () {
   return (
     <main className='min-h-screen bg-white'>
       {/* Hero Section */}
-      <section className='bg-gradient-to-b from-blue-50 to-white py-20'>
+      <section className='bg-gradient-to-b from-blue-50 to-white pt-32 pb-20'>
         <div className='container mx-auto px-4'>
           <div className='max-w-4xl mx-auto text-center'>
             <h1 className='text-5xl font-bold mb-6'>
