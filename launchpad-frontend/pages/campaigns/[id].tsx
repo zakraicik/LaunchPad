@@ -378,83 +378,94 @@ export default function CampaignDetail () {
           Back to Campaigns
         </button>
 
-        {/* Top level grid for the two main containers */}
-        <div className='grid grid-cols-1 md:grid-cols-2 gap-6 mb-6'>
-          {/* Campaign Description Container */}
-          <div className='bg-white rounded-lg shadow-sm p-6'>
-            <h2 className='text-base font-semibold mb-4'>Campaign Description</h2>
-            <p className='text-sm text-gray-600'>{campaign.description}</p>
+        {/* Campaign Title and Description Row */}
+        <div className='bg-white rounded-lg shadow-sm p-6 mb-6'>
+          <div className="flex items-center gap-3 mb-4">
+            <h1 className='text-2xl font-bold text-gray-900'>{campaign.title}</h1>
+            {isOwner && (
+              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                Owner
+              </span>
+            )}
+          </div>
+          <p className='text-sm text-gray-600'>{campaign.description}</p>
+        </div>
+
+        {/* Quick Stats Row */}
+        <div className='bg-white rounded-lg shadow-sm p-6 mb-6'>
+          <div className='grid grid-cols-3 gap-4'>
+            <div className='text-center'>
+              <p className='text-base font-medium'>
+                {campaign.contributors || 0}
+              </p>
+              <p className='text-xs text-gray-500'>Contributors</p>
+            </div>
+            <div className='text-center'>
+              {isSuccessful() ? (
+                <>
+                  <p className='text-base font-medium text-green-600'>
+                    Successful
+                  </p>
+                  <p className='text-xs text-gray-500'>Campaign Status</p>
+                </>
+              ) : isCampaignEnded() ? (
+                <>
+                  <p className='text-base font-medium text-red-600'>
+                    Unsuccessful
+                  </p>
+                  <p className='text-xs text-gray-500'>Campaign Status</p>
+                </>
+              ) : (
+                <>
+                  <CampaignTimer
+                    startTime={campaign.createdAt instanceof Date ? campaign.createdAt.getTime() / 1000 : typeof campaign.createdAt === 'string' ? new Date(campaign.createdAt).getTime() / 1000 : campaign.createdAt.toDate().getTime() / 1000}
+                    endTime={campaign.createdAt instanceof Date ? campaign.createdAt.getTime() / 1000 + Number(campaign.duration) * 24 * 60 * 60 : typeof campaign.createdAt === 'string' ? new Date(campaign.createdAt).getTime() / 1000 + Number(campaign.duration) * 24 * 60 * 60 : campaign.createdAt.toDate().getTime() / 1000 + Number(campaign.duration) * 24 * 60 * 60}
+                    duration={Number(campaign.duration)}
+                  />
+                  <p className='text-xs text-gray-500'>Time Remaining</p>
+                </>
+              )}
+            </div>
+            <div className='text-center'>
+              <p className='text-base font-medium'>
+                {token?.symbol || 'Loading...'}
+              </p>
+              <p className='text-xs text-gray-500'>Target Coin</p>
+            </div>
           </div>
 
-          {/* Quick Stats Container */}
-          <div className='bg-white rounded-lg shadow-sm p-6'>
-            <div className='grid grid-cols-3 gap-4'>
-              <div className='text-center'>
-                <p className='text-base font-medium'>
-                  {campaign.contributors || 0}
-                </p>
-                <p className='text-xs text-gray-500'>Contributors</p>
-              </div>
-              <div className='text-center'>
-                {isSuccessful() ? (
-                  <>
-                    <p className='text-base font-medium text-green-600'>
-                      Successful
-                    </p>
-                    <p className='text-xs text-gray-500'>Campaign Status</p>
-                  </>
-                ) : (
-                  <>
-                    <CampaignTimer
-                      startTime={campaign.createdAt instanceof Date ? campaign.createdAt.getTime() / 1000 : typeof campaign.createdAt === 'string' ? new Date(campaign.createdAt).getTime() / 1000 : campaign.createdAt.toDate().getTime() / 1000}
-                      endTime={campaign.createdAt instanceof Date ? campaign.createdAt.getTime() / 1000 + Number(campaign.duration) * 24 * 60 * 60 : typeof campaign.createdAt === 'string' ? new Date(campaign.createdAt).getTime() / 1000 + Number(campaign.duration) * 24 * 60 * 60 : campaign.createdAt.toDate().getTime() / 1000 + Number(campaign.duration) * 24 * 60 * 60}
-                      duration={Number(campaign.duration)}
-                    />
-                    <p className='text-xs text-gray-500'>Time Remaining</p>
-                  </>
-                )}
-              </div>
-              <div className='text-center'>
-                <p className='text-base font-medium'>
-                  {token?.symbol || 'Loading...'}
-                </p>
-                <p className='text-xs text-gray-500'>Target Coin</p>
-              </div>
+          {/* Progress Section */}
+          <div className='mt-6'>
+            <div className='w-full bg-gray-200 rounded-full h-2'>
+              <div
+                className='bg-blue-600 h-2 rounded-full'
+                style={{ width: `${Math.min(100, progress)}%` }}
+              />
             </div>
-
-            {/* Progress Section */}
-            <div className='mt-6'>
-              <div className='w-full bg-gray-200 rounded-full h-2'>
-                <div
-                  className='bg-blue-600 h-2 rounded-full'
-                  style={{ width: `${Math.min(100, progress)}%` }}
-                />
+            <div className='flex justify-between items-center mt-4'>
+              <div>
+                <p className='text-base font-medium'>
+                  {formattedRaised} {token?.symbol}
+                </p>
+                <p className='text-xs text-gray-500'>
+                  raised of {formattedGoal} {token?.symbol}
+                </p>
               </div>
-              <div className='flex justify-between items-center mt-4'>
-                <div>
-                  <p className='text-base font-medium'>
-                    {formattedRaised} {token?.symbol}
-                  </p>
-                  <p className='text-xs text-gray-500'>
-                    raised of {formattedGoal} {token?.symbol}
-                  </p>
-                </div>
-                <div className='text-right'>
-                  <p className='text-base font-medium'>
-                    {formattedGoal} {token?.symbol}
-                  </p>
-                  <p className='text-xs text-gray-500'>Goal Amount</p>
-                </div>
+              <div className='text-right'>
+                <p className='text-base font-medium'>
+                  {formattedGoal} {token?.symbol}
+                </p>
+                <p className='text-xs text-gray-500'>Goal Amount</p>
               </div>
             </div>
           </div>
         </div>
 
         {/* Campaign Details and Contribution Section */}
-        <div className='grid grid-cols-1 md:grid-cols-2 gap-6 mb-6'>
-          {/* Contribution Form */}
+        <div className='grid grid-cols-1 md:grid-cols-2 gap-6 mb-6 items-stretch'>
+          {/* Contribution Form or Owner Actions (left) */}
           {canContribute() ? (
-            <div className='bg-white rounded-lg shadow-sm flex flex-col justify-center p-8'>
+            <div className='bg-white rounded-lg shadow-sm flex flex-col justify-center p-8 h-full'>
               <div className='flex items-center gap-8 mb-6'>
                 <div className='flex-1'>
                   <div className='flex flex-col items-center text-center'>
@@ -524,7 +535,7 @@ export default function CampaignDetail () {
               </div>
             </div>
           ) : (
-            <div className='bg-white rounded-lg shadow-sm p-8'>              
+            <div className='bg-white rounded-lg shadow-sm p-8 h-full flex flex-col justify-center'>              
               {/* Campaign Owner Actions */}
               {isOwner && (isSuccessful() || isCampaignEnded()) && (
                 <div className='mb-6'>
@@ -543,7 +554,11 @@ export default function CampaignDetail () {
                       <div className='flex flex-col items-center text-center'>
                         <BanknotesIcon className='h-8 w-8 text-blue-600 mb-3' />
                         <h2 className='text-xl font-bold text-gray-900 mb-1.5'>Claim Campaign Funds</h2>
-                        <p className='text-sm text-gray-600 mb-4'>The campaign was successful! Claim your funds to start building.</p>
+                        <p className='text-sm text-gray-600 mb-4'>
+                          {isSuccessful()
+                            ? 'Claim your funds to start building.'
+                            : 'Claim your funds to enable refunds for your contributors.'}
+                        </p>
                         <button
                           onClick={handleClaimFunds}
                           disabled={isClaiming}
@@ -578,29 +593,40 @@ export default function CampaignDetail () {
                       </p>
                     </div>
                   ) : isCampaignEnded() && (
-                    <>
-                      <p className='text-sm text-gray-600 mb-4'>
-                        {hasClaimed 
-                          ? 'Campaign funds have been claimed. You can now request a refund.' 
-                          : 'Refunds will be available after the campaign owner claims funds'}
-                      </p>
-                      <button
-                        onClick={handleRequestRefund}
-                        disabled={!hasClaimed || isRequestingRefund}
-                        className='w-full bg-red-600 text-white py-2.5 px-4 rounded-full text-sm font-medium hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed'
-                      >
-                        {isRequestingRefund ? 'Requesting...' : 'Request Refund'}
-                      </button>
-                    </>
+                    <div className="flex flex-col items-center justify-center text-center py-6">
+                      <div className='flex flex-col items-center text-center'>
+                        <BanknotesIcon className='h-8 w-8 text-blue-600 mb-3' />
+                        <h2 className='text-xl font-bold text-gray-900 mb-1.5'>Request Refund</h2>
+                        <p className='text-sm text-gray-600 mb-4'>
+                          {hasClaimed
+                            ? 'You can now request a refund for your contributors.'
+                            : 'Refunds are on the way!'}
+                        </p>
+                        <button
+                          onClick={handleRequestRefund}
+                          disabled={!hasClaimed || isRequestingRefund}
+                          className='w-64 bg-red-600 text-white py-2.5 px-4 rounded-full text-sm font-medium hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 group relative'
+                        >
+                          {isRequestingRefund ? 'Requesting...' : 'Request Refund'}
+                          {/* Tooltip - only show when button is disabled and refunds are not yet available */}
+                          {!hasClaimed && !isRequestingRefund && (
+                            <span className="absolute -top-10 left-1/2 -translate-x-1/2 bg-gray-800 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
+                              Refunds will be available after owner claims funds.
+                            </span>
+                          )}
+                        </button>
+                      </div>
+                    </div>
                   )}
                 </div>
               )}
             </div>
           )}
 
-          {/* Campaign Details Card */}
-          <div className='bg-white rounded-lg shadow-sm'>
-            <div className='p-6'>
+          {/* Campaign Details Card (right) - vertically centered */}
+          <div className='bg-white rounded-lg shadow-sm h-full flex items-center'>
+            <div className='p-6 w-full'>
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">Campaign Details</h3>
               <CampaignDetails
                 category={campaign.category}
                 campaignAddress={campaign.campaignAddress}
@@ -651,32 +677,6 @@ export default function CampaignDetail () {
                 <div className='bg-gray-50 rounded-lg p-4'>
                   <h3 className='text-sm font-medium text-gray-900 mb-4'>Campaign Token Balances</h3>
                   <div className='space-y-4'>
-                    {!isCampaignEnded() ? (
-                      <>
-                        <div className='flex justify-between items-center'>
-                          <span className='text-sm text-gray-500'>Amount in Contract</span>
-                          <span className='text-sm font-medium'>
-                            {isLoadingBalance ? (
-                              'Loading...'
-                            ) : (
-                              `${formatAmount(tokenBalance)} ${token?.symbol}`
-                            )
-                          }
-                        </span>
-                      </div>
-                      <div className='flex justify-between items-center'>
-                        <span className='text-sm text-gray-500'>Amount in aTokens</span>
-                        <span className='text-sm font-medium'>
-                          {isLoadingYield ? (
-                            'Loading...'
-                          ) : (
-                            `${formatAmount(aTokenBalance)} ${token?.symbol}`
-                          )
-                        }
-                        </span>
-                      </div>
-                    </>
-                  ) : (
                     <div className='flex justify-between items-center'>
                       <span className='text-sm text-gray-500'>Amount in Contract</span>
                       <span className='text-sm font-medium'>
@@ -684,11 +684,19 @@ export default function CampaignDetail () {
                           'Loading...'
                         ) : (
                           `${formatAmount(tokenBalance)} ${token?.symbol}`
-                        )
-                      }
+                        )}
                       </span>
                     </div>
-                  )}
+                    <div className='flex justify-between items-center'>
+                      <span className='text-sm text-gray-500'>Amount in Yield Generating Protocol</span>
+                      <span className='text-sm font-medium'>
+                        {isLoadingYield ? (
+                          'Loading...'
+                        ) : (
+                          `${formatAmount(aTokenBalance)} ${token?.symbol}`
+                        )}
+                      </span>
+                    </div>
                   </div>
                 </div>
               </div>

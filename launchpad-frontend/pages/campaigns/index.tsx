@@ -9,11 +9,12 @@ import CampaignFilters from '../../components/campaigns/CampaignFilters'
 import CreateCampaignModal from '../../components/campaigns/CreateCampaignModal'
 import { useCampaigns } from '../../hooks/useCampaigns'
 import { useRouter } from 'next/router'
-import { useChainId } from 'wagmi'
+import { useChainId, useAccount } from 'wagmi'
 
 export default function CampaignsDiscovery() {
   const router = useRouter()
   const chainId = useChainId()
+  const { isConnected } = useAccount()
   const [mounted, setMounted] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedCategory, setSelectedCategory] = useState('all')
@@ -131,10 +132,16 @@ export default function CampaignsDiscovery() {
           {sortedCampaigns.length > 0 && (
             <button
               onClick={() => setIsCreateModalOpen(true)}
-              className='inline-flex items-center px-4 py-2 bg-green-600 text-white hover:bg-green-700 rounded-lg font-medium transition-colors'
+              disabled={!isConnected}
+              className='inline-flex items-center px-4 py-2 bg-green-600 text-white hover:bg-green-700 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed group relative'
             >
               <RocketLaunchIcon className='w-5 h-5 mr-2' />
               Create Campaign
+              {!isConnected && (
+                <span className="absolute -top-10 left-1/2 -translate-x-1/2 bg-gray-800 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
+                  Connect wallet to create campaign
+                </span>
+              )}
             </button>
           )}
         </div>
@@ -217,10 +224,16 @@ export default function CampaignsDiscovery() {
             </p>
             <button
               onClick={() => setIsCreateModalOpen(true)}
-              className='inline-flex items-center px-4 py-2 bg-green-600 text-white hover:bg-green-700 rounded-lg font-medium transition-colors'
+              disabled={!isConnected}
+              className='inline-flex items-center px-4 py-2 bg-green-600 text-white hover:bg-green-700 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed group relative'
             >
               <RocketLaunchIcon className='w-5 h-5 mr-2' />
               Create Campaign
+              {!isConnected && (
+                <span className="absolute -top-10 left-1/2 -translate-x-1/2 bg-gray-800 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
+                  Connect wallet to create campaign
+                </span>
+              )}
             </button>
           </div>
         )}

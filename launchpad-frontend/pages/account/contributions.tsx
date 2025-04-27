@@ -6,9 +6,12 @@ import { formatUnits } from 'ethers'
 import { useTokens } from '../../hooks/useTokens'
 import { formatNumber } from '../../utils/format'
 import { formatDistanceToNow } from 'date-fns'
-import { RocketLaunchIcon } from '@heroicons/react/24/outline'
+import { WalletIcon } from '@heroicons/react/24/outline'
 import { doc, getDoc } from 'firebase/firestore'
 import Link from 'next/link'
+import useHasBeenRefunded from '../../hooks/campaigns/useHasBeenRefunded'
+import useRefundStatuses from '../../hooks/campaigns/useRefundStatuses'
+import { Timestamp } from 'firebase/firestore'
 
 interface ContributionEvent {
   campaignId: string
@@ -27,6 +30,11 @@ interface Campaign {
   status: number
   statusText: string
   token: string
+  campaignAddress?: string
+  createdAt: string | Date | Timestamp
+  duration: string
+  totalContributions?: string
+  goalAmountSmallestUnits?: string
 }
 
 export default function UserContributions() {
@@ -36,6 +44,8 @@ export default function UserContributions() {
   const [isLoading, setIsLoading] = useState(true)
   const { getTokenByAddress } = useTokens()
   const [mounted, setMounted] = useState(false)
+  const [campaignStatuses, setCampaignStatuses] = useState<Record<string, string>>({})
+  const [statusFilter, setStatusFilter] = useState<string>('All')
 
   // Handle hydration mismatch
   useEffect(() => {
@@ -107,6 +117,28 @@ export default function UserContributions() {
     }
   }, [address, mounted])
 
+  // Calculate campaign statuses whenever campaigns change
+  useEffect(() => {
+    const newStatuses: Record<string, string> = {}
+    for (const event of contributionEvents) {
+      const campaign = campaigns[event.campaignId]
+      if (campaign) {
+        newStatuses[event.campaignId] = getCampaignStatus(campaign)
+      }
+    }
+    setCampaignStatuses(newStatuses)
+  }, [contributionEvents, campaigns])
+
+  // Prepare campaign data for refund status checking
+  const campaignsForRefundCheck = contributionEvents.map(event => ({
+    campaignId: event.campaignId,
+    campaignAddress: campaigns[event.campaignId]?.campaignAddress,
+    isRefundEligible: campaignStatuses[event.campaignId] === 'Refund Eligible'
+  }))
+
+  // Get refund statuses for all campaigns
+  const refundStatuses = useRefundStatuses(campaignsForRefundCheck, address)
+
   const formatAmount = (amount: string, tokenAddress: string) => {
     const token = getTokenByAddress(tokenAddress)
     if (!token) return '0'
@@ -168,6 +200,92 @@ export default function UserContributions() {
     }
   }
 
+  const getCampaignStatus = (campaign: Campaign | undefined) => {
+    if (!campaign) return 'Unknown'
+
+    const isCampaignEnded = (): boolean => {
+      if (!campaign.createdAt || !campaign.duration) return false
+
+      let createdAtDate: Date
+      if (typeof campaign.createdAt === 'string') {
+        createdAtDate = new Date(campaign.createdAt)
+      } else if (campaign.createdAt instanceof Date) {
+        createdAtDate = campaign.createdAt
+      } else {
+        createdAtDate = campaign.createdAt.toDate()
+      }
+
+      const endDate = new Date(
+        createdAtDate.getTime() + parseInt(campaign.duration) * 24 * 60 * 60 * 1000
+      )
+      return new Date() > endDate
+    }
+
+    const isSuccessful = (): boolean => {
+      if (!campaign.totalContributions || !campaign.goalAmountSmallestUnits) return false
+      try {
+        const totalContributions = BigInt(campaign.totalContributions)
+        const goalAmount = BigInt(campaign.goalAmountSmallestUnits)
+        return totalContributions >= goalAmount
+      } catch (error) {
+        console.error('Error checking if campaign is successful:', error)
+        return false
+      }
+    }
+
+    // If campaign has reached its goal, it's successful
+    if (isSuccessful()) {
+      return 'Successful'
+    }
+
+    // If campaign hasn't ended, it's in progress
+    if (!isCampaignEnded()) {
+      return 'In Progress'
+    }
+
+    // If campaign has ended and wasn't successful, check refund status
+    return 'Refund Eligible'
+  }
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'In Progress':
+        return 'bg-blue-100 text-blue-800'
+      case 'Successful':
+        return 'bg-green-100 text-green-800'
+      case 'Refund Eligible':
+        return 'bg-yellow-100 text-yellow-800'
+      case 'Refund Received':
+        return 'bg-green-100 text-green-800'
+      default:
+        return 'bg-gray-100 text-gray-800'
+    }
+  }
+
+  const getAvailableStatuses = () => {
+    const statuses = new Set(['All'])
+    Object.values(campaignStatuses).forEach(status => {
+      if (status) statuses.add(status)
+    })
+    // Add "Refund Received" status if any campaign has been refunded
+    if (Object.values(refundStatuses).some(status => status)) {
+      statuses.add('Refund Received')
+    }
+    return Array.from(statuses)
+  }
+
+  const filterContributions = (events: ContributionEvent[]) => {
+    if (statusFilter === 'All') return events
+
+    return events.filter(event => {
+      const campaignStatus = campaignStatuses[event.campaignId]
+      if (statusFilter === 'Refund Received') {
+        return campaignStatus === 'Refund Eligible' && refundStatuses[event.campaignId]
+      }
+      return campaignStatus === statusFilter
+    })
+  }
+
   if (!mounted) {
     return null // Prevent flash of incorrect content during hydration
   }
@@ -198,36 +316,65 @@ export default function UserContributions() {
     <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white pt-32 pb-20">
       <div className="container mx-auto px-4">
         <div className="mb-6">
-          <div className="flex items-center gap-4 mb-6">
-            <RocketLaunchIcon className="h-8 w-8 text-blue-600" />
-            <h1 className="text-2xl font-bold text-gray-900">Your Contributions</h1>
+          <div className="flex flex-col space-y-4 sm:space-y-0 sm:flex-row sm:items-center sm:justify-between mb-6">
+            <div className="flex items-center gap-4">
+              <WalletIcon className="h-8 w-8 text-blue-600" />
+              <h1 className="text-2xl font-bold text-gray-900">Your Contributions</h1>
+            </div>
+            
+            {/* Status Filter */}
+            {contributionEvents.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {getAvailableStatuses().map((status) => (
+                  <button
+                    key={status}
+                    onClick={() => setStatusFilter(status)}
+                    className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
+                      statusFilter === status
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    }`}
+                  >
+                    {status}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
 
           {contributionEvents.length > 0 && (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               <div className="bg-white rounded-lg shadow-sm p-6">
                 <dt className="text-sm font-medium text-gray-500">Total Contributions</dt>
-                <dd className="mt-1 text-2xl font-semibold text-gray-900">{stats.totalContributions}</dd>
+                <dd className="mt-1 text-2xl font-semibold text-gray-900">
+                  {mounted ? stats.totalContributions : '...'}
+                </dd>
               </div>
               
               <div className="bg-white rounded-lg shadow-sm p-6">
                 <dt className="text-sm font-medium text-gray-500">Unique Campaigns</dt>
-                <dd className="mt-1 text-2xl font-semibold text-gray-900">{stats.uniqueCampaigns}</dd>
+                <dd className="mt-1 text-2xl font-semibold text-gray-900">
+                  {mounted ? stats.uniqueCampaigns : '...'}
+                </dd>
               </div>
 
               <div className="bg-white rounded-lg shadow-sm p-6">
                 <dt className="text-sm font-medium text-gray-500">Contributions by Token</dt>
                 <dd className="mt-1">
-                  {stats.tokenStats.map(({ symbol, total, count }) => (
-                    <div key={symbol} className="mb-2 last:mb-0">
-                      <div className="text-2xl font-semibold text-gray-900">
-                        {total} {symbol}
+                  {mounted ? (
+                    stats.tokenStats.map(({ symbol, total, count }) => (
+                      <div key={symbol} className="mb-2 last:mb-0">
+                        <div className="text-2xl font-semibold text-gray-900">
+                          {total} {symbol}
+                        </div>
+                        <div className="text-sm text-gray-500">
+                          {count} contribution{count !== 1 ? 's' : ''}
+                        </div>
                       </div>
-                      <div className="text-sm text-gray-500">
-                        {count} contribution{count !== 1 ? 's' : ''}
-                      </div>
-                    </div>
-                  ))}
+                    ))
+                  ) : (
+                    <div>...</div>
+                  )}
                 </dd>
               </div>
             </div>
@@ -242,30 +389,47 @@ export default function UserContributions() {
           ) : (
             <div className="flow-root">
               <ul role="list" className="-mb-8">
-                {contributionEvents.map((event) => {
+                {mounted ? filterContributions(contributionEvents).map((event) => {
                   const campaign = campaigns[event.campaignId]
                   const token = getTokenByAddress(campaign?.token || '')
+                  const isUnsuccessful = campaign?.statusText === 'Unsuccessful'
                   
                   return (
                     <li key={event.transactionHash} className="relative pb-8">
                       <div className="relative flex items-start space-x-3">
                         <div className="min-w-0 flex-1">
                           <div className="text-sm">
-                            <Link 
-                              href={`/campaigns/${event.campaignId}`}
-                              className="font-medium text-gray-900 hover:text-blue-600 transition-colors flex items-center gap-1"
-                            >
-                              {campaign?.title || 'Unknown Campaign'}
-                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                              </svg>
-                            </Link>
+                            <div className="flex items-center justify-between mb-1">
+                              <div className="flex items-center gap-2 flex-1">
+                                <Link 
+                                  href={`/campaigns/${event.campaignId}`}
+                                  className="font-medium text-gray-900 hover:text-blue-600 transition-colors flex items-center gap-1"
+                                >
+                                  {campaign?.title || 'Unknown Campaign'}
+                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                                  </svg>
+                                </Link>
+                                <div className="flex items-center gap-2">
+                                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                                    getStatusColor(
+                                      campaignStatuses[event.campaignId] === 'Refund Eligible' && refundStatuses[event.campaignId]
+                                        ? 'Refund Received'
+                                        : campaignStatuses[event.campaignId]
+                                    )
+                                  }`}>
+                                    {campaignStatuses[event.campaignId] === 'Refund Eligible' && refundStatuses[event.campaignId]
+                                      ? 'Refund Received'
+                                      : campaignStatuses[event.campaignId] || 'Unknown'}
+                                  </span>
+                                </div>
+                              </div>
+                              <div className="text-sm text-gray-500">
+                                Block #{event.blockNumber}
+                              </div>
+                            </div>
                             <p className="mt-0.5 text-sm text-gray-500">
-                              {mounted && (
-                                <>
-                                  Contributed {formatAmount(event.amount, campaign?.token || '')} {token?.symbol || 'tokens'} • {formatDistanceToNow(event.blockTimestamp, { addSuffix: true })}
-                                </>
-                              )}
+                              Contributed {formatAmount(event.amount, campaign?.token || '')} {token?.symbol || 'tokens'} • {formatDistanceToNow(event.blockTimestamp, { addSuffix: true })}
                             </p>
                             <div className="mt-2 text-sm text-gray-500">
                               <a
@@ -279,15 +443,14 @@ export default function UserContributions() {
                             </div>
                           </div>
                         </div>
-                        <div className="flex-shrink-0 self-center">
-                          <div className="text-sm text-gray-500">
-                            Block #{event.blockNumber}
-                          </div>
-                        </div>
                       </div>
                     </li>
                   )
-                })}
+                }) : (
+                  <div className="text-center py-4">
+                    <p className="text-gray-500">Loading contributions...</p>
+                  </div>
+                )}
               </ul>
             </div>
           )}
@@ -295,4 +458,4 @@ export default function UserContributions() {
       </div>
     </div>
   )
-} 
+}

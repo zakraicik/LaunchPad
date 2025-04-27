@@ -39,19 +39,6 @@ export default function Navbar () {
     { name: 'About', href: '/about' }
   ]
 
-  const accountNavigation = [
-    {
-      name: 'My Campaigns',
-      href: '/campaigns/my',
-      icon: RocketLaunchIcon
-    },
-    { 
-      name: 'My Contributions', 
-      href: '/account/contributions', 
-      icon: WalletIcon 
-    }
-  ]
-
   const adminNavigation = [
     {
       name: 'Token Management',
@@ -69,6 +56,24 @@ export default function Navbar () {
       icon: BanknotesIcon
     }
   ]
+
+  const accountNavigation = mounted ? [
+    {
+      name: 'My Campaigns',
+      href: '/campaigns/my',
+      icon: RocketLaunchIcon
+    },
+    { 
+      name: 'My Contributions', 
+      href: '/account/contributions', 
+      icon: WalletIcon 
+    },
+    {
+      name: 'Available Refunds',
+      href: '/account/refunds',
+      icon: BanknotesIcon
+    }
+  ] : []
 
   const isActive = (path: string) => {
     // For exact matches (like Home and About)

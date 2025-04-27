@@ -211,7 +211,7 @@ export default function CreateCampaignModal ({
                 id='title'
                 value={title}
                 onChange={e => setTitle(e.target.value)}
-                className='w-full rounded-md border-gray-200 shadow-sm focus:border-blue-500 focus:ring-blue-500 bg-gray-50 text-sm px-3 py-2'
+                className='w-full pl-4 pr-4 py-2.5 bg-white border-2 border-gray-200 rounded-lg text-base font-medium focus:outline-none focus:ring-2 focus:ring-gray-100 focus:border-gray-400 transition-all'
                 required
               />
             </div>
@@ -228,7 +228,7 @@ export default function CreateCampaignModal ({
                 value={description}
                 onChange={e => setDescription(e.target.value)}
                 rows={4}
-                className='w-full rounded-md border-gray-200 shadow-sm focus:border-blue-500 focus:ring-blue-500 bg-gray-50 text-sm px-3 py-2'
+                className='w-full pl-4 pr-4 py-2.5 bg-white border-2 border-gray-200 rounded-lg text-base font-medium focus:outline-none focus:ring-2 focus:ring-gray-100 focus:border-gray-400 transition-all'
                 required
               />
             </div>
@@ -245,7 +245,7 @@ export default function CreateCampaignModal ({
                 id='targetAmount'
                 value={targetAmount}
                 onChange={e => setTargetAmount(e.target.value)}
-                className='w-full rounded-md border-gray-200 shadow-sm focus:border-blue-500 focus:ring-blue-500 bg-gray-50 text-sm px-3 py-2'
+                className='w-full pl-4 pr-4 py-2.5 bg-white border-2 border-gray-200 rounded-lg text-base font-medium focus:outline-none focus:ring-2 focus:ring-gray-100 focus:border-gray-400 transition-all'
                 required
                 min='0'
                 step='0.000000000000000001'
@@ -263,7 +263,7 @@ export default function CreateCampaignModal ({
                 id='token'
                 value={selectedToken}
                 onChange={e => setSelectedToken(e.target.value)}
-                className='w-full rounded-md border-gray-200 shadow-sm focus:border-blue-500 focus:ring-blue-500 bg-gray-50 text-sm px-3 py-2'
+                className='w-full pl-4 pr-4 py-2.5 bg-white border-2 border-gray-200 rounded-lg text-base font-medium focus:outline-none focus:ring-2 focus:ring-gray-100 focus:border-gray-400 transition-all'
                 required
               >
                 <option value=''>Select a token</option>
@@ -287,7 +287,7 @@ export default function CreateCampaignModal ({
                 id='duration'
                 value={duration}
                 onChange={e => setDuration(e.target.value)}
-                className='w-full rounded-md border-gray-200 shadow-sm focus:border-blue-500 focus:ring-blue-500 bg-gray-50 text-sm px-3 py-2'
+                className='w-full pl-4 pr-4 py-2.5 bg-white border-2 border-gray-200 rounded-lg text-base font-medium focus:outline-none focus:ring-2 focus:ring-gray-100 focus:border-gray-400 transition-all'
                 required
                 min='1'
               />
@@ -304,7 +304,7 @@ export default function CreateCampaignModal ({
                 id='category'
                 value={category}
                 onChange={e => setCategory(e.target.value)}
-                className='w-full rounded-md border-gray-200 shadow-sm focus:border-blue-500 focus:ring-blue-500 bg-gray-50 text-sm px-3 py-2'
+                className='w-full pl-4 pr-4 py-2.5 bg-white border-2 border-gray-200 rounded-lg text-base font-medium focus:outline-none focus:ring-2 focus:ring-gray-100 focus:border-gray-400 transition-all'
                 required
               >
                 <option value=''>Select a category</option>
@@ -329,7 +329,7 @@ export default function CreateCampaignModal ({
                 value={githubUrl}
                 onChange={e => setGithubUrl(e.target.value)}
                 placeholder='https://github.com/username/repository'
-                className='w-full rounded-md border-gray-200 shadow-sm focus:border-blue-500 focus:ring-blue-500 bg-gray-50 text-sm px-3 py-2'
+                className='w-full pl-4 pr-4 py-2.5 bg-white border-2 border-gray-200 rounded-lg text-base font-medium focus:outline-none focus:ring-2 focus:ring-gray-100 focus:border-gray-400 transition-all'
                 required
                 pattern='https://github.com/[\w-]+/[\w.-]+/?'
               />

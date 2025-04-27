@@ -4,9 +4,11 @@ import Link from 'next/link'
 import { RocketLaunchIcon } from '@heroicons/react/24/outline'
 import { useState } from 'react'
 import CreateCampaignModal from '../components/campaigns/CreateCampaignModal'
+import { useAccount } from 'wagmi'
 
 export default function Home () {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
+  const { isConnected } = useAccount()
 
   return (
     <main className='min-h-screen bg-white'>
@@ -29,10 +31,16 @@ export default function Home () {
               </Link>
               <button
                 onClick={() => setIsCreateModalOpen(true)}
-                className='inline-flex items-center px-6 py-3 bg-green-600 text-white hover:bg-green-700 rounded-lg font-medium transition-colors'
+                disabled={!isConnected}
+                className='inline-flex items-center px-6 py-3 bg-green-600 text-white hover:bg-green-700 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed group relative'
               >
                 <RocketLaunchIcon className='w-5 h-5 mr-2' />
                 Create Campaign
+                {!isConnected && (
+                  <span className="absolute -top-10 left-1/2 -translate-x-1/2 bg-gray-800 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
+                    Connect wallet to create campaign
+                  </span>
+                )}
               </button>
             </div>
           </div>
