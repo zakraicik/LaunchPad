@@ -27,7 +27,7 @@ const config: HardhatUserConfig = {
     hardhat: {
       forking: {
         url: `https://base-mainnet.g.alchemy.com/v2/${ALCHEMY_API_KEY}`,
-        blockNumber: 27890280 // Use a recent block number
+        blockNumber: 29502862 // Use a recent block number
       },
       chains: {
         8453: {

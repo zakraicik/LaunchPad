@@ -27,10 +27,11 @@ contract DefiIntegrationManager is
 
     // Status and operation constants (packed into single bytes)
     uint8 private constant OP_DEPOSITED = 1;
-    uint8 private constant OP_WITHDRAWN = 2;
+    uint8 private constant OP_WITHDRAWN_TO_CONTRACT = 2;
     uint8 private constant OP_TOKEN_REGISTRY_UPDATED = 3;
     uint8 private constant OP_FEE_MANAGER_UPDATED = 4;
     uint8 private constant OP_AAVE_POOL_UPDATED = 5;
+    uint8 private constant OP_WITHDRAWN_TO_PLATFORM_TREASURY = 6;
 
     // Error codes
     uint8 private constant ERR_ZERO_AMOUNT = 1;
@@ -313,6 +314,23 @@ contract DefiIntegrationManager is
                     feeManager.platformTreasury(),
                     platformShare
                 );
+
+                emit DefiOperation(
+                    OP_WITHDRAWN_TO_PLATFORM_TREASURY,
+                    feeManager.platformTreasury(),
+                    _token,
+                    platformShare,
+                    campaignId
+                );
+
+                emit DefiOperation(
+                    OP_WITHDRAWN_TO_CONTRACT,
+                    msg.sender,
+                    _token,
+                    creatorShare,
+                    campaignId
+                );
+
             } else {
                 uint256 remaining = withdrawn - coverRefunds;
 
@@ -321,17 +339,25 @@ contract DefiIntegrationManager is
                     feeManager.platformTreasury(),
                     remaining
                 );
+
+                emit DefiOperation(
+                    OP_WITHDRAWN_TO_PLATFORM_TREASURY,
+                    feeManager.platformTreasury(),
+                    _token,
+                    remaining,
+                    campaignId
+                );
+
+                emit DefiOperation(
+                    OP_WITHDRAWN_TO_CONTRACT,
+                    msg.sender,
+                    _token,
+                    coverRefunds,
+                    campaignId
+                );
             }
 
             aaveBalances[_token][msg.sender] = 0;
-
-            emit DefiOperation(
-                OP_WITHDRAWN,
-                msg.sender,
-                _token,
-                withdrawn,
-                campaignId
-            );
 
             return withdrawn;
         } catch {
