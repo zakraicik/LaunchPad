@@ -232,11 +232,14 @@ export default function MyCampaigns () {
     <div className='min-h-screen bg-gradient-to-b from-blue-50 to-white pt-32 pb-20'>
       <div className='container mx-auto px-4 sm:px-6 lg:px-8'>
         <div className='flex justify-between items-start mb-8'>
-          <div>
-            <h1 className='text-3xl font-bold text-gray-900'>My Campaigns</h1>
-            <p className='mt-2 text-sm text-gray-500'>
-              Manage and track your campaigns
-            </p>
+          <div className="flex items-center gap-4">
+            <RocketLaunchIcon className="h-8 w-8 text-blue-600" />
+            <div>
+              <h1 className='text-3xl font-bold text-gray-900'>My Campaigns</h1>
+              <p className='mt-2 text-sm text-gray-500'>
+                Manage and track your campaigns
+              </p>
+            </div>
           </div>
           <button
             onClick={() => setIsCreateModalOpen(true)}

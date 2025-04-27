@@ -79,7 +79,7 @@ service cloud.firestore {
       allow read: if true;
     }
 
-    match /refundevents/{docId} {
+    match /refundEvents/{docId} {
       allow read: if true;
     }
 

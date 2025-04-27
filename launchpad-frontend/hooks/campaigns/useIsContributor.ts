@@ -1,54 +1,67 @@
-import { useState } from 'react'
+import { useMemo } from 'react'
 import { Contract, BrowserProvider } from 'ethers'
 import { useWalletClient } from 'wagmi'
+import { useQueries } from '@tanstack/react-query'
 import CampaignABI from '../../../artifacts/contracts/Campaign.sol/Campaign.json'
 import toast from 'react-hot-toast'
 
-export const useIsContributor = () => {
+interface CampaignCheck {
+  campaignId: string
+  campaignAddress?: string
+}
+
+export const useIsContributor = (campaigns: CampaignCheck[], userAddress?: string) => {
   const { data: walletClient } = useWalletClient()
-  const [isCheckingContributor, setIsCheckingContributor] = useState(false)
 
-  const checkIsContributor = async (campaignAddress: string, walletAddress: string) => {
-    if (!walletClient || !campaignAddress) {
-      toast.error('Please connect your wallet')
-      return
-    }
+  // Memoize the queries configuration to prevent unnecessary query updates
+  const queries = useMemo(() => 
+    campaigns.map(campaign => ({
+      queryKey: ['isContributor', campaign.campaignId, campaign.campaignAddress, userAddress],
+      queryFn: async () => {
+        if (!walletClient || !campaign.campaignAddress || !userAddress) {
+          return false
+        }
 
-    setIsCheckingContributor(true)
-    let toastId = toast.loading('Initiating refund request...')
+        try {
+          const provider = new BrowserProvider(walletClient.transport)
+          const signer = await provider.getSigner()
+          
+          const campaignContract = new Contract(
+            campaign.campaignAddress,
+            CampaignABI.abi,
+            signer
+          )
 
-    try {
-      const provider = new BrowserProvider(walletClient.transport)
-      const signer = await provider.getSigner()
-      
-      // Create campaign contract instance
-      const campaignContract = new Contract(
-        campaignAddress,
-        CampaignABI.abi,
-        signer
-      )
+          return await campaignContract.isContributor(userAddress)
+        } catch (error: any) {
+          console.error('Error checking if contributor:', error)
+          if (error.code !== 'ACTION_REJECTED') {
+            toast.error(error.message || 'Failed to check if contributor')
+          }
+          return false
+        }
+      },
+      enabled: Boolean(
+        walletClient && 
+        campaign.campaignAddress && 
+        userAddress
+      ),
+      refetchInterval: 30000, // 30 seconds
+      staleTime: 20000, // 20 seconds
+      gcTime: 60000, // 1 minute
+      retry: 2,
+    })),
+    [campaigns, userAddress, walletClient]
+  )
 
-      // Call requestRefund function
-      const tx = await campaignContract.isContributor(walletAddress)
-      toast.dismiss(toastId)
-      toastId = toast.loading('Transaction sent. Waiting for confirmation...')
+  const contributorQueries = useQueries({ queries })
 
-      toast.dismiss(toastId)
-      toast.success('Checking if contributor!')
-
-      return tx
-    } catch (error: any) {
-      console.error('Error checking if contributor:', error)
-      toast.dismiss(toastId)
-      // Don't show toast for user rejections
-      if (error.code !== 'ACTION_REJECTED') {
-        toast.error(error.message || 'Failed to check if contributor')
-      }
-      throw error
-    } finally {
-        setIsCheckingContributor(false)
-    }
-  }
-
-  return { checkIsContributor, isCheckingContributor }
+  // Memoize the final result to prevent unnecessary object creation
+  return useMemo(() => 
+    campaigns.reduce<Record<string, boolean>>((acc, campaign, index) => {
+      acc[campaign.campaignId] = contributorQueries[index].data ?? false
+      return acc
+    }, {}),
+    [campaigns, contributorQueries]
+  )
 }

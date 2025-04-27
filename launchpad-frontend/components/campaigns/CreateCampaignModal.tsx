@@ -184,7 +184,7 @@ export default function CreateCampaignModal ({
 
       <div className='fixed inset-0 flex items-center justify-center p-4'>
         <Dialog.Panel className='mx-auto max-w-2xl w-full bg-white/90 backdrop-blur-md rounded-xl shadow-xl flex flex-col max-h-[90vh] border border-gray-100'>
-          <Dialog.Title className='text-lg font-medium text-gray-900 p-6 border-b bg-gray-50 rounded-t-xl'>
+          <Dialog.Title className='text-lg font-medium text-blue-600 p-6 border-b bg-gray-50 rounded-t-xl'>
             Create New Campaign
           </Dialog.Title>
 
@@ -339,11 +339,11 @@ export default function CreateCampaignModal ({
             </div>
           </form>
 
-          <div className='flex justify-end space-x-3 p-6 border-t bg-gray-50 rounded-b-xl'>
+          <div className='flex justify-end space-x-3 p-6 border-t bg-blue-50 rounded-b-xl'>
             <button
               type='button'
               onClick={onClose}
-              className='px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 border border-gray-300 rounded-md transition-colors duration-200'
+              className='px-4 py-2 text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 border border-gray-300 rounded-md transition-colors duration-200'
               ref={cancelButtonRef}
             >
               Cancel
@@ -352,7 +352,7 @@ export default function CreateCampaignModal ({
               type='button'
               onClick={handleCreateClick}
               disabled={isSubmitting}
-              className='inline-flex justify-center px-4 py-2 text-sm font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 border border-transparent rounded-md disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200'
+              className='inline-flex justify-center px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 border border-transparent rounded-md disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200'
             >
               {isSubmitting ? 'Creating...' : 'Create Campaign'}
             </button>

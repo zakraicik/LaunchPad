@@ -1,6 +1,6 @@
 import { useRouter } from 'next/router'
 import { useState, useEffect } from 'react'
-import { ShareIcon, ArrowLeftIcon, RocketLaunchIcon, BanknotesIcon } from '@heroicons/react/24/outline'
+import { ShareIcon, ArrowLeftIcon, RocketLaunchIcon, BanknotesIcon, FlagIcon } from '@heroicons/react/24/outline'
 import Contributors from '../../components/campaigns/Contributors'
 import CampaignDetails from '../../components/campaigns/CampaignDetails'
 import { formatNumber } from '../../utils/format'
@@ -13,8 +13,11 @@ import { useAccount, useWalletClient, usePublicClient } from 'wagmi'
 import toast from 'react-hot-toast'
 import CampaignTimer from '../../components/campaigns/CampaignTimer'
 import { useClaimFunds, useContribute, useRequestRefund, useHasClaimedFunds } from '@/hooks/campaigns'
+import { useIsContributor } from '@/hooks/campaigns/useIsContributor'
 import { useGetATokenAddress } from '@/hooks/defiManager/useGetATokenAddress'
 import { ERC20_ABI } from '../../config/abis/erc20'
+import useRefundStatuses from '@/hooks/campaigns/useRefundStatuses'
+import Link from 'next/link'
 
 interface Campaign {
   id: string
@@ -60,6 +63,50 @@ export default function CampaignDetail () {
   const [isLoadingYield, setIsLoadingYield] = useState(false)
   const [tokenBalance, setTokenBalance] = useState<string>('0')
   const [isLoadingBalance, setIsLoadingBalance] = useState(false)
+
+  const isSuccessful = (): boolean => {
+    if (!campaign?.totalContributions || !campaign?.goalAmountSmallestUnits) return false
+    try {
+      const totalContributions = BigInt(campaign.totalContributions)
+      const goalAmount = BigInt(campaign.goalAmountSmallestUnits)
+      return totalContributions >= goalAmount
+    } catch (error) {
+      console.error('Error checking if campaign is successful:', error)
+      return false
+    }
+  }
+
+  const isCampaignEnded = (): boolean => {
+    if (!campaign?.createdAt || !campaign?.duration) return false
+
+    let createdAtDate: Date
+    if (typeof campaign.createdAt === 'string') {
+      createdAtDate = new Date(campaign.createdAt)
+    } else if (campaign.createdAt instanceof Date) {
+      createdAtDate = campaign.createdAt
+    } else {
+      createdAtDate = campaign.createdAt.toDate()
+    }
+
+    const endDate = new Date(
+      createdAtDate.getTime() + parseInt(campaign.duration) * 24 * 60 * 60 * 1000
+    )
+    return new Date() > endDate
+  }
+
+  const canContribute = (): boolean => {
+    return !isCampaignEnded() && !isSuccessful()
+  }
+
+  const campaigns = campaign ? [{ 
+    campaignId: campaign.id, 
+    campaignAddress: campaign.campaignAddress,
+    isRefundEligible: isCampaignEnded() && !isSuccessful()
+  }] : []
+  const contributorStatuses = useIsContributor(campaigns, address)
+  const refundStatuses = useRefundStatuses(campaigns, address)
+  const isContributor = campaign ? contributorStatuses[campaign.id] : false
+  const hasBeenRefunded = campaign ? refundStatuses[campaign.id] : false
 
   useEffect(() => {
     setMounted(true)
@@ -232,22 +279,6 @@ export default function CampaignDetail () {
     }
   }
 
-  const isSuccessful = (): boolean => {
-    if (!campaign?.totalContributions || !campaign?.goalAmountSmallestUnits) return false
-    try {
-      const totalContributions = BigInt(campaign.totalContributions)
-      const goalAmount = BigInt(campaign.goalAmountSmallestUnits)
-      return totalContributions >= goalAmount
-    } catch (error) {
-      console.error('Error checking if campaign is successful:', error)
-      return false
-    }
-  }
-
-  const canContribute = (): boolean => {
-    return !isCampaignEnded() && !isSuccessful()
-  }
-
   const calculateProgress = (): number => {
     if (!campaign.totalContributions || !token) return 0
     try {
@@ -326,24 +357,6 @@ export default function CampaignDetail () {
         toast.error('Failed to request refund')
       }
     }
-  }
-
-  const isCampaignEnded = (): boolean => {
-    if (!campaign?.createdAt || !campaign?.duration) return false
-
-    let createdAtDate: Date
-    if (typeof campaign.createdAt === 'string') {
-      createdAtDate = new Date(campaign.createdAt)
-    } else if (campaign.createdAt instanceof Date) {
-      createdAtDate = campaign.createdAt
-    } else {
-      createdAtDate = campaign.createdAt.toDate()
-    }
-
-    const endDate = new Date(
-      createdAtDate.getTime() + parseInt(campaign.duration) * 24 * 60 * 60 * 1000
-    )
-    return new Date() > endDate
   }
 
   const isOwner = address && campaign?.creator && address.toLowerCase() === campaign.creator.toLowerCase()
@@ -541,23 +554,39 @@ export default function CampaignDetail () {
                 <div className='mb-6'>
                   {hasClaimed ? (
                     <div className='text-center py-8'>
-                      <RocketLaunchIcon className='h-12 w-12 mx-auto mb-4 text-blue-600 animate-bounce' />
-                      <h3 className='text-xl font-bold text-gray-900 mb-2'>
-                        Funds Successfully Claimed!
-                      </h3>
-                      <p className='text-sm text-gray-600'>
-                        You have the funds. Now go build something amazing! 🚀
-                      </p>
+                      {isSuccessful() ? (
+                        <>
+                          <RocketLaunchIcon className='h-12 w-12 mx-auto mb-4 text-blue-600 animate-bounce' />
+                          <h3 className='text-xl font-bold text-gray-900 mb-2'>
+                            Funds Successfully Claimed!
+                          </h3>
+                          <p className='text-sm text-gray-600'>
+                            You have the funds. Now go build something amazing! 🚀
+                          </p>
+                        </>
+                      ) : (
+                        <>
+                          <BanknotesIcon className='h-12 w-12 mx-auto mb-4 text-blue-600' />
+                          <h3 className='text-xl font-bold text-gray-900 mb-2'>
+                            Funds Successfully Claimed
+                          </h3>
+                          <p className='text-sm text-gray-600'>
+                            Contributors can now request refunds for their contributions.
+                          </p>
+                        </>
+                      )}
                     </div>
                   ) : (
                     <div className='flex flex-col items-center justify-center py-6'>
                       <div className='flex flex-col items-center text-center'>
                         <BanknotesIcon className='h-8 w-8 text-blue-600 mb-3' />
-                        <h2 className='text-xl font-bold text-gray-900 mb-1.5'>Claim Campaign Funds</h2>
+                        <h2 className='text-xl font-bold text-gray-900 mb-1.5'>
+                          {isSuccessful() ? 'Claim Campaign Funds' : 'Enable Refunds'}
+                        </h2>
                         <p className='text-sm text-gray-600 mb-4'>
                           {isSuccessful()
                             ? 'Claim your funds to start building.'
-                            : 'Claim your funds to enable refunds for your contributors.'}
+                            : 'Claim funds to enable refunds for your contributors.'}
                         </p>
                         <button
                           onClick={handleClaimFunds}
@@ -570,7 +599,7 @@ export default function CampaignDetail () {
                               <span>Claiming...</span>
                             </>
                           ) : (
-                            <span>Claim Funds</span>
+                            <span>{isSuccessful() ? 'Claim Funds' : 'Enable Refunds'}</span>
                           )}
                         </button>
                       </div>
@@ -592,15 +621,15 @@ export default function CampaignDetail () {
                         Campaign was successful, which means it was no longer accepting contributions.
                       </p>
                     </div>
-                  ) : isCampaignEnded() && (
+                  ) : isCampaignEnded() && isContributor && !hasBeenRefunded ? (
                     <div className="flex flex-col items-center justify-center text-center py-6">
                       <div className='flex flex-col items-center text-center'>
                         <BanknotesIcon className='h-8 w-8 text-blue-600 mb-3' />
                         <h2 className='text-xl font-bold text-gray-900 mb-1.5'>Request Refund</h2>
                         <p className='text-sm text-gray-600 mb-4'>
                           {hasClaimed
-                            ? 'You can now request a refund for your contributors.'
-                            : 'Refunds are on the way!'}
+                            ? 'You can now request a refund for your contribution.'
+                            : 'Refunds will be available once the owner claims funds.'}
                         </p>
                         <button
                           onClick={handleRequestRefund}
@@ -616,6 +645,35 @@ export default function CampaignDetail () {
                           )}
                         </button>
                       </div>
+                    </div>
+                  ) : isCampaignEnded() && isContributor && hasBeenRefunded ? (
+                    <div className="text-center py-8">
+                      <BanknotesIcon className='h-12 w-12 mx-auto mb-4 text-green-600' />
+                      <h3 className='text-xl font-bold text-gray-900 mb-2'>
+                        Refund Received
+                      </h3>
+                      <p className='text-sm text-gray-600'>
+                        You have already received your refund for this campaign.
+                      </p>
+                    </div>
+                  ) : isCampaignEnded() && !isContributor && (
+                    <div className="text-center py-8">
+                      <FlagIcon className='h-12 w-12 mx-auto mb-4 text-gray-600' />
+                      <h3 className='text-xl font-bold text-gray-900 mb-2'>
+                        Campaign Has Concluded
+                      </h3>
+                      <p className='text-sm text-gray-600'>
+                        This campaign has ended. Check out other active campaigns you can contribute to!
+                      </p>
+                      <Link 
+                        href="/campaigns"
+                        className="mt-4 inline-flex items-center text-blue-600 hover:text-blue-800 gap-1 text-sm"
+                      >
+                        View Active Campaigns
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                        </svg>
+                      </Link>
                     </div>
                   )}
                 </div>

@@ -16,7 +16,8 @@ import {
   RocketLaunchIcon,
   CurrencyDollarIcon,
   BanknotesIcon,
-  UserIcon
+  UserIcon,
+  ArrowPathIcon
 } from '@heroicons/react/24/outline'
 import { useIsAdmin } from '../utils/admin'
 import { useFirebaseAuth } from '../hooks/useFirebaseAuth'
@@ -69,9 +70,9 @@ export default function Navbar () {
       icon: WalletIcon 
     },
     {
-      name: 'Available Refunds',
+      name: 'My Refunds',
       href: '/account/refunds',
-      icon: BanknotesIcon
+      icon: ArrowPathIcon
     }
   ] : []
 

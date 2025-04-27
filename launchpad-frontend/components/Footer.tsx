@@ -4,8 +4,8 @@ export default function Footer() {
   return (
     <footer className="bg-white border-t border-gray-100">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <div className="py-8 flex justify-between">
-          <div className="flex flex-col space-y-2">
+        <div className="py-8 flex flex-col sm:flex-row sm:justify-between items-center space-y-4 sm:space-y-0">
+          <div className="flex flex-col items-center sm:items-start space-y-2">
             <div className="text-sm text-gray-500">Need help?</div>
             <a 
               href="mailto:hi@getlaunched.xyz" 
@@ -15,7 +15,7 @@ export default function Footer() {
               hi@getlaunched.xyz
             </a>
           </div>
-          <div className="text-sm text-gray-400">
+          <div className="text-sm text-gray-400 text-center sm:text-left">
             © {new Date().getFullYear()} LaunchPad. All rights reserved.
           </div>
         </div>

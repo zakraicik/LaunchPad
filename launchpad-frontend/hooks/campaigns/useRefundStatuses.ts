@@ -1,3 +1,4 @@
+import { useMemo } from 'react'
 import { Contract, BrowserProvider } from 'ethers'
 import { useWalletClient } from 'wagmi'
 import { useQueries } from '@tanstack/react-query'
@@ -13,8 +14,9 @@ interface CampaignContribution {
 const useRefundStatuses = (campaigns: CampaignContribution[], userAddress?: string) => {
   const { data: walletClient } = useWalletClient()
 
-  const refundQueries = useQueries({
-    queries: campaigns.map(campaign => ({
+  // Memoize the queries configuration to prevent unnecessary query updates
+  const queries = useMemo(() => 
+    campaigns.map(campaign => ({
       queryKey: ['hasBeenRefunded', campaign.campaignId, campaign.campaignAddress, userAddress],
       queryFn: async () => {
         if (!walletClient || !campaign.campaignAddress || !userAddress || !campaign.isRefundEligible) {
@@ -46,18 +48,24 @@ const useRefundStatuses = (campaigns: CampaignContribution[], userAddress?: stri
         userAddress && 
         campaign.isRefundEligible
       ),
-      refetchInterval: 10000,
-      staleTime: 5000,
-      gcTime: 30000,
+      refetchInterval: 30000, // Increased to 30 seconds
+      staleTime: 20000, // Increased to 20 seconds
+      gcTime: 60000, // Increased to 1 minute
       retry: 2,
-    }))
-  })
+    })),
+    [campaigns, userAddress, walletClient]
+  )
 
-  // Convert the array of query results into a map of campaignId -> refund status
-  return campaigns.reduce<Record<string, boolean>>((acc, campaign, index) => {
-    acc[campaign.campaignId] = refundQueries[index].data ?? false
-    return acc
-  }, {})
+  const refundQueries = useQueries({ queries })
+
+  // Memoize the final result to prevent unnecessary object creation
+  return useMemo(() => 
+    campaigns.reduce<Record<string, boolean>>((acc, campaign, index) => {
+      acc[campaign.campaignId] = refundQueries[index].data ?? false
+      return acc
+    }, {}),
+    [campaigns, refundQueries]
+  )
 }
 
 export default useRefundStatuses 

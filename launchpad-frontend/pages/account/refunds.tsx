@@ -1,131 +1,97 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useAccount } from 'wagmi'
-import { collection, query, where, getDocs } from 'firebase/firestore'
-import { db } from '../../utils/firebase'
 import { formatUnits } from 'ethers'
 import { useTokens } from '../../hooks/useTokens'
 import { formatNumber } from '../../utils/format'
+import { formatDistanceToNow } from 'date-fns'
+import { ArrowPathIcon } from '@heroicons/react/24/outline'
 import Link from 'next/link'
-import { BanknotesIcon } from '@heroicons/react/24/outline'
-
-interface Campaign {
-  id: string
-  title: string
-  description: string
-  goalAmountSmallestUnits: string
-  token: string
-  createdAt: any
-  duration: string
-  campaignAddress?: string
-  hasClaimed?: boolean
-  contribution?: string
-  totalContributions?: string
-}
+import { useRefunds } from '../../hooks/campaigns/useRefunds'
 
 export default function RefundsPage() {
   const { address, isConnected } = useAccount()
-  const [campaigns, setCampaigns] = useState<Campaign[]>([])
-  const [isLoading, setIsLoading] = useState(true)
   const { getTokenByAddress } = useTokens()
+  const [mounted, setMounted] = useState(false)
+  const { data: refundsData, isLoading } = useRefunds(address)
+  const refundEvents = refundsData?.refundEvents || []
+  const campaigns = refundsData?.campaignRefunds || {}
 
+  // Handle hydration mismatch
   useEffect(() => {
-    const fetchRefundableCampaigns = async () => {
-      if (!address) return
+    setMounted(true)
+  }, [])
 
-      setIsLoading(true)
-      try {
-        // First, get all contribution events for this user
-        const contributionEventsRef = collection(db, 'contributionEvents')
-        const contributionQuery = query(
-          contributionEventsRef,
-          where('contributor', '==', address.toLowerCase())
-        )
-        const contributionSnapshot = await getDocs(contributionQuery)
-
-        // Get unique campaign IDs and contribution amounts
-        const campaignContributions = new Map<string, string>()
-        contributionSnapshot.forEach(doc => {
-          const data = doc.data()
-          const existingAmount = campaignContributions.get(data.campaignId) || '0'
-          const newAmount = (BigInt(existingAmount) + BigInt(data.amount)).toString()
-          campaignContributions.set(data.campaignId, newAmount)
-        })
-
-        // Get refund events to exclude already refunded campaigns
-        const refundEventsRef = collection(db, 'refundEvents')
-        const refundQuery = query(
-          refundEventsRef,
-          where('contributor', '==', address.toLowerCase())
-        )
-        const refundSnapshot = await getDocs(refundQuery)
-        const refundedCampaignIds = new Set(
-          refundSnapshot.docs.map(doc => doc.data().campaignId)
-        )
-
-        // Get campaign details for contributed campaigns
-        const campaignsRef = collection(db, 'campaigns')
-        const campaignsData: Campaign[] = []
-
-        for (const [campaignId, contribution] of Array.from(campaignContributions.entries())) {
-          if (!refundedCampaignIds.has(campaignId)) {
-            const campaignDoc = await getDocs(
-              query(campaignsRef, where('id', '==', campaignId))
-            )
-            
-            if (!campaignDoc.empty) {
-              const campaignData = campaignDoc.docs[0].data() as Campaign
-              // Only include campaigns that have ended unsuccessfully and owner has claimed
-              const endTime = new Date(
-                (typeof campaignData.createdAt === 'string' 
-                  ? new Date(campaignData.createdAt) 
-                  : campaignData.createdAt.toDate()
-                ).getTime() + parseInt(campaignData.duration) * 24 * 60 * 60 * 1000
-              )
-              
-              if (
-                new Date() > endTime && // Campaign has ended
-                campaignData.hasClaimed && // Owner has claimed
-                BigInt(campaignData.totalContributions || '0') < BigInt(campaignData.goalAmountSmallestUnits) // Campaign unsuccessful
-              ) {
-                campaignsData.push({
-                  ...campaignData,
-                  contribution
-                })
-              }
-            }
-          }
+  // Memoize stats calculation
+  const stats = useMemo(() => {
+    if (!mounted) return { totalRefunds: 0, uniqueCampaigns: 0, tokenStats: [] }
+    
+    const uniqueCampaigns = new Set(refundEvents.map(event => event.campaignId))
+    
+    // Group refunds by token to sum amounts correctly
+    const refundsByToken = refundEvents.reduce((acc, event) => {
+      const campaign = campaigns[event.campaignId]
+      const tokenAddress = campaign?.token || ''
+      if (!acc[tokenAddress]) {
+        acc[tokenAddress] = {
+          amounts: [],
+          count: 0
         }
-
-        setCampaigns(campaignsData)
-      } catch (error) {
-        console.error('Error fetching refundable campaigns:', error)
-      } finally {
-        setIsLoading(false)
       }
+      acc[tokenAddress].amounts.push(event.amount)
+      acc[tokenAddress].count++
+      return acc
+    }, {} as Record<string, { amounts: string[], count: number }>)
+
+    // Calculate total refunded for each token
+    const tokenStats = Object.entries(refundsByToken).map(([tokenAddress, data]) => {
+      const token = getTokenByAddress(tokenAddress)
+      if (!token) return null
+      
+      const total = data.amounts.reduce((sum, amount) => {
+        try {
+          const formatted = parseFloat(formatUnits(amount, token.decimals))
+          return sum + formatted
+        } catch (error) {
+          console.error('Error calculating total:', error)
+          return sum
+        }
+      }, 0)
+
+      return {
+        symbol: token.symbol,
+        total: total.toLocaleString(undefined, { maximumFractionDigits: 2 }),
+        count: data.count
+      }
+    }).filter((stats): stats is { symbol: string; total: string; count: number } => stats !== null)
+
+    return {
+      totalRefunds: refundEvents.length,
+      uniqueCampaigns: uniqueCampaigns.size,
+      tokenStats
     }
+  }, [mounted, refundEvents, campaigns, getTokenByAddress])
 
-    fetchRefundableCampaigns()
-  }, [address])
-
-  const formatAmount = (amount: string, tokenAddress: string): string => {
+  const formatAmount = (amount: string, tokenAddress: string) => {
     const token = getTokenByAddress(tokenAddress)
-    if (!amount || !token) return '0.0'
+    if (!token) return '0'
     try {
-      const rawAmount = formatUnits(amount, token.decimals)
-      return formatNumber(Number(parseFloat(rawAmount).toFixed(1)))
+      const formattedAmount = formatUnits(amount, token.decimals)
+      return Math.floor(parseFloat(formattedAmount)).toLocaleString()
     } catch (error) {
       console.error('Error formatting amount:', error)
-      return '0.0'
+      return '0'
     }
+  }
+
+  if (!mounted) {
+    return null // Prevent flash of incorrect content during hydration
   }
 
   if (!isConnected) {
     return (
-      <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white py-20">
+      <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white pt-32 pb-20">
         <div className="container mx-auto px-4">
-          <div className="text-center">
-            <p className="text-gray-600">Please connect your wallet to view refundable campaigns.</p>
-          </div>
+          <div className="text-center">Please connect your wallet to view your refunds</div>
         </div>
       </div>
     )
@@ -133,53 +99,128 @@ export default function RefundsPage() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white py-20">
+      <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white pt-32 pb-20">
         <div className="container mx-auto px-4">
-          <div className="text-center">
-            <p className="text-gray-600">Loading refundable campaigns...</p>
-          </div>
+          <div className="text-center">Loading your refunds...</div>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white py-20">
+    <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white pt-32 pb-20">
       <div className="container mx-auto px-4">
-        <h1 className="text-3xl font-bold text-gray-900 mb-8">Available Refunds</h1>
-        
-        {campaigns.length === 0 ? (
-          <div className="bg-white rounded-lg shadow-sm p-6 text-center">
-            <p className="text-gray-600">No refunds are currently available.</p>
+        <div className="mb-6">
+          <div className="flex items-center gap-4 mb-6">
+            <ArrowPathIcon className="h-8 w-8 text-blue-600" />
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900">Your Refunds</h1>
+              <p className="mt-1 text-sm text-gray-500">Track your campaign refunds</p>
+            </div>
           </div>
-        ) : (
-          <div className="grid gap-6">
-            {campaigns.map(campaign => {
-              const token = getTokenByAddress(campaign.token)
-              return (
-                <div key={campaign.id} className="bg-white rounded-lg shadow-sm p-6">
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <h2 className="text-xl font-semibold text-gray-900 mb-2">
-                        {campaign.title}
-                      </h2>
-                      <p className="text-sm text-gray-500 mb-4">
-                        Your contribution: {formatAmount(campaign.contribution || '0', campaign.token)} {token?.symbol}
-                      </p>
-                    </div>
-                    <Link
-                      href={`/campaigns/${campaign.id}`}
-                      className="inline-flex items-center px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-full hover:bg-red-700 transition-colors"
-                    >
-                      <BanknotesIcon className="h-4 w-4 mr-2" />
-                      Request Refund
-                    </Link>
+
+          {refundEvents.length > 0 && (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div className="bg-white rounded-lg shadow-sm p-6">
+                <dt className="text-sm font-medium text-gray-500">Total Refunds</dt>
+                <dd className="mt-1 text-2xl font-semibold text-gray-900">
+                  {mounted ? stats.totalRefunds : '...'}
+                </dd>
+              </div>
+              
+              <div className="bg-white rounded-lg shadow-sm p-6">
+                <dt className="text-sm font-medium text-gray-500">Unique Campaigns</dt>
+                <dd className="mt-1 text-2xl font-semibold text-gray-900">
+                  {mounted ? stats.uniqueCampaigns : '...'}
+                </dd>
+              </div>
+
+              <div className="bg-white rounded-lg shadow-sm p-6">
+                <dt className="text-sm font-medium text-gray-500">Refunds by Token</dt>
+                <dd className="mt-1">
+                  {mounted ? (
+                    stats.tokenStats.map(({ symbol, total, count }) => (
+                      <div key={symbol} className="mb-2 last:mb-0">
+                        <div className="text-2xl font-semibold text-gray-900">
+                          {total} {symbol}
+                        </div>
+                        <div className="text-sm text-gray-500">
+                          {count} refund{count !== 1 ? 's' : ''}
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <div>...</div>
+                  )}
+                </dd>
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="bg-white rounded-lg shadow-sm p-6">
+          {refundEvents.length === 0 ? (
+            <div className="text-center py-8">
+              <p className="text-gray-500">You haven't received any refunds yet</p>
+            </div>
+          ) : (
+            <div className="flow-root">
+              <ul role="list" className="-mb-8">
+                {mounted ? refundEvents.map((event) => {
+                  const campaign = campaigns[event.campaignId]
+                  const token = getTokenByAddress(campaign?.token || '')
+                  
+                  return (
+                    <li key={event.transactionHash} className="relative pb-8">
+                      <div className="relative flex items-start space-x-3">
+                        <div className="min-w-0 flex-1">
+                          <div className="text-sm">
+                            <div className="flex items-center justify-between mb-1">
+                              <div className="flex items-center gap-2 flex-1">
+                                <Link 
+                                  href={`/campaigns/${event.campaignId}`}
+                                  className="font-medium text-gray-900 hover:text-blue-600 transition-colors flex items-center gap-1"
+                                >
+                                  {campaign?.title || 'Unknown Campaign'}
+                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                                  </svg>
+                                </Link>
+                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
+                                  Refund Received
+                                </span>
+                              </div>
+                              <div className="text-sm text-gray-500">
+                                Block #{event.blockNumber}
+                              </div>
+                            </div>
+                            <p className="mt-0.5 text-sm text-gray-500">
+                              Refunded {formatAmount(event.amount, campaign?.token || '')} {token?.symbol || 'tokens'} • {formatDistanceToNow(event.blockTimestamp, { addSuffix: true })}
+                            </p>
+                            <div className="mt-2 text-sm text-gray-500">
+                              <a
+                                href={`https://basescan.org/tx/${event.transactionHash}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-blue-600 hover:text-blue-800"
+                              >
+                                View transaction →
+                              </a>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </li>
+                  )
+                }) : (
+                  <div className="text-center py-4">
+                    <p className="text-gray-500">Loading refunds...</p>
                   </div>
-                </div>
-              )
-            })}
-          </div>
-        )}
+                )}
+              </ul>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   )

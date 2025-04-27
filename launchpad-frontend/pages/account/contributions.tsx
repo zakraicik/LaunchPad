@@ -1,124 +1,78 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useAccount } from 'wagmi'
-import { collection, query, where, getDocs, orderBy } from 'firebase/firestore'
-import { db } from '../../utils/firebase'
 import { formatUnits } from 'ethers'
 import { useTokens } from '../../hooks/useTokens'
 import { formatNumber } from '../../utils/format'
 import { formatDistanceToNow } from 'date-fns'
 import { WalletIcon } from '@heroicons/react/24/outline'
-import { doc, getDoc } from 'firebase/firestore'
 import Link from 'next/link'
-import useHasBeenRefunded from '../../hooks/campaigns/useHasBeenRefunded'
 import useRefundStatuses from '../../hooks/campaigns/useRefundStatuses'
-import { Timestamp } from 'firebase/firestore'
-
-interface ContributionEvent {
-  campaignId: string
-  contributor: string
-  amount: string
-  blockNumber: number
-  blockTimestamp: Date
-  transactionHash: string
-  tokenAddress: string
-}
-
-interface Campaign {
-  id: string
-  title: string
-  description: string
-  status: number
-  statusText: string
-  token: string
-  campaignAddress?: string
-  createdAt: string | Date | Timestamp
-  duration: string
-  totalContributions?: string
-  goalAmountSmallestUnits?: string
-}
+import { useContributions, Campaign, ContributionEvent } from '../../hooks/campaigns/useContributions'
 
 export default function UserContributions() {
   const { address, isConnected } = useAccount()
-  const [contributionEvents, setContributionEvents] = useState<ContributionEvent[]>([])
-  const [campaigns, setCampaigns] = useState<Record<string, Campaign>>({})
-  const [isLoading, setIsLoading] = useState(true)
   const { getTokenByAddress } = useTokens()
   const [mounted, setMounted] = useState(false)
-  const [campaignStatuses, setCampaignStatuses] = useState<Record<string, string>>({})
   const [statusFilter, setStatusFilter] = useState<string>('All')
+  const { data: contributionsData, isLoading } = useContributions(address)
+  const contributionEvents = contributionsData?.contributionEvents || []
+  const campaigns = contributionsData?.campaigns || {}
 
   // Handle hydration mismatch
   useEffect(() => {
     setMounted(true)
   }, [])
 
-  useEffect(() => {
-    const fetchContributions = async () => {
-      if (!address) return
+  // Memoize getCampaignStatus function
+  const getCampaignStatus = useMemo(() => {
+    return (campaign: Campaign): string => {
+      const isCampaignEnded = (): boolean => {
+        if (!campaign.createdAt || !campaign.duration) return false
 
-      try {
-        setIsLoading(true)
-        const contributionEventsRef = collection(db, 'contributionEvents')
-        const q = query(
-          contributionEventsRef,
-          where('contributor', '==', address.toLowerCase()),
-          orderBy('blockTimestamp', 'desc')
+        let createdAtDate: Date
+        if (typeof campaign.createdAt === 'string') {
+          createdAtDate = new Date(campaign.createdAt)
+        } else if (campaign.createdAt instanceof Date) {
+          createdAtDate = campaign.createdAt
+        } else {
+          createdAtDate = campaign.createdAt.toDate()
+        }
+
+        const endDate = new Date(
+          createdAtDate.getTime() + parseInt(campaign.duration) * 24 * 60 * 60 * 1000
         )
-        const querySnapshot = await getDocs(q)
-
-        const events = querySnapshot.docs.map(doc => {
-          const data = doc.data()
-          return {
-            campaignId: data.campaignId,
-            contributor: data.contributor,
-            amount: data.amount,
-            blockNumber: data.blockNumber,
-            blockTimestamp: data.blockTimestamp.toDate(),
-            transactionHash: data.transactionHash,
-            tokenAddress: data.token
-          }
-        })
-
-        setContributionEvents(events)
-
-        // Fetch campaign details for each contribution
-        const campaignPromises = events.map(async (event) => {
-          const campaignRef = doc(db, 'campaigns', event.campaignId)
-          const campaignSnap = await getDoc(campaignRef)
-          if (campaignSnap.exists()) {
-            const data = campaignSnap.data()
-            return {
-              id: campaignSnap.id,
-              ...data,
-              token: data.token
-            } as Campaign
-          }
-          return null
-        })
-
-        const campaignResults = await Promise.all(campaignPromises)
-        const campaignMap = campaignResults.reduce((acc, campaign) => {
-          if (campaign) {
-            acc[campaign.id] = campaign
-          }
-          return acc
-        }, {} as Record<string, Campaign>)
-
-        setCampaigns(campaignMap)
-      } catch (error) {
-        console.error('Error fetching contributions:', error)
-      } finally {
-        setIsLoading(false)
+        return new Date() > endDate
       }
-    }
 
-    if (mounted) {
-      fetchContributions()
-    }
-  }, [address, mounted])
+      const isSuccessful = (): boolean => {
+        if (!campaign.totalContributions || !campaign.goalAmountSmallestUnits) return false
+        try {
+          const totalContributions = BigInt(campaign.totalContributions)
+          const goalAmount = BigInt(campaign.goalAmountSmallestUnits)
+          return totalContributions >= goalAmount
+        } catch (error) {
+          console.error('Error checking if campaign is successful:', error)
+          return false
+        }
+      }
 
-  // Calculate campaign statuses whenever campaigns change
-  useEffect(() => {
+      // If campaign has reached its goal, it's successful
+      if (isSuccessful()) {
+        return 'Successful'
+      }
+
+      // If campaign hasn't ended, it's in progress
+      if (!isCampaignEnded()) {
+        return 'In Progress'
+      }
+
+      // If campaign has ended and wasn't successful, check refund status
+      return 'Refund Eligible'
+    }
+  }, [])
+
+  // Memoize campaign statuses calculation
+  const campaignStatuses = useMemo(() => {
     const newStatuses: Record<string, string> = {}
     for (const event of contributionEvents) {
       const campaign = campaigns[event.campaignId]
@@ -126,32 +80,23 @@ export default function UserContributions() {
         newStatuses[event.campaignId] = getCampaignStatus(campaign)
       }
     }
-    setCampaignStatuses(newStatuses)
-  }, [contributionEvents, campaigns])
+    return newStatuses
+  }, [contributionEvents, campaigns, getCampaignStatus])
 
-  // Prepare campaign data for refund status checking
-  const campaignsForRefundCheck = contributionEvents.map(event => ({
-    campaignId: event.campaignId,
-    campaignAddress: campaigns[event.campaignId]?.campaignAddress,
-    isRefundEligible: campaignStatuses[event.campaignId] === 'Refund Eligible'
-  }))
+  // Memoize campaignsForRefundCheck
+  const campaignsForRefundCheck = useMemo(() => {
+    return contributionEvents.map(event => ({
+      campaignId: event.campaignId,
+      campaignAddress: campaigns[event.campaignId]?.campaignAddress,
+      isRefundEligible: campaignStatuses[event.campaignId] === 'Refund Eligible'
+    }))
+  }, [contributionEvents, campaigns, campaignStatuses])
 
   // Get refund statuses for all campaigns
   const refundStatuses = useRefundStatuses(campaignsForRefundCheck, address)
 
-  const formatAmount = (amount: string, tokenAddress: string) => {
-    const token = getTokenByAddress(tokenAddress)
-    if (!token) return '0'
-    try {
-      const formattedAmount = formatUnits(amount, token.decimals)
-      return Math.floor(parseFloat(formattedAmount)).toLocaleString()
-    } catch (error) {
-      console.error('Error formatting amount:', error)
-      return '0'
-    }
-  }
-
-  const calculateStats = () => {
+  // Memoize stats calculation
+  const stats = useMemo(() => {
     if (!mounted) return { totalContributions: 0, uniqueCampaigns: 0, tokenStats: [] }
     
     const uniqueCampaigns = new Set(contributionEvents.map(event => event.campaignId))
@@ -198,53 +143,18 @@ export default function UserContributions() {
       uniqueCampaigns: uniqueCampaigns.size,
       tokenStats
     }
-  }
+  }, [mounted, contributionEvents, campaigns, getTokenByAddress])
 
-  const getCampaignStatus = (campaign: Campaign | undefined) => {
-    if (!campaign) return 'Unknown'
-
-    const isCampaignEnded = (): boolean => {
-      if (!campaign.createdAt || !campaign.duration) return false
-
-      let createdAtDate: Date
-      if (typeof campaign.createdAt === 'string') {
-        createdAtDate = new Date(campaign.createdAt)
-      } else if (campaign.createdAt instanceof Date) {
-        createdAtDate = campaign.createdAt
-      } else {
-        createdAtDate = campaign.createdAt.toDate()
-      }
-
-      const endDate = new Date(
-        createdAtDate.getTime() + parseInt(campaign.duration) * 24 * 60 * 60 * 1000
-      )
-      return new Date() > endDate
+  const formatAmount = (amount: string, tokenAddress: string) => {
+    const token = getTokenByAddress(tokenAddress)
+    if (!token) return '0'
+    try {
+      const formattedAmount = formatUnits(amount, token.decimals)
+      return Math.floor(parseFloat(formattedAmount)).toLocaleString()
+    } catch (error) {
+      console.error('Error formatting amount:', error)
+      return '0'
     }
-
-    const isSuccessful = (): boolean => {
-      if (!campaign.totalContributions || !campaign.goalAmountSmallestUnits) return false
-      try {
-        const totalContributions = BigInt(campaign.totalContributions)
-        const goalAmount = BigInt(campaign.goalAmountSmallestUnits)
-        return totalContributions >= goalAmount
-      } catch (error) {
-        console.error('Error checking if campaign is successful:', error)
-        return false
-      }
-    }
-
-    // If campaign has reached its goal, it's successful
-    if (isSuccessful()) {
-      return 'Successful'
-    }
-
-    // If campaign hasn't ended, it's in progress
-    if (!isCampaignEnded()) {
-      return 'In Progress'
-    }
-
-    // If campaign has ended and wasn't successful, check refund status
-    return 'Refund Eligible'
   }
 
   const getStatusColor = (status: string) => {
@@ -256,7 +166,7 @@ export default function UserContributions() {
       case 'Refund Eligible':
         return 'bg-yellow-100 text-yellow-800'
       case 'Refund Received':
-        return 'bg-green-100 text-green-800'
+        return 'bg-purple-100 text-purple-800'
       default:
         return 'bg-gray-100 text-gray-800'
     }
@@ -310,16 +220,17 @@ export default function UserContributions() {
     )
   }
 
-  const stats = calculateStats()
-
   return (
     <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white pt-32 pb-20">
       <div className="container mx-auto px-4">
         <div className="mb-6">
-          <div className="flex flex-col space-y-4 sm:space-y-0 sm:flex-row sm:items-center sm:justify-between mb-6">
+          <div className="flex flex-col space-y-4 sm:space-y-0 sm:flex-row sm:items-start sm:justify-between mb-6">
             <div className="flex items-center gap-4">
               <WalletIcon className="h-8 w-8 text-blue-600" />
-              <h1 className="text-2xl font-bold text-gray-900">Your Contributions</h1>
+              <div>
+                <h1 className="text-2xl font-bold text-gray-900">Your Contributions</h1>
+                <p className="mt-1 text-sm text-gray-500">Track your campaign contributions</p>
+              </div>
             </div>
             
             {/* Status Filter */}
@@ -341,7 +252,7 @@ export default function UserContributions() {
               </div>
             )}
           </div>
-
+          
           {contributionEvents.length > 0 && (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               <div className="bg-white rounded-lg shadow-sm p-6">
