@@ -30,20 +30,20 @@ const db = admin.firestore();
  * @property {string} campaignId - Unique identifier of the campaign
  */
 interface FactoryOperationEventData {
-  eventType: string
-  rawEventId: string
-  createdAt: Date
-  blockNumber: number | null
-  blockTimestamp: Date | null
-  transactionHash: string | null
-  contractAddress: string | null
+  eventType: string;
+  rawEventId: string;
+  createdAt: Date;
+  blockNumber: number | null;
+  blockTimestamp: Date | null;
+  transactionHash: string | null;
+  contractAddress: string | null;
   operation: {
-    code: number
-    name: string
-  }
-  campaignAddress: string
-  creator: string
-  campaignId: string
+    code: number;
+    name: string;
+  };
+  campaignAddress: string;
+  creator: string;
+  campaignId: string;
 }
 
 /**
@@ -56,15 +56,17 @@ interface FactoryOperationEventData {
  * @property {string} status - Current status of the campaign
  * @property {number|null} blockNumber - Block number where campaign was created
  * @property {string|null} transactionHash - Transaction hash of campaign creation
+ * @property {number} networkId - Network ID of the chain where campaign is deployed
  */
 interface CampaignData {
-  campaignId: string
-  campaignAddress: string
-  creator: string
-  createdAt: Date
-  status: number
-  blockNumber: number | null
-  transactionHash: string | null
+  campaignId: string;
+  campaignAddress: string;
+  creator: string;
+  createdAt: Date;
+  status: number;
+  blockNumber: number | null;
+  transactionHash: string | null;
+  networkId: number;
 }
 
 /**
@@ -132,6 +134,20 @@ export const processCampaignFactoryEvents = onDocumentCreated(
 
       // Process logs from the Alchemy webhook
       const networkName = webhookData.event.network;
+
+      // Get network ID based on network name
+      const networkId =
+        networkName === "BASE_MAINNET" ?
+          8453 :
+          networkName === "BASE_SEPOLIA" ?
+            84532 :
+            null;
+
+      if (!networkId) {
+        logger.error(`Unsupported network: ${networkName}`);
+        return;
+      }
+
       const logs = webhookData.event.data.block.logs;
       const blockNumber = webhookData.event.data.block.number;
       const blockTimestamp = webhookData.event.data.block.timestamp;
@@ -169,7 +185,7 @@ export const processCampaignFactoryEvents = onDocumentCreated(
             blockTimestamp,
           );
 
-          await processFactoryOperation(enhancedLog, rawEventId);
+          await processFactoryOperation(enhancedLog, rawEventId, networkId);
         }
       }
     } catch (error) {
@@ -185,10 +201,12 @@ export const processCampaignFactoryEvents = onDocumentCreated(
  * @function processFactoryOperation
  * @param {EnhancedEventLog} log - The log object from the webhook
  * @param {string} rawEventId - The ID of the raw event document
+ * @param {number} networkId - Network ID of the chain where the event occurred
  */
 async function processFactoryOperation(
   log: EnhancedEventLog,
   rawEventId: string,
+  networkId: number,
 ) {
   try {
     if (!log || !log.topics || !log.data) {
@@ -278,7 +296,10 @@ async function processFactoryOperation(
         normalizedCreator,
         log.block?.number || null,
         log.transaction?.hash || null,
-        log.block?.timestamp ? new Date(log.block.timestamp * 1000) : new Date(),
+        log.block?.timestamp ?
+          new Date(log.block.timestamp * 1000) :
+          new Date(),
+        networkId,
       );
     }
   } catch (error) {
@@ -297,6 +318,7 @@ async function processFactoryOperation(
  * @param {number|null} blockNumber - Block number where the campaign was created
  * @param {string|null} transactionHash - Transaction hash of the campaign creation
  * @param {Date} timestamp - Timestamp when the campaign was created
+ * @param {number} networkId - Network ID of the chain where the campaign is deployed
  */
 async function storeCampaignData(
   campaignId: string,
@@ -305,6 +327,7 @@ async function storeCampaignData(
   blockNumber: number | null,
   transactionHash: string | null,
   timestamp: Date,
+  networkId: number,
 ) {
   try {
     // Create campaign data record
@@ -316,6 +339,7 @@ async function storeCampaignData(
       status: 1, // Initial status (STATUS_ACTIVE = 1) matching the contract state; don't want to risk async operations with the event collector
       blockNumber,
       transactionHash,
+      networkId,
     };
 
     // Log the campaign data we're about to store

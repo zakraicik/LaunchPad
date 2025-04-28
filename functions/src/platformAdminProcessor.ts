@@ -23,30 +23,30 @@ const db = admin.firestore();
  */
 interface PlatformAdminEventData {
   /** Type of the event */
-  eventType: string
+  eventType: string;
   /** ID of the raw event document */
-  rawEventId: string
+  rawEventId: string;
   /** Timestamp when the event was processed */
-  createdAt: Date
+  createdAt: Date;
   /** Block number where the event occurred */
-  blockNumber: number | null
+  blockNumber: number | null;
   /** Block timestamp when the event occurred */
-  blockTimestamp: Date | null
+  blockTimestamp: Date | null;
   /** Hash of the transaction containing the event */
-  transactionHash: string | null
+  transactionHash: string | null;
   /** Address of the contract that emitted the event */
-  contractAddress: string | null
+  contractAddress: string | null;
   /** Operation details including code and name */
   operation: {
-    code: number
-    name: string
-  }
+    code: number;
+    name: string;
+  };
   /** Address of the admin involved in the operation */
-  admin: string
+  admin: string;
   /** Previous value before the operation */
-  oldValue: string
+  oldValue: string;
   /** New value after the operation */
-  newValue: string
+  newValue: string;
 }
 
 /**
@@ -55,13 +55,15 @@ interface PlatformAdminEventData {
  */
 interface AdminData {
   /** Admin's Ethereum address */
-  address: string
+  address: string;
   /** Whether the admin is currently active */
-  isActive: boolean
+  isActive: boolean;
   /** Timestamp of the last update */
-  lastUpdated: Date
+  lastUpdated: Date;
   /** Name of the last operation performed */
-  lastOperation: string
+  lastOperation: string;
+  /** Network ID of the chain where admin is registered */
+  networkId: number;
 }
 
 // Event signature and interface for PlatformAdminOperation
@@ -177,6 +179,14 @@ async function processPlatformAdminOperation(
       return;
     }
 
+    // Get the raw event data to access network information
+    const rawEventDoc = await db.collection("rawEvents").doc(rawEventId).get();
+    const rawEvent = rawEventDoc.data();
+    if (!rawEvent?.data?.event?.network) {
+      logger.error("Missing network information in raw event");
+      return;
+    }
+
     // Extract the admin address from topics since it's indexed
     // The admin address is in the second topic (index 1)
     const adminAddress =
@@ -190,7 +200,9 @@ async function processPlatformAdminOperation(
     }
 
     // Admin address needs to be properly formatted with checksum
-    const normalizedAdminAddress = ethers.getAddress(adminAddress).toLowerCase();
+    const normalizedAdminAddress = ethers
+      .getAddress(adminAddress)
+      .toLowerCase();
     // Extract data from the non-indexed parameters
     // The data field contains all non-indexed parameters packed together
     const decodedData = ethers.AbiCoder.defaultAbiCoder().decode(
@@ -201,6 +213,20 @@ async function processPlatformAdminOperation(
     const opType = Number(decodedData[0]);
     const oldValue = decodedData[1];
     const newValue = decodedData[2];
+
+    // Get network ID based on network name
+    const networkName = rawEvent.data.event.network;
+    const networkId =
+      networkName === "BASE_MAINNET" ?
+        8453 :
+        networkName === "BASE_SEPOLIA" ?
+          84532 :
+          null;
+
+    if (!networkId) {
+      logger.error(`Unsupported network: ${networkName}`);
+      return;
+    }
 
     // Format the data
     const adminEvent: PlatformAdminEventData = {
@@ -232,7 +258,7 @@ async function processPlatformAdminOperation(
     logger.info(`Admin event stored with ID: ${docRef.id}`);
 
     // Update admin record based on operation type
-    await updateAdminRecordByOpType(opType, normalizedAdminAddress);
+    await updateAdminRecordByOpType(opType, normalizedAdminAddress, networkId);
   } catch (error) {
     logger.error(`Error processing PlatformAdminOperation: ${error}`);
   }
@@ -243,9 +269,14 @@ async function processPlatformAdminOperation(
  * @function updateAdminRecordByOpType
  * @param {number} opType - The operation type code (1 for ADD, 2 for REMOVE)
  * @param {string} adminAddress - The admin's Ethereum address
+ * @param {number} networkId - The network ID of the chain where admin is registered
  * @return {Promise<void>}
  */
-async function updateAdminRecordByOpType(opType: number, adminAddress: string) {
+async function updateAdminRecordByOpType(
+  opType: number,
+  adminAddress: string,
+  networkId: number,
+) {
   try {
     if (!adminAddress) {
       logger.error("Invalid admin address for updateAdminRecordByOpType");
@@ -275,6 +306,7 @@ async function updateAdminRecordByOpType(opType: number, adminAddress: string) {
         isActive: true,
         lastUpdated: new Date(),
         lastOperation: "ADMIN_ADDED",
+        networkId,
       };
 
       await adminRef.set(adminAddedData, {merge: true});
@@ -288,12 +320,15 @@ async function updateAdminRecordByOpType(opType: number, adminAddress: string) {
           isActive: false,
           lastUpdated: new Date(),
           lastOperation: "ADMIN_REMOVED",
+          networkId,
         };
 
         await adminRef.update(adminRemovedData);
         logger.info(`Admin marked as inactive for ${adminAddress}`);
       } else {
-        logger.warn(`Attempted to remove non-existent admin: ${adminAddress}`);
+        logger.warn(
+          `Attempted to remove non-existent admin: ${adminAddress}`,
+        );
       }
       break;
 

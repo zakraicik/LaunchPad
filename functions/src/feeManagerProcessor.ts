@@ -24,34 +24,34 @@ const db = admin.firestore();
  */
 interface FeeManagerEventData {
   /** Type of the event */
-  eventType: string
+  eventType: string;
   /** ID of the raw event document */
-  rawEventId: string
+  rawEventId: string;
   /** When the event was processed */
-  createdAt: Date
+  createdAt: Date;
   /** Block number where the event occurred */
-  blockNumber: number | null
+  blockNumber: number | null;
   /** Block timestamp when the event occurred */
-  blockTimestamp: Date | null
+  blockTimestamp: Date | null;
   /** Hash of the transaction containing the event */
-  transactionHash: string | null
+  transactionHash: string | null;
   /** Address of the contract that emitted the event */
-  contractAddress: string | null
+  contractAddress: string | null;
   /** Operation details */
   operation: {
     /** Numeric operation code */
-    code: number
+    code: number;
     /** Human-readable operation name */
-    name: string
-  }
+    name: string;
+  };
   /** Primary address related to the operation */
-  relatedAddress: string
+  relatedAddress: string;
   /** Secondary address related to the operation */
-  secondaryAddress: string
+  secondaryAddress: string;
   /** Primary value related to the operation */
-  primaryValue: string
+  primaryValue: string;
   /** Secondary value related to the operation */
-  secondaryValue: string
+  secondaryValue: string;
 }
 
 /**
@@ -60,13 +60,15 @@ interface FeeManagerEventData {
  */
 interface FeeConfigData {
   /** Address of the platform treasury */
-  treasuryAddress: string
+  treasuryAddress: string;
   /** Platform fee share in basis points (e.g., 100 = 1%) */
-  platformFeeShare: number
+  platformFeeShare: number;
   /** When the configuration was last updated */
-  lastUpdated: Date
+  lastUpdated: Date;
   /** Last operation that modified the configuration */
-  lastOperation: string
+  lastOperation: string;
+  /** Network ID of the chain where fee config is deployed */
+  networkId: number;
 }
 
 // Event signature and interface for FeeManagerOperation
@@ -184,6 +186,28 @@ async function processFeeManagerOperation(
       return;
     }
 
+    // Get the raw event data to access network information
+    const rawEventDoc = await db.collection("rawEvents").doc(rawEventId).get();
+    const rawEvent = rawEventDoc.data();
+    if (!rawEvent?.data?.event?.network) {
+      logger.error("Missing network information in raw event");
+      return;
+    }
+
+    // Get network ID based on network name
+    const networkName = rawEvent.data.event.network;
+    const networkId =
+      networkName === "BASE_MAINNET" ?
+        8453 :
+        networkName === "BASE_SEPOLIA" ?
+          84532 :
+          null;
+
+    if (!networkId) {
+      logger.error(`Unsupported network: ${networkName}`);
+      return;
+    }
+
     // Extract the indexed addresses from topics
     // The relatedAddress is in the second topic (index 1)
     // The secondaryAddress is in the third topic (index 2)
@@ -258,6 +282,7 @@ async function processFeeManagerOperation(
       normalizedSecondaryAddress,
       primaryValue.toString(),
       secondaryValue.toString(),
+      networkId,
     );
   } catch (error) {
     logger.error(`Error processing FeeManagerOperation: ${error}`);
@@ -273,6 +298,7 @@ async function processFeeManagerOperation(
  * @param {string} secondaryAddress - The secondary address (e.g., new treasury)
  * @param {string} primaryValue - The primary value (e.g., old fee share)
  * @param {string} secondaryValue - The secondary value (e.g., new fee share)
+ * @param {number} networkId - The network ID of the chain where fee config is deployed
  */
 async function updateFeeConfigByOpType(
   opType: number,
@@ -280,11 +306,12 @@ async function updateFeeConfigByOpType(
   secondaryAddress: string,
   primaryValue: string,
   secondaryValue: string,
+  networkId: number,
 ) {
   try {
     // Reference to the fee configuration document
-    // We use a fixed ID for the fee config since there's only one global config
-    const feeConfigRef = db.collection("feeConfig").doc("current");
+    // We use a fixed ID for the fee config since there's only one global config per network
+    const feeConfigRef = db.collection("feeConfig").doc(`${networkId}`);
 
     // Get current fee configuration
     const feeConfigDoc = await feeConfigRef.get();
@@ -298,6 +325,7 @@ async function updateFeeConfigByOpType(
         platformFeeShare: 0,
         lastUpdated: new Date(),
         lastOperation: "",
+        networkId,
       };
 
     // Handle different operation types
@@ -309,6 +337,7 @@ async function updateFeeConfigByOpType(
         treasuryAddress: secondaryAddress,
         lastUpdated: new Date(),
         lastOperation: "TREASURY_UPDATED",
+        networkId,
       };
 
       await feeConfigRef.set(feeConfigData, {merge: true});
@@ -322,6 +351,7 @@ async function updateFeeConfigByOpType(
         platformFeeShare: parseInt(secondaryValue),
         lastUpdated: new Date(),
         lastOperation: "SHARE_UPDATED",
+        networkId,
       };
 
       await feeConfigRef.set(feeConfigData, {merge: true});

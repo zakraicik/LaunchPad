@@ -25,23 +25,25 @@ const db = admin.firestore();
  */
 interface CampaignEventBase {
   /** Type of the event */
-  eventType: string
+  eventType: string;
   /** ID of the raw event document */
-  rawEventId: string
+  rawEventId: string;
   /** When the event was processed */
-  createdAt: Date
+  createdAt: Date;
   /** Block number where the event occurred */
-  blockNumber: number | null
+  blockNumber: number | null;
   /** Timestamp of the block */
-  blockTimestamp: Date | null
+  blockTimestamp: Date | null;
   /** Hash of the transaction */
-  transactionHash: string | null
+  transactionHash: string | null;
   /** Address of the contract that emitted the event */
-  contractAddress: string | null
+  contractAddress: string | null;
   /** Unique identifier of the campaign */
-  campaignId: string
+  campaignId: string;
   /** Address of the campaign contract */
-  campaignAddress: string
+  campaignAddress: string;
+  /** Network ID of the chain where event occurred */
+  networkId: number;
 }
 
 /**
@@ -51,9 +53,9 @@ interface CampaignEventBase {
  */
 interface ContributionEventData extends CampaignEventBase {
   /** Address of the contributor */
-  contributor: string
+  contributor: string;
   /** Amount contributed (in wei) */
-  amount: string
+  amount: string;
 }
 
 /**
@@ -63,9 +65,9 @@ interface ContributionEventData extends CampaignEventBase {
  */
 interface RefundIssuedEventData extends CampaignEventBase {
   /** Address of the contributor receiving the refund */
-  contributor: string
+  contributor: string;
   /** Amount refunded (in wei) */
-  amount: string
+  amount: string;
 }
 
 /**
@@ -75,9 +77,9 @@ interface RefundIssuedEventData extends CampaignEventBase {
  */
 interface FundsClaimedEventData extends CampaignEventBase {
   /** Address that initiated the claim */
-  initiator: string
+  initiator: string;
   /** Amount claimed (in wei) */
-  amount: string
+  amount: string;
 }
 
 /**
@@ -87,11 +89,11 @@ interface FundsClaimedEventData extends CampaignEventBase {
  */
 interface CampaignStatusChangedEventData extends CampaignEventBase {
   /** Previous status code */
-  oldStatus: number
+  oldStatus: number;
   /** New status code */
-  newStatus: number
+  newStatus: number;
   /** Reason code for the status change */
-  reason: number
+  reason: number;
 }
 
 /**
@@ -101,9 +103,9 @@ interface CampaignStatusChangedEventData extends CampaignEventBase {
  */
 interface AdminOverrideSetEventData extends CampaignEventBase {
   /** New override status */
-  status: boolean
+  status: boolean;
   /** Address of the admin who set the override */
-  admin: string
+  admin: string;
 }
 
 /**
@@ -113,13 +115,13 @@ interface AdminOverrideSetEventData extends CampaignEventBase {
  */
 interface FundsOperationEventData extends CampaignEventBase {
   /** Address of the token involved in the operation */
-  token: string
+  token: string;
   /** Amount involved in the operation (in wei) */
-  amount: string
+  amount: string;
   /** Type of funds operation */
-  opType: number
+  opType: number;
   /** Address that initiated the operation */
-  initiator: string
+  initiator: string;
 }
 
 /**
@@ -128,30 +130,32 @@ interface FundsOperationEventData extends CampaignEventBase {
  */
 interface EventCollectorOperationData {
   /** Type of the event */
-  eventType: string
+  eventType: string;
   /** ID of the raw event document */
-  rawEventId: string
+  rawEventId: string;
   /** When the event was processed */
-  createdAt: Date
+  createdAt: Date;
   /** Block number where the event occurred */
-  blockNumber: number | null
+  blockNumber: number | null;
   /** Timestamp of the block */
-  blockTimestamp: Date | null
+  blockTimestamp: Date | null;
   /** Hash of the transaction */
-  transactionHash: string | null
+  transactionHash: string | null;
   /** Address of the contract that emitted the event */
-  contractAddress: string | null
+  contractAddress: string | null;
   /** Operation details */
   operation: {
     /** Operation code */
-    code: number
+    code: number;
     /** Human-readable operation name */
-    name: string
-  }
+    name: string;
+  };
   /** Address of the sender */
-  sender: string
+  sender: string;
   /** Target address of the operation */
-  targetAddress: string
+  targetAddress: string;
+  /** Network ID of the chain where event occurred */
+  networkId: number;
 }
 
 // Define event signatures
@@ -260,6 +264,22 @@ export const processCampaignEvents = onDocumentCreated(
         return;
       }
 
+      // Get network information
+      const networkName = webhookData.event.network;
+
+      // Get network ID based on network name
+      const networkId =
+        networkName === "BASE_MAINNET" ?
+          8453 :
+          networkName === "BASE_SEPOLIA" ?
+            84532 :
+            null;
+
+      if (!networkId) {
+        logger.error(`Unsupported network: ${networkName}`);
+        return;
+      }
+
       // Process logs from the Alchemy webhook
       const logs = webhookData.event.data.block.logs;
       const blockNumber = webhookData.event.data.block.number;
@@ -290,25 +310,41 @@ export const processCampaignEvents = onDocumentCreated(
         // Check which event type this is and process accordingly
         switch (eventSignature) {
         case CONTRIBUTION_SIGNATURE_HASH:
-          await processContributionEvent(enhancedLog, rawEventId);
+          await processContributionEvent(enhancedLog, rawEventId, networkId);
           break;
         case REFUND_ISSUED_SIGNATURE_HASH:
-          await processRefundIssuedEvent(enhancedLog, rawEventId);
+          await processRefundIssuedEvent(enhancedLog, rawEventId, networkId);
           break;
         case FUNDS_CLAIMED_SIGNATURE_HASH:
-          await processFundsClaimedEvent(enhancedLog, rawEventId);
+          await processFundsClaimedEvent(enhancedLog, rawEventId, networkId);
           break;
         case CAMPAIGN_STATUS_CHANGED_SIGNATURE_HASH:
-          await processCampaignStatusChangedEvent(enhancedLog, rawEventId);
+          await processCampaignStatusChangedEvent(
+            enhancedLog,
+            rawEventId,
+            networkId,
+          );
           break;
         case ADMIN_OVERRIDE_SET_SIGNATURE_HASH:
-          await processAdminOverrideSetEvent(enhancedLog, rawEventId);
+          await processAdminOverrideSetEvent(
+            enhancedLog,
+            rawEventId,
+            networkId,
+          );
           break;
         case FUNDS_OPERATION_SIGNATURE_HASH:
-          await processFundsOperationEvent(enhancedLog, rawEventId);
+          await processFundsOperationEvent(
+            enhancedLog,
+            rawEventId,
+            networkId,
+          );
           break;
         case EVENT_COLLECTOR_OPERATION_SIGNATURE_HASH:
-          await processEventCollectorOperationEvent(enhancedLog, rawEventId);
+          await processEventCollectorOperationEvent(
+            enhancedLog,
+            rawEventId,
+            networkId,
+          );
           break;
         default:
           logger.debug(`Unknown event signature: ${eventSignature}`);
@@ -326,10 +362,12 @@ export const processCampaignEvents = onDocumentCreated(
  * @function processContributionEvent
  * @param {EnhancedEventLog} log - The enhanced log object
  * @param {string} rawEventId - The ID of the raw event document
+ * @param {number} networkId - The network ID of the chain where the event occurred
  */
 async function processContributionEvent(
   log: EnhancedEventLog,
   rawEventId: string,
+  networkId: number,
 ) {
   try {
     if (!log || !log.topics || !log.data) {
@@ -381,6 +419,7 @@ async function processContributionEvent(
       amount: amount.toString(),
       campaignId,
       campaignAddress,
+      networkId,
     };
 
     // Store the contribution event
@@ -394,6 +433,7 @@ async function processContributionEvent(
       campaignId,
       campaignAddress,
       amount.toString(),
+      networkId,
     );
   } catch (error) {
     logger.error(`Error processing Contribution event: ${error}`);
@@ -406,10 +446,12 @@ async function processContributionEvent(
  * @function processRefundIssuedEvent
  * @param {EnhancedEventLog} log - The enhanced log object
  * @param {string} rawEventId - The ID of the raw event document
+ * @param {number} networkId - The network ID of the chain where the event occurred
  */
 async function processRefundIssuedEvent(
   log: EnhancedEventLog,
   rawEventId: string,
+  networkId: number,
 ) {
   try {
     if (!log || !log.topics || !log.data) {
@@ -461,6 +503,7 @@ async function processRefundIssuedEvent(
       amount: amount.toString(),
       campaignId,
       campaignAddress,
+      networkId,
     };
 
     // Store the refund event
@@ -468,7 +511,12 @@ async function processRefundIssuedEvent(
     logger.info(`Refund event stored with ID: ${docRef.id}`);
 
     // Update campaign refunds summary
-    await updateCampaignRefunds(campaignId, campaignAddress, amount.toString());
+    await updateCampaignRefunds(
+      campaignId,
+      campaignAddress,
+      amount.toString(),
+      networkId,
+    );
   } catch (error) {
     logger.error(`Error processing RefundIssued event: ${error}`);
   }
@@ -480,10 +528,12 @@ async function processRefundIssuedEvent(
  * @function processFundsClaimedEvent
  * @param {EnhancedEventLog} log - The enhanced log object
  * @param {string} rawEventId - The ID of the raw event document
+ * @param {number} networkId - The network ID of the chain where the event occurred
  */
 async function processFundsClaimedEvent(
   log: EnhancedEventLog,
   rawEventId: string,
+  networkId: number,
 ) {
   try {
     if (!log || !log.topics || !log.data) {
@@ -535,6 +585,7 @@ async function processFundsClaimedEvent(
       amount: amount.toString(),
       campaignId,
       campaignAddress,
+      networkId,
     };
 
     // Store the claim event
@@ -542,7 +593,12 @@ async function processFundsClaimedEvent(
     logger.info(`Claim event stored with ID: ${docRef.id}`);
 
     // Update campaign claims summary
-    await updateCampaignClaims(campaignId, campaignAddress, amount.toString());
+    await updateCampaignClaims(
+      campaignId,
+      campaignAddress,
+      amount.toString(),
+      networkId,
+    );
   } catch (error) {
     logger.error(`Error processing FundsClaimed event: ${error}`);
   }
@@ -554,10 +610,12 @@ async function processFundsClaimedEvent(
  * @function processCampaignStatusChangedEvent
  * @param {EnhancedEventLog} log - The enhanced log object
  * @param {string} rawEventId - The ID of the raw event document
+ * @param {number} networkId - The network ID of the chain where the event occurred
  */
 async function processCampaignStatusChangedEvent(
   log: EnhancedEventLog,
   rawEventId: string,
+  networkId: number,
 ) {
   try {
     if (!log || !log.topics || !log.data) {
@@ -606,6 +664,7 @@ async function processCampaignStatusChangedEvent(
       reason,
       campaignId,
       campaignAddress,
+      networkId,
     };
 
     // Store the status change event
@@ -613,9 +672,72 @@ async function processCampaignStatusChangedEvent(
     logger.info(`Campaign status change event stored with ID: ${docRef.id}`);
 
     // Update campaign status in campaigns collection
-    await updateCampaignStatus(campaignId, campaignAddress, newStatus, reason);
+    await updateCampaignStatus(
+      campaignId,
+      campaignAddress,
+      newStatus,
+      reason,
+      networkId,
+    );
   } catch (error) {
     logger.error(`Error processing CampaignStatusChanged event: ${error}`);
+  }
+}
+
+/**
+ * Update campaign status
+ * @async
+ * @function updateCampaignStatus
+ * @param {string} campaignId - The campaign ID
+ * @param {string} campaignAddress - The campaign contract address
+ * @param {number} status - The new status code
+ * @param {number} reason - The reason code for status change
+ * @param {number} networkId - The network ID of the chain
+ */
+async function updateCampaignStatus(
+  campaignId: string,
+  campaignAddress: string,
+  status: number,
+  reason: number,
+  networkId: number,
+) {
+  try {
+    const campaignRef = db.collection("campaigns").doc(campaignId);
+    const campaignDoc = await campaignRef.get();
+
+    if (campaignDoc.exists) {
+      await campaignRef.update({
+        status,
+        statusReason: reason,
+        statusText: CAMPAIGN_STATUS_TYPES[status] || "UNKNOWN",
+        statusReasonText: STATUS_CHANGE_REASONS[reason] || "UNKNOWN",
+        lastStatusChangeAt: new Date(),
+        lastUpdated: new Date(),
+        networkId,
+      });
+    } else {
+      // Create new campaign record
+      await campaignRef.set({
+        campaignId,
+        campaignAddress,
+        status,
+        statusReason: reason,
+        statusText: CAMPAIGN_STATUS_TYPES[status] || "UNKNOWN",
+        statusReasonText: STATUS_CHANGE_REASONS[reason] || "UNKNOWN",
+        createdAt: new Date(),
+        lastStatusChangeAt: new Date(),
+        lastUpdated: new Date(),
+        networkId,
+      });
+    }
+
+    logger.info(
+      `Updated status for campaign ${campaignId} to ${
+        CAMPAIGN_STATUS_TYPES[status] || status
+      }`,
+    );
+  } catch (error) {
+    logger.error(`Error updating campaign status: ${error}`);
   }
 }
 
@@ -625,10 +747,12 @@ async function processCampaignStatusChangedEvent(
  * @function processAdminOverrideSetEvent
  * @param {EnhancedEventLog} log - The enhanced log object
  * @param {string} rawEventId - The ID of the raw event document
+ * @param {number} networkId - The network ID of the chain where the event occurred
  */
 async function processAdminOverrideSetEvent(
   log: EnhancedEventLog,
   rawEventId: string,
+  networkId: number,
 ) {
   try {
     if (!log || !log.topics || !log.data) {
@@ -681,10 +805,13 @@ async function processAdminOverrideSetEvent(
       admin,
       campaignId,
       campaignAddress,
+      networkId,
     };
 
     // Store the admin override event
-    const docRef = await db.collection("adminOverrideEvents").add(overrideEvent);
+    const docRef = await db
+      .collection("adminOverrideEvents")
+      .add(overrideEvent);
     logger.info(`Admin override event stored with ID: ${docRef.id}`);
 
     // Update campaign admin override status
@@ -693,9 +820,53 @@ async function processAdminOverrideSetEvent(
       campaignAddress,
       status,
       admin,
+      networkId,
     );
   } catch (error) {
     logger.error(`Error processing AdminOverrideSet event: ${error}`);
+  }
+}
+
+/**
+ * Update campaign admin override status
+ * @async
+ * @function updateCampaignAdminOverride
+ * @param {string} campaignId - The campaign ID
+ * @param {string} campaignAddress - The campaign contract address
+ * @param {boolean} status - The admin override status
+ * @param {string} admin - The admin address who set the override
+ * @param {number} networkId - The network ID of the chain
+ */
+async function updateCampaignAdminOverride(
+  campaignId: string,
+  campaignAddress: string,
+  status: boolean,
+  admin: string,
+  networkId: number,
+) {
+  try {
+    const campaignRef = db.collection("campaigns").doc(campaignId);
+    const campaignDoc = await campaignRef.get();
+
+    if (campaignDoc.exists) {
+      await campaignRef.update({
+        adminOverride: status,
+        lastAdminOverrideBy: admin,
+        lastAdminOverrideAt: new Date(),
+        lastUpdated: new Date(),
+        networkId,
+      });
+    } else {
+      logger.warn(
+        `Campaign ${campaignId} not found when processing admin override`,
+      );
+    }
+
+    logger.info(
+      `Updated admin override for campaign ${campaignId} to ${status}`,
+    );
+  } catch (error) {
+    logger.error(`Error updating campaign admin override: ${error}`);
   }
 }
 
@@ -705,10 +876,12 @@ async function processAdminOverrideSetEvent(
  * @function processFundsOperationEvent
  * @param {EnhancedEventLog} log - The enhanced log object
  * @param {string} rawEventId - The ID of the raw event document
+ * @param {number} networkId - The network ID of the chain where the event occurred
  */
 async function processFundsOperationEvent(
   log: EnhancedEventLog,
   rawEventId: string,
+  networkId: number,
 ) {
   try {
     if (!log || !log.topics || !log.data) {
@@ -764,10 +937,13 @@ async function processFundsOperationEvent(
       initiator,
       campaignId,
       campaignAddress,
+      networkId,
     };
 
     // Store the funds operation event
-    const docRef = await db.collection("fundsOperationEvents").add(fundsOpEvent);
+    const docRef = await db
+      .collection("fundsOperationEvents")
+      .add(fundsOpEvent);
     logger.info(`Funds operation event stored with ID: ${docRef.id}`);
 
     // Update campaign funds based on operation type
@@ -777,6 +953,7 @@ async function processFundsOperationEvent(
       token,
       amount.toString(),
       opType,
+      networkId,
     );
   } catch (error) {
     logger.error(`Error processing FundsOperation event: ${error}`);
@@ -789,14 +966,18 @@ async function processFundsOperationEvent(
  * @function processEventCollectorOperationEvent
  * @param {EnhancedEventLog} log - The enhanced log object
  * @param {string} rawEventId - The ID of the raw event document
+ * @param {number} networkId - The network ID of the chain where the event occurred
  */
 async function processEventCollectorOperationEvent(
   log: EnhancedEventLog,
   rawEventId: string,
+  networkId: number,
 ) {
   try {
     if (!log || !log.topics || !log.data) {
-      logger.error("Invalid log data for CampaignEventCollectorOperation event");
+      logger.error(
+        "Invalid log data for CampaignEventCollectorOperation event",
+      );
       return;
     }
 
@@ -842,6 +1023,7 @@ async function processEventCollectorOperationEvent(
       },
       sender,
       targetAddress,
+      networkId,
     };
 
     // Store the event collector operation event
@@ -853,16 +1035,26 @@ async function processEventCollectorOperationEvent(
     // Update relevant collections based on operation type
     switch (opType) {
     case 1: // FACTORY_AUTHORIZED
-      await updateFactoryAuthorization(targetAddress, true);
+      await updateFactoryAuthorization(targetAddress, true, networkId);
       break;
     case 2: // FACTORY_DEAUTHORIZED
-      await updateFactoryAuthorization(targetAddress, false);
+      await updateFactoryAuthorization(targetAddress, false, networkId);
       break;
     case 3: // CAMPAIGN_AUTHORIZED
-      await updateCampaignAuthorization(sender, true, targetAddress);
+      await updateCampaignAuthorization(
+        sender,
+        true,
+        targetAddress,
+        networkId,
+      );
       break;
     case 4: // CAMPAIGN_DEAUTHORIZED
-      await updateCampaignAuthorization(sender, false, targetAddress);
+      await updateCampaignAuthorization(
+        sender,
+        false,
+        targetAddress,
+        networkId,
+      );
       break;
     default:
       logger.warn(`Unknown operation type: ${opType}`);
@@ -881,11 +1073,13 @@ async function processEventCollectorOperationEvent(
  * @param {string} campaignId - The campaign ID
  * @param {string} campaignAddress - The campaign contract address
  * @param {string} amount - The contribution amount (string)
+ * @param {number} networkId - The network ID of the chain
  */
 async function updateCampaignContributions(
   campaignId: string,
   campaignAddress: string,
   amount: string,
+  networkId: number,
 ) {
   try {
     const campaignRef = db.collection("campaigns").doc(campaignId);
@@ -899,9 +1093,12 @@ async function updateCampaignContributions(
         ).toString(),
         lastContributionAt: new Date(),
         lastUpdated: new Date(),
+        networkId,
       });
     } else {
-      logger.warn(`Campaign ${campaignId} not found when processing contribution`);
+      logger.warn(
+        `Campaign ${campaignId} not found when processing contribution`,
+      );
     }
 
     logger.info(`Updated contributions for campaign ${campaignId}`);
@@ -917,11 +1114,13 @@ async function updateCampaignContributions(
  * @param {string} campaignId - The campaign ID
  * @param {string} campaignAddress - The campaign contract address
  * @param {string} amount - The refund amount (string)
+ * @param {number} networkId - The network ID of the chain
  */
 async function updateCampaignRefunds(
   campaignId: string,
   campaignAddress: string,
   amount: string,
+  networkId: number,
 ) {
   try {
     const campaignRef = db.collection("campaigns").doc(campaignId);
@@ -935,6 +1134,7 @@ async function updateCampaignRefunds(
         ).toString(),
         lastRefundAt: new Date(),
         lastUpdated: new Date(),
+        networkId,
       });
     } else {
       logger.warn(`Campaign ${campaignId} not found when processing refund`);
@@ -953,11 +1153,13 @@ async function updateCampaignRefunds(
  * @param {string} campaignId - The campaign ID
  * @param {string} campaignAddress - The campaign contract address
  * @param {string} amount - The claimed amount (string)
+ * @param {number} networkId - The network ID of the chain
  */
 async function updateCampaignClaims(
   campaignId: string,
   campaignAddress: string,
   amount: string,
+  networkId: number,
 ) {
   try {
     const campaignRef = db.collection("campaigns").doc(campaignId);
@@ -971,6 +1173,7 @@ async function updateCampaignClaims(
         ).toString(),
         lastClaimAt: new Date(),
         lastUpdated: new Date(),
+        networkId,
       });
     } else {
       logger.warn(`Campaign ${campaignId} not found when processing claim`);
@@ -983,95 +1186,6 @@ async function updateCampaignClaims(
 }
 
 /**
- * Update campaign status
- * @async
- * @function updateCampaignStatus
- * @param {string} campaignId - The campaign ID
- * @param {string} campaignAddress - The campaign contract address
- * @param {number} status - The new status code
- * @param {number} reason - The reason code for status change
- */
-async function updateCampaignStatus(
-  campaignId: string,
-  campaignAddress: string,
-  status: number,
-  reason: number,
-) {
-  try {
-    const campaignRef = db.collection("campaigns").doc(campaignId);
-    const campaignDoc = await campaignRef.get();
-
-    if (campaignDoc.exists) {
-      await campaignRef.update({
-        status,
-        statusReason: reason,
-        statusText: CAMPAIGN_STATUS_TYPES[status] || "UNKNOWN",
-        statusReasonText: STATUS_CHANGE_REASONS[reason] || "UNKNOWN",
-        lastStatusChangeAt: new Date(),
-        lastUpdated: new Date(),
-      });
-    } else {
-      // Create new campaign record
-      await campaignRef.set({
-        campaignId,
-        campaignAddress,
-        status,
-        statusReason: reason,
-        statusText: CAMPAIGN_STATUS_TYPES[status] || "UNKNOWN",
-        statusReasonText: STATUS_CHANGE_REASONS[reason] || "UNKNOWN",
-        createdAt: new Date(),
-        lastStatusChangeAt: new Date(),
-        lastUpdated: new Date(),
-      });
-    }
-
-    logger.info(
-      `Updated status for campaign ${campaignId} to ${
-        CAMPAIGN_STATUS_TYPES[status] || status
-      }`,
-    );
-  } catch (error) {
-    logger.error(`Error updating campaign status: ${error}`);
-  }
-}
-
-/**
- * Update campaign admin override status
- * @async
- * @function updateCampaignAdminOverride
- * @param {string} campaignId - The campaign ID
- * @param {string} campaignAddress - The campaign contract address
- * @param {boolean} status - The admin override status
- * @param {string} admin - The admin address who set the override
- */
-async function updateCampaignAdminOverride(
-  campaignId: string,
-  campaignAddress: string,
-  status: boolean,
-  admin: string,
-) {
-  try {
-    const campaignRef = db.collection("campaigns").doc(campaignId);
-    const campaignDoc = await campaignRef.get();
-
-    if (campaignDoc.exists) {
-      await campaignRef.update({
-        adminOverride: status,
-        lastAdminOverrideBy: admin,
-        lastAdminOverrideAt: new Date(),
-        lastUpdated: new Date(),
-      });
-    } else {
-      logger.warn(`Campaign ${campaignId} not found when processing admin override`);
-    }
-
-    logger.info(`Updated admin override for campaign ${campaignId} to ${status}`);
-  } catch (error) {
-    logger.error(`Error updating campaign admin override: ${error}`);
-  }
-}
-
-/**
  * Update campaign funds based on operation type
  * @async
  * @function updateCampaignFunds
@@ -1080,6 +1194,7 @@ async function updateCampaignAdminOverride(
  * @param {string} token - The token address
  * @param {string} amount - The amount (string)
  * @param {number} opType - The operation type
+ * @param {number} networkId - The network ID of the chain
  */
 async function updateCampaignFunds(
   campaignId: string,
@@ -1087,6 +1202,7 @@ async function updateCampaignFunds(
   token: string,
   amount: string,
   opType: number,
+  networkId: number,
 ) {
   try {
     const campaignRef = db.collection("campaigns").doc(campaignId);
@@ -1098,13 +1214,15 @@ async function updateCampaignFunds(
         lastFundsOperationType: opType,
         lastFundsOperationTypeText: FUNDS_OPERATION_TYPES[opType] || "UNKNOWN",
         lastUpdated: new Date(),
+        networkId,
       };
 
       if (opType === 1) {
         // DEPOSIT
         fundsUpdate[`tokenBalances.${token}`] = (
           ethers.toBigInt(
-            (campaignDoc.exists && campaignDoc.data()?.tokenBalances?.[token]) ||
+            (campaignDoc.exists &&
+              campaignDoc.data()?.tokenBalances?.[token]) ||
               "0",
           ) + ethers.toBigInt(amount)
         ).toString();
@@ -1112,7 +1230,8 @@ async function updateCampaignFunds(
         // WITHDRAWAL, REFUND, CLAIM
         fundsUpdate[`tokenBalances.${token}`] = (
           ethers.toBigInt(
-            (campaignDoc.exists && campaignDoc.data()?.tokenBalances?.[token]) ||
+            (campaignDoc.exists &&
+              campaignDoc.data()?.tokenBalances?.[token]) ||
               "0",
           ) - ethers.toBigInt(amount)
         ).toString();
@@ -1120,7 +1239,9 @@ async function updateCampaignFunds(
 
       await campaignRef.update(fundsUpdate);
     } else {
-      logger.warn(`Campaign ${campaignId} not found when processing funds operation`);
+      logger.warn(
+        `Campaign ${campaignId} not found when processing funds operation`,
+      );
     }
 
     logger.info(
@@ -1139,10 +1260,12 @@ async function updateCampaignFunds(
  * @function updateFactoryAuthorization
  * @param {string} factoryAddress - The factory contract address
  * @param {boolean} isAuthorized - Whether the factory is authorized
+ * @param {number} networkId - The network ID of the chain
  */
 async function updateFactoryAuthorization(
   factoryAddress: string,
   isAuthorized: boolean,
+  networkId: number,
 ) {
   try {
     const factoryRef = db.collection("authorizedFactories").doc(factoryAddress);
@@ -1154,6 +1277,7 @@ async function updateFactoryAuthorization(
           address: factoryAddress,
           isAuthorized: true,
           lastUpdated: new Date(),
+          networkId,
         },
         {merge: true},
       );
@@ -1164,6 +1288,7 @@ async function updateFactoryAuthorization(
       await factoryRef.update({
         isAuthorized: false,
         lastUpdated: new Date(),
+        networkId,
       });
 
       logger.info(`Factory ${factoryAddress} deauthorized`);
@@ -1180,11 +1305,13 @@ async function updateFactoryAuthorization(
  * @param {string} campaignAddress - The campaign contract address
  * @param {boolean} isAuthorized - Whether the campaign is authorized
  * @param {string} [factoryAddress=""] - The factory that authorized the campaign
+ * @param {number} networkId - The network ID of the chain
  */
 async function updateCampaignAuthorization(
   campaignAddress: string,
   isAuthorized: boolean,
   factoryAddress = "",
+  networkId: number,
 ) {
   try {
     const authCampaignRef = db
@@ -1199,16 +1326,20 @@ async function updateCampaignAuthorization(
           isAuthorized: true,
           authorizedBy: factoryAddress,
           lastUpdated: new Date(),
+          networkId,
         },
         {merge: true},
       );
 
-      logger.info(`Campaign ${campaignAddress} authorized by ${factoryAddress}`);
+      logger.info(
+        `Campaign ${campaignAddress} authorized by ${factoryAddress}`,
+      );
     } else {
       // Update campaign to deauthorized
       await authCampaignRef.update({
         isAuthorized: false,
         lastUpdated: new Date(),
+        networkId,
       });
 
       logger.info(`Campaign ${campaignAddress} deauthorized`);

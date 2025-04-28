@@ -21,30 +21,30 @@ const db = admin.firestore();
  */
 interface TokenEventData {
   /** Type of the event */
-  eventType: string
+  eventType: string;
   /** ID of the raw event document */
-  rawEventId: string
+  rawEventId: string;
   /** Timestamp when the event was created */
-  createdAt: Date
+  createdAt: Date;
   /** Block number where the event occurred */
-  blockNumber: number | null
+  blockNumber: number | null;
   /** Block timestamp when the event occurred */
-  blockTimestamp: Date | null
+  blockTimestamp: Date | null;
   /** Hash of the transaction containing the event */
-  transactionHash: string | null
+  transactionHash: string | null;
   /** Address of the contract that emitted the event */
-  contractAddress: string | null
+  contractAddress: string | null;
   /** Operation details including code and name */
   operation: {
-    code: number
-    name: string
-  }
+    code: number;
+    name: string;
+  };
   /** Token address involved in the event */
-  token: string
+  token: string;
   /** Raw value from the event */
-  value: string
+  value: string;
   /** Number of decimal places for the token */
-  decimals: number
+  decimals: number;
 }
 
 /**
@@ -53,17 +53,19 @@ interface TokenEventData {
  */
 interface TokenData {
   /** Token contract address */
-  address: string
+  address: string;
   /** Whether the token is currently supported */
-  isSupported: boolean
+  isSupported: boolean;
   /** Minimum contribution amount in raw units */
-  minimumContribution?: string
+  minimumContribution?: string;
   /** Number of decimal places for the token */
-  decimals?: number
+  decimals?: number;
   /** Last update timestamp */
-  lastUpdated: Date
+  lastUpdated: Date;
   /** Last operation performed on the token */
-  lastOperation: string
+  lastOperation: string;
+  /** Network ID of the chain where token is deployed */
+  networkId: number;
 }
 
 // Event signature and interface for TokenRegistryOperation
@@ -124,6 +126,7 @@ export const processTokenRegistryEvents = onDocumentCreated(
       }
 
       // Process logs from the Alchemy webhook
+      const networkName = webhookData.event.network;
       const logs = webhookData.event.data.block.logs;
       const blockNumber = webhookData.event.data.block.number;
       const blockTimestamp = webhookData.event.data.block.timestamp;
@@ -178,6 +181,14 @@ async function processTokenRegistryOperation(
       return;
     }
 
+    // Get the raw event data to access network information
+    const rawEventDoc = await db.collection("rawEvents").doc(rawEventId).get();
+    const rawEvent = rawEventDoc.data();
+    if (!rawEvent?.data?.event?.network) {
+      logger.error("Missing network information in raw event");
+      return;
+    }
+
     const tokenAddress =
       log.topics.length > 1 ?
         ethers.dataSlice(log.topics[1], 12) : // Convert bytes32 to address
@@ -189,7 +200,9 @@ async function processTokenRegistryOperation(
     }
 
     // Token address needs to be properly formatted with checksum
-    const normalizedTokenAddress = ethers.getAddress(tokenAddress).toLowerCase();
+    const normalizedTokenAddress = ethers
+      .getAddress(tokenAddress)
+      .toLowerCase();
 
     // Extract data from the non-indexed parameters
     // The data field contains all non-indexed parameters packed together
@@ -201,6 +214,20 @@ async function processTokenRegistryOperation(
     const opType = Number(decodedData[0]);
     const value = decodedData[1];
     const decimals = Number(decodedData[2]);
+
+    // Get network ID based on network name
+    const networkName = rawEvent.data.event.network;
+    const networkId =
+      networkName === "BASE_MAINNET" ?
+        8453 :
+        networkName === "BASE_SEPOLIA" ?
+          84532 :
+          null;
+
+    if (!networkId) {
+      logger.error(`Unsupported network: ${networkName}`);
+      return;
+    }
 
     // Format the data
     const tokenEvent: TokenEventData = {
@@ -237,6 +264,7 @@ async function processTokenRegistryOperation(
       normalizedTokenAddress,
       value.toString(),
       decimals,
+      networkId,
     );
   } catch (error) {
     logger.error(`Error processing TokenRegistryOperation: ${error}`);
@@ -250,6 +278,7 @@ async function processTokenRegistryOperation(
  * @param {string} tokenAddress - The token contract address
  * @param {string} value - The value (e.g., minimum contribution amount)
  * @param {number} decimals - The token decimals
+ * @param {number} networkId - The network ID of the chain where token is deployed
  * @return {Promise<void>} A promise that resolves when the update is complete
  */
 async function updateTokenRecordByOpType(
@@ -257,6 +286,7 @@ async function updateTokenRecordByOpType(
   tokenAddress: string,
   value: string,
   decimals: number,
+  networkId: number,
 ) {
   try {
     if (!tokenAddress) {
@@ -286,6 +316,7 @@ async function updateTokenRecordByOpType(
         isSupported: true,
         lastUpdated: new Date(),
         lastOperation: "TOKEN_ADDED",
+        networkId,
       };
       await tokenRef.set(tokenData, {merge: true});
       logger.info(`Token record created/updated for ${tokenAddress}`);
@@ -297,7 +328,9 @@ async function updateTokenRecordByOpType(
         await tokenRef.delete();
         logger.info(`Token record removed for ${tokenAddress}`);
       } else {
-        logger.warn(`Attempted to remove non-existent token: ${tokenAddress}`);
+        logger.warn(
+          `Attempted to remove non-existent token: ${tokenAddress}`,
+        );
       }
       break;
 
@@ -307,6 +340,7 @@ async function updateTokenRecordByOpType(
           isSupported: false,
           lastUpdated: new Date(),
           lastOperation: "TOKEN_SUPPORT_DISABLED",
+          networkId,
         };
         await tokenRef.update(tokenData);
         logger.info(`Token support disabled for ${tokenAddress}`);
@@ -323,12 +357,11 @@ async function updateTokenRecordByOpType(
           isSupported: true,
           lastUpdated: new Date(),
           lastOperation: "TOKEN_SUPPORT_ENABLED",
+          networkId,
         };
         await tokenRef.update(tokenData);
         logger.info(`Token support enabled for ${tokenAddress}`);
       } else {
-        // This case should not happen due to on-chain verification,
-        // but we handle it defensively
         logger.warn(
           `Attempted to enable support for non-existent token: ${tokenAddress}`,
         );
@@ -341,6 +374,7 @@ async function updateTokenRecordByOpType(
           minimumContribution: value,
           lastUpdated: new Date(),
           lastOperation: "MIN_CONTRIBUTION_UPDATED",
+          networkId,
         };
         await tokenRef.update(tokenData);
         logger.info(`Minimum contribution updated for ${tokenAddress}`);
