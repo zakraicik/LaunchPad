@@ -14,6 +14,10 @@ import { useIsAdmin } from '../../utils/admin'
 import toast from 'react-hot-toast'
 import { formatUnits, parseUnits } from 'ethers'
 import { useRouter } from 'next/router'
+import { useHydration } from '@/pages/_app'
+import { formatDistanceToNow, isValid } from 'date-fns'
+import { Timestamp } from 'firebase/firestore'
+import { XMarkIcon, ArrowPathIcon } from '@heroicons/react/24/outline'
 
 interface TokenInfo {
   address: string
@@ -27,14 +31,16 @@ interface TokenInfo {
 
 export default function TokenManagement() {
   const router = useRouter()
-  const { tokens } = useTokenRegistry()
+  const { isHydrated } = useHydration()
+  const { tokens, isLoading, error } = useTokenRegistry()
   const { address } = useAccount()
   const { isAdmin, isLoading: isLoadingAdmin } = useIsAdmin(address)
-  const { addToken, isAdding, error } = useAddToken()
-  const { removeToken, isRemoving } = useRemoveToken()
-  const { toggleSupport, isToggling } = useToggleTokenSupport()
-  const { updateMinContribution, isUpdating } = useUpdateMinContribution()
+  const { addToken, isAdding, error: addError } = useAddToken()
+  const { removeToken, isRemoving, error: removeError } = useRemoveToken()
+  const { toggleSupport, isToggling, error: toggleError } = useToggleTokenSupport()
+  const { updateMinContribution, isUpdating, error: updateError } = useUpdateMinContribution()
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
+  const { writeContract, isPending, isError: writeContractError } = useWriteContract()
   const [isAddModalOpen, setIsAddModalOpen] = useState(false)
   const [isRemoveModalOpen, setIsRemoveModalOpen] = useState(false)
   const [selectedToken, setSelectedToken] = useState<TokenInfo | null>(null)
@@ -53,18 +59,22 @@ export default function TokenManagement() {
   const [isMinAmountModalOpen, setIsMinAmountModalOpen] = useState(false)
   const [selectedTokenForMinAmount, setSelectedTokenForMinAmount] = useState<TokenInfo | null>(null)
   const [newMinAmount, setNewMinAmount] = useState('')
-  const { writeContract, isPending, isError: writeContractError } = useWriteContract()
+  const [editingToken, setEditingToken] = useState<string | null>(null)
 
   // Redirect if not admin
   useEffect(() => {
+    if (!isHydrated) return // Skip if not hydrated yet
+    
     if (!isLoadingAdmin && !isAdmin) {
       router.push('/')
       toast.error('You do not have permission to access this page')
     }
-  }, [isAdmin, isLoadingAdmin, router])
+  }, [isAdmin, isLoadingAdmin, router, isHydrated])
 
   // Click outside handler for popover
   useEffect(() => {
+    if (!isHydrated) return // Skip if not hydrated yet
+    
     function handleClickOutside(event: MouseEvent) {
       if (popoverRef.current && !popoverRef.current.contains(event.target as Node)) {
         setShowAddressPopover(null)
@@ -75,13 +85,14 @@ export default function TokenManagement() {
     return () => {
       document.removeEventListener('mousedown', handleClickOutside)
     }
-  }, [])
+  }, [isHydrated])
 
   // Fetch custom symbols
   useEffect(() => {
-    const fetchCustomSymbols = async () => {
-      if (!tokens || hasFetchedSymbols.current) return
+    if (!isHydrated) return // Skip if not hydrated yet
+    if (!tokens || hasFetchedSymbols.current) return
 
+    const fetchCustomSymbols = async () => {
       try {
         const symbols: Record<string, string> = {}
         for (const token of tokens) {
@@ -99,7 +110,7 @@ export default function TokenManagement() {
     }
 
     fetchCustomSymbols()
-  }, [tokens])
+  }, [tokens, isHydrated])
 
   const handleCopyAddress = async (address: string) => {
     try {
@@ -141,31 +152,20 @@ export default function TokenManagement() {
     }
   }
 
-  const handleAddToken = async () => {
-    if (!isAdmin || !newTokenAddress || !minContribution) return
-
+  const handleAddToken = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!isHydrated) return
+    
     const toastId = toast.loading('Adding token...')
     try {
-      setAddTokenError(null)
-      const { txHash } = await addToken(newTokenAddress, minContribution)
-      
-      // Create/update token record in Firebase with networkId
-      const tokenRef = doc(collection(db, 'tokens'), newTokenAddress.toLowerCase())
-      await setDoc(tokenRef, {
-        networkId: chainId.toString(),
-        lastOperation: 'TOKEN_ADDED',
-        lastUpdated: new Date().toISOString(),
-        isSupported: true,
-        minimumContribution: minContribution
-      }, { merge: true })
-
+      await addToken(newTokenAddress, minContribution)
       toast.success('Token added successfully!', { id: toastId })
       setIsAddModalOpen(false)
       setNewTokenAddress('')
       setMinContribution('')
-    } catch (error) {
-      console.error('Error adding token:', error)
-      const errorMessage = error instanceof Error ? error.message : 'Failed to add token'
+    } catch (err) {
+      console.error('Failed to add token:', err)
+      const errorMessage = err instanceof Error ? err.message : 'Failed to add token'
       setAddTokenError(errorMessage)
       toast.error(errorMessage, { id: toastId })
     }
@@ -177,18 +177,16 @@ export default function TokenManagement() {
     setIsRemoveModalOpen(true)
   }
 
-  const handleRemoveToken = async () => {
-    if (!tokenToRemove || !isAdmin) return
-
+  const handleRemoveToken = async (tokenAddress: string) => {
+    if (!isHydrated) return
+    
     const toastId = toast.loading('Removing token...')
     try {
-      const { txHash } = await removeToken(tokenToRemove.address)
+      await removeToken(tokenAddress)
       toast.success('Token removed successfully!', { id: toastId })
-      setIsRemoveModalOpen(false)
-      setTokenToRemove(null)
-    } catch (error) {
-      console.error('Error removing token:', error)
-      const errorMessage = error instanceof Error ? error.message : 'Failed to remove token'
+    } catch (err) {
+      console.error('Failed to remove token:', err)
+      const errorMessage = err instanceof Error ? err.message : 'Failed to remove token'
       toast.error(errorMessage, { id: toastId })
     }
   }
@@ -239,6 +237,20 @@ export default function TokenManagement() {
     }
   }
 
+  const formatDate = (timestamp: Timestamp | string) => {
+    try {
+      const date = typeof timestamp === 'object' && 'toDate' in timestamp
+        ? (timestamp as Timestamp).toDate()
+        : new Date(timestamp)
+
+      if (!isValid(date)) return 'Invalid date'
+      return formatDistanceToNow(date, { addSuffix: true })
+    } catch (err) {
+      console.error('Error formatting date:', err)
+      return 'Invalid date'
+    }
+  }
+
   // Show loading state while checking admin status
   if (isLoadingAdmin) {
     return (
@@ -253,19 +265,66 @@ export default function TokenManagement() {
     return null
   }
 
+  if (!isHydrated) {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white pt-32 pb-20">
+        <div className="container mx-auto px-4">
+          <div className="text-center">Loading...</div>
+        </div>
+      </div>
+    )
+  }
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white pt-32 pb-20">
+        <div className="container mx-auto px-4">
+          <div className="flex justify-between items-center mb-6">
+            <h1 className="text-2xl font-bold">Token Management</h1>
+          </div>
+          <div className="bg-white rounded-lg shadow p-6">
+            <div className="flex justify-center items-center h-32">
+              <div className="text-gray-600">Loading tokens...</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white pt-32 pb-20">
+        <div className="container mx-auto px-4">
+          <div className="flex justify-between items-center mb-6">
+            <h1 className="text-2xl font-bold">Token Management</h1>
+          </div>
+          <div className="bg-white rounded-lg shadow">
+            <div className="p-6">
+              <div className="bg-red-50 text-red-600 p-4 rounded-lg">
+                Error loading tokens: {typeof error === 'string' ? error : 'Unknown error'}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className='min-h-screen bg-gradient-to-b from-blue-50 to-white pt-32 pb-20'>
       <div className='container mx-auto px-4'>
         <div className='flex justify-between items-center mb-6'>
           <h1 className='text-2xl font-bold'>Token Management</h1>
-          <button 
-            onClick={() => setIsAddModalOpen(true)}
-            className='bg-blue-600 text-white p-2 md:px-4 md:py-2 rounded-lg flex items-center gap-2'
-            title="Add Token"
-          >
-            <PlusIcon className='h-5 w-5' />
-            <span className='hidden md:inline'>Add Token</span>
-          </button>
+          <div className="flex items-center gap-2">
+            <button 
+              onClick={() => setIsAddModalOpen(true)}
+              className='bg-blue-600 text-white p-2 md:px-4 md:py-2 rounded-lg flex items-center gap-2'
+            >
+              <PlusIcon className='h-5 w-5' />
+              <span className='hidden md:inline'>Add Token</span>
+            </button>
+          </div>
         </div>
 
         {/* Card Grid Layout */}
@@ -451,58 +510,70 @@ export default function TokenManagement() {
         {isAddModalOpen && (
           <div className="fixed inset-0 bg-black/30 flex items-center justify-center p-4">
             <div className="bg-white rounded-lg p-6 max-w-sm w-full">
-              <h2 className="text-lg font-medium mb-4">Add New Token</h2>
-              <div className="space-y-4">
+              <div className="flex justify-between items-center mb-4">
+                <h2 className="text-xl font-semibold">Add New Token</h2>
+                <button 
+                  onClick={() => setIsAddModalOpen(false)}
+                  className="text-gray-500 hover:text-gray-700"
+                >
+                  <XMarkIcon className="h-6 w-6" />
+                </button>
+              </div>
+              
+              <form onSubmit={handleAddToken} className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label htmlFor="tokenAddress" className="block text-sm font-medium text-gray-700 mb-1">
                     Token Address
                   </label>
                   <input
                     type="text"
+                    id="tokenAddress"
                     value={newTokenAddress}
                     onChange={(e) => setNewTokenAddress(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                    placeholder="Enter token address"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="0x..."
+                    required
                   />
                 </div>
+
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Minimum Contribution (in whole tokens)
+                  <label htmlFor="minContribution" className="block text-sm font-medium text-gray-700 mb-1">
+                    Minimum Contribution
                   </label>
                   <input
-                    type="number"
+                    type="text"
+                    id="minContribution"
                     value={minContribution}
                     onChange={(e) => setMinContribution(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                    placeholder="Enter minimum contribution amount"
-                    min="0"
-                    step="0.000000000000000001"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="0.1"
+                    required
                   />
                 </div>
-                {addTokenError && (
-                  <p className="mt-2 text-sm text-red-600">{addTokenError}</p>
+
+                {addError && (
+                  <div className="text-red-600 text-sm">
+                    {addError}
+                  </div>
                 )}
-              </div>
-              <div className="flex justify-end gap-2 mt-4">
-                <button
-                  onClick={() => {
-                    setIsAddModalOpen(false)
-                    setNewTokenAddress('')
-                    setMinContribution('')
-                    setAddTokenError(null)
-                  }}
-                  className="px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 rounded-md"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleAddToken}
-                  disabled={isAdding || !newTokenAddress || !minContribution}
-                  className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {isAdding ? 'Adding...' : 'Add Token'}
-                </button>
-              </div>
+
+                <div className="flex justify-end gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setIsAddModalOpen(false)}
+                    className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-md"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isAdding}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
+                  >
+                    {isAdding ? 'Adding...' : 'Add Token'}
+                  </button>
+                </div>
+              </form>
             </div>
           </div>
         )}
@@ -526,7 +597,7 @@ export default function TokenManagement() {
                   Cancel
                 </button>
                 <button
-                  onClick={handleRemoveToken}
+                  onClick={() => handleRemoveToken(tokenToRemove?.address || '')}
                   disabled={isRemoving}
                   className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-md disabled:opacity-50"
                 >

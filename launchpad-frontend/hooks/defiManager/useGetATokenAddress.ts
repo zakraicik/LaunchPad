@@ -3,14 +3,22 @@ import { getContractAddress } from '@/config/addresses'
 import DefiIntegrationManager from '../../../artifacts/contracts/DefiIntegrationManager.sol/DefiIntegrationManager.json'
 import { useState } from 'react'
 import { ethers } from 'ethers'
+import { useHydration } from '../../pages/_app'
 
 export function useGetATokenAddress() {
+  const { isHydrated } = useHydration()
   const chainId = useChainId()
   const { data: walletClient } = useWalletClient()
   const [isUpdating, setIsUpdating] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const getATokenAddress = async (token: string) => {
+    // Early return if not hydrated yet
+    if (!isHydrated) {
+      setError('Client not yet hydrated')
+      return null
+    }
+    
     try {
       setIsUpdating(true)
       setError(null)
@@ -42,9 +50,6 @@ export function useGetATokenAddress() {
       )
 
       return tx     
-    //   return {
-    //     txHash: receipt.hash
-    //   }
     } catch (err) {
       console.error('Error getting aToken address:', err)
       const errorMessage = err instanceof Error ? err.message : 'Failed to get aToken address'
@@ -58,6 +63,7 @@ export function useGetATokenAddress() {
   return {
     getATokenAddress,
     isUpdating,
-    error
+    error,
+    isHydrated
   }
 } 

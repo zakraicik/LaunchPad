@@ -6,11 +6,13 @@ import CampaignContractFactory from '../../artifacts/contracts/CampaignContractF
 import { getContractAddress } from '../config/addresses'
 import { useWalletClient, useAccount } from 'wagmi'
 import { getAuth } from 'firebase/auth'
+import { useHydration } from '../pages/_app'
 
 // Define the operation type constant
 const OP_CAMPAIGN_CREATED = 1
 
-export function useCampaignFactory () {
+export function useCampaignFactory() {
+  const { isHydrated } = useHydration()
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const { data: walletClient } = useWalletClient()
@@ -18,10 +20,12 @@ export function useCampaignFactory () {
 
   // Initialize state in useEffect to avoid render-phase updates
   useEffect(() => {
+    if (!isHydrated) return // Skip if not hydrated
+    
     if (error) {
       setError(null)
     }
-  }, [error])
+  }, [error, isHydrated])
 
   const createCampaign = useCallback(
     async (
@@ -33,6 +37,12 @@ export function useCampaignFactory () {
       category?: string,
       githubUrl?: string
     ) => {
+      // Early return if not hydrated yet
+      if (!isHydrated) {
+        setError('Client not yet hydrated')
+        return null
+      }
+      
       try {
         console.log('useCampaignFactory: Starting campaign creation', {
           isConnected,
@@ -225,12 +235,13 @@ export function useCampaignFactory () {
         setIsLoading(false)
       }
     },
-    [walletClient, isConnected]
+    [walletClient, isConnected, isHydrated]
   )
 
   return {
     createCampaign,
     isLoading,
-    error
+    error,
+    isHydrated
   }
 }

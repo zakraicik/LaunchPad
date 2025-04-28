@@ -5,8 +5,10 @@ import { PencilIcon, ClipboardIcon, ClipboardDocumentCheckIcon, ArrowPathIcon } 
 import { useIsAdmin } from '@/utils/admin'
 import { useAccount } from 'wagmi'
 import { Timestamp } from 'firebase/firestore'
+import { useHydration } from '@/pages/_app'
 
 export default function FeeManagement() {
+  const { isHydrated } = useHydration()
   const { feeSettings, isLoading, error, refetch } = useFeeManager()
   const { address } = useAccount()
   const { isAdmin } = useIsAdmin(address)
@@ -15,8 +17,9 @@ export default function FeeManagement() {
   const [copiedAddress, setCopiedAddress] = useState(false)
   const popoverRef = useRef<HTMLDivElement>(null)
 
-  // Click outside handler for popover
   useEffect(() => {
+    if (!isHydrated) return
+    
     function handleClickOutside(event: MouseEvent) {
       if (popoverRef.current && !popoverRef.current.contains(event.target as Node)) {
         setShowAddressPopover(false)
@@ -27,9 +30,11 @@ export default function FeeManagement() {
     return () => {
       document.removeEventListener('mousedown', handleClickOutside)
     }
-  }, [])
+  }, [isHydrated])
 
   const handleCopyAddress = async (address: string) => {
+    if (!isHydrated) return
+    
     try {
       await navigator.clipboard.writeText(address)
       setCopiedAddress(true)
@@ -41,7 +46,6 @@ export default function FeeManagement() {
 
   const formatDate = (timestamp: Timestamp | string) => {
     try {
-      // Handle Firebase Timestamp
       const date = typeof timestamp === 'object' && 'toDate' in timestamp
         ? (timestamp as Timestamp).toDate()
         : new Date(timestamp)
@@ -52,6 +56,16 @@ export default function FeeManagement() {
       console.error('Error formatting date:', err)
       return 'Invalid date'
     }
+  }
+
+  if (!isHydrated) {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white pt-32 pb-20">
+        <div className="container mx-auto px-4">
+          <div className="text-center">Loading...</div>
+        </div>
+      </div>
+    )
   }
 
   if (isLoading) {
@@ -114,7 +128,6 @@ export default function FeeManagement() {
         <div className='bg-white rounded-lg shadow'>
           {feeSettings ? (
             <div className='p-6 space-y-6'>
-              {/* Platform Fee Share */}
               <div className='flex items-center justify-between'>
                 <div>
                   <h3 className='text-sm font-medium text-gray-500 uppercase tracking-wider'>Platform Fee Share</h3>
@@ -132,7 +145,6 @@ export default function FeeManagement() {
                 )}
               </div>
 
-              {/* Treasury Address */}
               <div>
                 <h3 className='text-sm font-medium text-gray-500 uppercase tracking-wider'>Treasury Address</h3>
                 <div className='mt-1 flex items-center justify-between'>
@@ -150,7 +162,6 @@ export default function FeeManagement() {
                       }
                     </button>
 
-                    {/* Address Popover */}
                     {showAddressPopover && feeSettings?.treasuryAddress && (
                       <div 
                         ref={popoverRef}
@@ -198,7 +209,6 @@ export default function FeeManagement() {
                 </div>
               </div>
 
-              {/* Last Updated */}
               <div>
                 <h3 className='text-sm font-medium text-gray-500 uppercase tracking-wider'>Last Updated</h3>
                 <p className='mt-1 text-sm text-gray-600'>
@@ -228,12 +238,10 @@ export default function FeeManagement() {
           )}
         </div>
 
-        {/* Edit Modal placeholder - implement actual modal based on your needs */}
         {isEditModalOpen && (
           <div className="fixed inset-0 bg-black/30 flex items-center justify-center p-4">
             <div className="bg-white rounded-lg p-6 max-w-sm w-full">
               <h2 className="text-lg font-medium mb-4">Edit Fee Settings</h2>
-              {/* Add your form fields here */}
               <div className="flex justify-end gap-2">
                 <button
                   onClick={() => setIsEditModalOpen(false)}

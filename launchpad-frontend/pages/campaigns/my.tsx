@@ -13,6 +13,7 @@ import {
 } from '../../hooks/useCampaigns'
 import { Timestamp } from 'firebase/firestore'
 import { SUPPORTED_NETWORKS } from '../../config/addresses'
+import { useHydration } from '@/pages/_app'
 
 interface Campaign extends BaseCampaign {
   statusText: string
@@ -33,6 +34,7 @@ interface CampaignWithCalculations extends Campaign {
 }
 
 export default function MyCampaigns () {
+  const { isHydrated } = useHydration()
   const router = useRouter()
   const { address } = useAccount()
   const chainId = useChainId()
@@ -42,22 +44,14 @@ export default function MyCampaigns () {
     refresh: refreshCampaigns
   } = useCampaigns({ filterByOwner: true })
   const { getTokenByAddress } = useTokens()
-  const [mounted, setMounted] = useState(false)
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
-
-  // Handle hydration
-  useEffect(() => {
-    requestAnimationFrame(() => {
-      setMounted(true)
-    })
-  }, [])
 
   // Refresh campaigns when chain ID changes
   useEffect(() => {
-    if (mounted && SUPPORTED_NETWORKS.includes(chainId as typeof SUPPORTED_NETWORKS[number])) {
+    if (isHydrated && SUPPORTED_NETWORKS.includes(chainId as typeof SUPPORTED_NETWORKS[number])) {
       refreshCampaigns()
     }
-  }, [chainId, mounted, refreshCampaigns])
+  }, [chainId, isHydrated, refreshCampaigns])
 
   // Memoize the token getter
   const memoizedGetTokenByAddress = useCallback(getTokenByAddress, [getTokenByAddress])
@@ -67,6 +61,7 @@ export default function MyCampaigns () {
     amount: string | undefined,
     tokenAddress: string
   ): string => {
+    if (!isHydrated) return '0'
     if (!amount) return '0'
     try {
       const token = memoizedGetTokenByAddress(tokenAddress)
@@ -77,13 +72,14 @@ export default function MyCampaigns () {
       console.error('Error formatting amount:', error)
       return '0'
     }
-  }, [memoizedGetTokenByAddress])
+  }, [memoizedGetTokenByAddress, isHydrated])
 
   const calculateProgress = useCallback((
     raised: string | undefined,
     goal: string,
     tokenAddress: string
   ) => {
+    if (!isHydrated) return 0
     if (!raised) return 0
     try {
       const token = memoizedGetTokenByAddress(tokenAddress)
@@ -95,17 +91,18 @@ export default function MyCampaigns () {
       console.error('Error calculating progress:', error)
       return 0
     }
-  }, [memoizedGetTokenByAddress])
+  }, [memoizedGetTokenByAddress, isHydrated])
 
   const isCampaignEnded = useCallback((createdAt: Timestamp, duration: number): boolean => {
+    if (!isHydrated) return false
     const startDate = createdAt.toDate()
     const endDate = new Date(startDate.getTime() + duration * 24 * 60 * 60 * 1000)
     return new Date() > endDate
-  }, [])
+  }, [isHydrated])
 
   // Process campaigns directly
   const processedCampaigns = useMemo(() => {
-    if (!realCampaigns.length) return []
+    if (!isHydrated || !realCampaigns.length) return []
 
     return realCampaigns.map(campaign => {
       const duration = campaign.duration
@@ -152,14 +149,21 @@ export default function MyCampaigns () {
         canClaimFunds
       } as CampaignWithCalculations
     })
-  }, [realCampaigns, formatAmount, calculateProgress, isCampaignEnded])
+  }, [realCampaigns, formatAmount, calculateProgress, isCampaignEnded, isHydrated])
 
   const handleViewCampaign = (campaignId: string) => {
+    if (!isHydrated) return
     router.push(`/campaigns/${campaignId}`)
   }
 
-  if (!mounted) {
-    return null
+  if (!isHydrated) {
+    return (
+      <div className='min-h-screen bg-gradient-to-b from-blue-50 to-white pt-32 pb-20'>
+        <div className='container mx-auto px-4 sm:px-6 lg:px-8'>
+          <div className='text-center'>Loading...</div>
+        </div>
+      </div>
+    )
   }
 
   if (!address) {

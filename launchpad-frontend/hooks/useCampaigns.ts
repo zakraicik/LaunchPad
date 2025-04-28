@@ -3,6 +3,7 @@ import { db } from '../utils/firebase'
 import { collection, query, where, getDocs, orderBy, Timestamp } from 'firebase/firestore'
 import { useAccount, useChainId } from 'wagmi'
 import { SUPPORTED_NETWORKS } from '../config/addresses'
+import { useHydration } from '../pages/_app'
 
 export interface Campaign {
   id: string

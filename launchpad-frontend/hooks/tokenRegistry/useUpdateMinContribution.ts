@@ -4,14 +4,22 @@ import TokenRegistry from '../../../artifacts/contracts/TokenRegistry.sol/TokenR
 import { useState } from 'react'
 import { ethers } from 'ethers'
 import { type Abi } from 'viem'
+import { useHydration } from '@/pages/_app'
 
 export function useUpdateMinContribution() {
+  const { isHydrated } = useHydration()
   const chainId = useChainId()
   const { data: walletClient } = useWalletClient()
   const [isUpdating, setIsUpdating] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const updateMinContribution = async (tokenAddress: string, minAmount: string) => {
+    // Early return if not hydrated yet
+    if (!isHydrated) {
+      setError('Client not yet hydrated')
+      return null
+    }
+    
     try {
       setIsUpdating(true)
       setError(null)
@@ -53,6 +61,7 @@ export function useUpdateMinContribution() {
   return {
     updateMinContribution,
     isUpdating,
-    error
+    error,
+    isHydrated
   }
 } 

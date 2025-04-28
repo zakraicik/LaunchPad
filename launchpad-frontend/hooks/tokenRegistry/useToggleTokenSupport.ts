@@ -3,14 +3,22 @@ import { getContractAddress } from '@/config/addresses'
 import TokenRegistry from '../../../artifacts/contracts/TokenRegistry.sol/TokenRegistry.json'
 import { useState } from 'react'
 import { ethers } from 'ethers'
+import { useHydration } from '@/pages/_app'
 
 export function useToggleTokenSupport() {
+  const { isHydrated } = useHydration()
   const chainId = useChainId()
   const { data: walletClient } = useWalletClient()
   const [isToggling, setIsToggling] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const toggleSupport = async (tokenAddress: string, enable: boolean) => {
+    // Early return if not hydrated yet
+    if (!isHydrated) {
+      setError('Client not yet hydrated')
+      return null
+    }
+    
     try {
       setIsToggling(true)
       setError(null)
@@ -59,6 +67,7 @@ export function useToggleTokenSupport() {
   return {
     toggleSupport,
     isToggling,
-    error
+    error,
+    isHydrated
   }
 } 

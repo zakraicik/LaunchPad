@@ -2,6 +2,7 @@ import { useQuery, UseQueryOptions } from '@tanstack/react-query'
 import { collection, getDocs } from 'firebase/firestore'
 import { db } from '../utils/firebase'
 import { useChainId } from 'wagmi'
+import { useHydration } from '../pages/_app'
 
 export interface Token {
   address: string
@@ -43,6 +44,7 @@ const fetchTokens = async (): Promise<Token[]> => {
 }
 
 export function useTokens() {
+  const { isHydrated } = useHydration()
   const chainId = useChainId()
 
   const queryOptions: UseQueryOptions<Token[], Error, Token[], [string, number]> = {
@@ -51,7 +53,8 @@ export function useTokens() {
     staleTime: 30000,
     gcTime: 5 * 60 * 1000,
     retry: 2,
-    retryDelay: 1000
+    retryDelay: 1000,
+    enabled: isHydrated
   }
 
   const { data: tokens = [], isLoading } = useQuery(queryOptions)
@@ -80,6 +83,7 @@ export function useTokens() {
   return {
     tokens,
     isLoading,
-    getTokenByAddress
+    getTokenByAddress,
+    isHydrated
   }
 }

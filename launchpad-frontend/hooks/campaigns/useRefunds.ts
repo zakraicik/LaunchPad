@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { collection, query, where, getDocs, orderBy, doc, getDoc } from 'firebase/firestore'
 import { db } from '../../utils/firebase'
 import { Timestamp } from 'firebase/firestore'
+import { useHydration } from '../../pages/_app'
 
 export interface RefundEvent {
   campaignId: string
@@ -22,6 +23,8 @@ export interface CampaignRefundData {
 }
 
 export const useRefunds = (address?: string) => {
+  const { isHydrated } = useHydration()
+  
   return useQuery({
     queryKey: ['refunds', address],
     queryFn: async () => {
@@ -84,8 +87,9 @@ export const useRefunds = (address?: string) => {
         throw error
       }
     },
-    enabled: !!address,
-    staleTime: 30000, // Consider data fresh for 30 seconds
-    gcTime: 5 * 60 * 1000 // Keep in cache for 5 minutes
+    // Only enable query when both address is available AND component is hydrated
+    enabled: !!address && isHydrated,
+    staleTime: 30000,
+    gcTime: 5 * 60 * 1000
   })
 } 

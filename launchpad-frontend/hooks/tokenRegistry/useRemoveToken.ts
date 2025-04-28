@@ -3,16 +3,24 @@ import { getContractAddress } from '@/config/addresses'
 import TokenRegistry from '../../../artifacts/contracts/TokenRegistry.sol/TokenRegistry.json'
 import { useState } from 'react'
 import { ethers } from 'ethers'
+import { useHydration } from '@/pages/_app'
 
 export function useRemoveToken() {
+  const { isHydrated } = useHydration()
   const chainId = useChainId()
   const { data: walletClient } = useWalletClient()
   const [isRemoving, setIsRemoving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const removeToken = async (tokenAddress: string) => {
+    // Early return if not hydrated yet
+    if (!isHydrated) {
+      setError('Client not yet hydrated')
+      return null
+    }
+    
     try {
-    setIsRemoving(true)
+      setIsRemoving(true)
       setError(null)
 
       if (!walletClient) {
@@ -59,6 +67,7 @@ export function useRemoveToken() {
   return {
     removeToken,
     isRemoving,
-    error
+    error,
+    isHydrated
   }
 } 

@@ -10,12 +10,13 @@ import CreateCampaignModal from '../../components/campaigns/CreateCampaignModal'
 import { useCampaigns } from '../../hooks/useCampaigns'
 import { useRouter } from 'next/router'
 import { useChainId, useAccount } from 'wagmi'
+import { useHydration } from '@/pages/_app'
 
 export default function CampaignsDiscovery() {
+  const { isHydrated } = useHydration()
   const router = useRouter()
   const chainId = useChainId()
   const { isConnected } = useAccount()
-  const [mounted, setMounted] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedCategory, setSelectedCategory] = useState('all')
   const [sortBy, setSortBy] = useState('newest')
@@ -25,6 +26,8 @@ export default function CampaignsDiscovery() {
 
   // Handle category from URL parameter
   useEffect(() => {
+    if (!isHydrated) return
+    
     if (router.isReady) {
       const { category } = router.query
       if (category && typeof category === 'string') {
@@ -33,25 +36,20 @@ export default function CampaignsDiscovery() {
         setSelectedCategory('all')
       }
     }
-  }, [router.isReady, router.query])
+  }, [router.isReady, router.query, isHydrated])
 
   // Refresh campaigns when chain ID changes
   useEffect(() => {
-    if (mounted) {
+    if (isHydrated) {
       refresh()
     }
-  }, [chainId, mounted, refresh])
-
-  useEffect(() => {
-    requestAnimationFrame(() => {
-      setMounted(true)
-    })
-  }, [])
+  }, [chainId, isHydrated, refresh])
 
   const handleCategoryChange = (category: string) => {
+    if (!isHydrated) return
+    
     const newCategory = category.toLowerCase() === 'all' ? 'all' : category
     setSelectedCategory(newCategory)
-    // Update URL when category changes
     router.push({
       pathname: router.pathname,
       query: { ...router.query, category: newCategory }
@@ -60,32 +58,18 @@ export default function CampaignsDiscovery() {
 
   // Filter campaigns based on search query and category
   const filteredCampaigns = campaigns.filter(campaign => {
-    // Skip campaigns without required data
+    if (!isHydrated) return false
+    
     if (!campaign.createdAt || !campaign.duration) return false
 
-    // Calculate campaign end date
     const createdAtDate = campaign.createdAt.seconds * 1000
-
     const endDate = createdAtDate + campaign.duration * 24 * 60 * 60 * 1000
-
     const now = Date.now()
-    
     const isActive = now < endDate
 
-    // Check if campaign is successful (raised amount >= goal amount)
     const isSuccessful = campaign.totalContributions && campaign.goalAmountSmallestUnits && 
       BigInt(campaign.totalContributions) >= BigInt(campaign.goalAmountSmallestUnits)
 
-    // Debug logging
-    console.log('Campaign filtering:', {
-      title: campaign.title,
-      totalContributions: campaign.totalContributions,
-      goalAmount: campaign.goalAmountSmallestUnits,
-      isSuccessful,
-      isActive
-    })
-
-    // Apply search and category filters
     const matchesSearch =
       campaign.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
       campaign.description.toLowerCase().includes(searchQuery.toLowerCase())
@@ -93,12 +77,13 @@ export default function CampaignsDiscovery() {
     const matchesCategory =
       selectedCategory === 'all' || campaign.category === selectedCategory
 
-    // Only include active campaigns that are not successful and match search and category
     return isActive && !isSuccessful && matchesSearch && matchesCategory
   })
 
   // Sort campaigns based on selected sort option
   const sortedCampaigns = [...filteredCampaigns].sort((a, b) => {
+    if (!isHydrated) return 0
+    
     switch (sortBy) {
       case 'newest':
         return Number(b.createdAt) - Number(a.createdAt)
@@ -116,7 +101,18 @@ export default function CampaignsDiscovery() {
   })
 
   const handleCampaignClick = (campaignId: string) => {
+    if (!isHydrated) return
     router.push(`/campaigns/${campaignId}`)
+  }
+
+  if (!isHydrated) {
+    return (
+      <div className='min-h-screen bg-gradient-to-b from-blue-50 to-white pt-32 pb-20'>
+        <div className='container mx-auto px-4 sm:px-6 lg:px-8'>
+          <div className='text-center'>Loading...</div>
+        </div>
+      </div>
+    )
   }
 
   return (

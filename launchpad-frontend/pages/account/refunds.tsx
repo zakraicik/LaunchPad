@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useMemo } from 'react'
 import { useAccount } from 'wagmi'
 import { formatUnits } from 'ethers'
 import { useTokens } from '../../hooks/useTokens'
@@ -7,27 +7,23 @@ import { formatDistanceToNow } from 'date-fns'
 import { ArrowPathIcon } from '@heroicons/react/24/outline'
 import Link from 'next/link'
 import { useRefunds } from '../../hooks/campaigns/useRefunds'
+import { useHydration } from '../../pages/_app'
 
 export default function RefundsPage() {
+  const { isHydrated } = useHydration()
   const { address, isConnected } = useAccount()
   const { getTokenByAddress } = useTokens()
-  const [mounted, setMounted] = useState(false)
-  const { data: refundsData, isLoading } = useRefunds(address)
+  
+  const { data: refundsData, isLoading } = useRefunds(
+    isHydrated ? address : undefined
+  )
+  
   const refundEvents = refundsData?.refundEvents || []
   const campaigns = refundsData?.campaignRefunds || {}
 
-  // Handle hydration mismatch
-  useEffect(() => {
-    setMounted(true)
-  }, [])
-
-  // Memoize stats calculation
   const stats = useMemo(() => {
-    if (!mounted) return { totalRefunds: 0, uniqueCampaigns: 0, tokenStats: [] }
-    
     const uniqueCampaigns = new Set(refundEvents.map(event => event.campaignId))
     
-    // Group refunds by token to sum amounts correctly
     const refundsByToken = refundEvents.reduce((acc, event) => {
       const campaign = campaigns[event.campaignId]
       const tokenAddress = campaign?.token || ''
@@ -42,7 +38,6 @@ export default function RefundsPage() {
       return acc
     }, {} as Record<string, { amounts: string[], count: number }>)
 
-    // Calculate total refunded for each token
     const tokenStats = Object.entries(refundsByToken).map(([tokenAddress, data]) => {
       const token = getTokenByAddress(tokenAddress)
       if (!token) return null
@@ -69,7 +64,7 @@ export default function RefundsPage() {
       uniqueCampaigns: uniqueCampaigns.size,
       tokenStats
     }
-  }, [mounted, refundEvents, campaigns, getTokenByAddress])
+  }, [refundEvents, campaigns, getTokenByAddress])
 
   const formatAmount = (amount: string, tokenAddress: string) => {
     const token = getTokenByAddress(tokenAddress)
@@ -83,8 +78,14 @@ export default function RefundsPage() {
     }
   }
 
-  if (!mounted) {
-    return null // Prevent flash of incorrect content during hydration
+  if (!isHydrated) {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white pt-32 pb-20">
+        <div className="container mx-auto px-4">
+          <div className="text-center">Loading...</div>
+        </div>
+      </div>
+    )
   }
 
   if (!isConnected) {
@@ -124,34 +125,30 @@ export default function RefundsPage() {
               <div className="bg-white rounded-lg shadow-sm p-6">
                 <dt className="text-sm font-medium text-gray-500">Total Refunds</dt>
                 <dd className="mt-1 text-2xl font-semibold text-gray-900">
-                  {mounted ? stats.totalRefunds : '...'}
+                  {stats.totalRefunds}
                 </dd>
               </div>
               
               <div className="bg-white rounded-lg shadow-sm p-6">
                 <dt className="text-sm font-medium text-gray-500">Unique Campaigns</dt>
                 <dd className="mt-1 text-2xl font-semibold text-gray-900">
-                  {mounted ? stats.uniqueCampaigns : '...'}
+                  {stats.uniqueCampaigns}
                 </dd>
               </div>
 
               <div className="bg-white rounded-lg shadow-sm p-6">
                 <dt className="text-sm font-medium text-gray-500">Refunds by Token</dt>
                 <dd className="mt-1">
-                  {mounted ? (
-                    stats.tokenStats.map(({ symbol, total, count }) => (
-                      <div key={symbol} className="mb-2 last:mb-0">
-                        <div className="text-2xl font-semibold text-gray-900">
-                          {total} {symbol}
-                        </div>
-                        <div className="text-sm text-gray-500">
-                          {count} refund{count !== 1 ? 's' : ''}
-                        </div>
+                  {stats.tokenStats.map(({ symbol, total, count }) => (
+                    <div key={symbol} className="mb-2 last:mb-0">
+                      <div className="text-2xl font-semibold text-gray-900">
+                        {total} {symbol}
                       </div>
-                    ))
-                  ) : (
-                    <div>...</div>
-                  )}
+                      <div className="text-sm text-gray-500">
+                        {count} refund{count !== 1 ? 's' : ''}
+                      </div>
+                    </div>
+                  ))}
                 </dd>
               </div>
             </div>
@@ -166,7 +163,7 @@ export default function RefundsPage() {
           ) : (
             <div className="flow-root">
               <ul role="list" className="-mb-8">
-                {mounted ? refundEvents.map((event) => {
+                {refundEvents.map((event) => {
                   const campaign = campaigns[event.campaignId]
                   const token = getTokenByAddress(campaign?.token || '')
                   
@@ -212,11 +209,7 @@ export default function RefundsPage() {
                       </div>
                     </li>
                   )
-                }) : (
-                  <div className="text-center py-4">
-                    <p className="text-gray-500">Loading refunds...</p>
-                  </div>
-                )}
+                })}
               </ul>
             </div>
           )}

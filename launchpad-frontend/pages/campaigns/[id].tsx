@@ -18,6 +18,7 @@ import { useGetATokenAddress } from '@/hooks/defiManager/useGetATokenAddress'
 import { ERC20_ABI } from '../../config/abis/erc20'
 import useRefundStatuses from '@/hooks/campaigns/useRefundStatuses'
 import Link from 'next/link'
+import { useHydration } from '@/pages/_app'
 
 interface Campaign {
   id: string
@@ -43,13 +44,13 @@ interface Campaign {
 }
 
 export default function CampaignDetail () {
+  const { isHydrated } = useHydration()
   const router = useRouter()
   const { id } = router.query
   const [activeTab, setActiveTab] = useState('contributors')
   const [campaign, setCampaign] = useState<Campaign | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const { getTokenByAddress } = useTokens()
-  const [mounted, setMounted] = useState(false)
   const [contributionAmount, setContributionAmount] = useState('')
   const { claimFunds, isClaiming } = useClaimFunds()
   const { contribute, isContributing } = useContribute()
@@ -109,16 +110,6 @@ export default function CampaignDetail () {
   const hasBeenRefunded = campaign ? refundStatuses[campaign.id] : false
 
   useEffect(() => {
-    setMounted(true)
-    return () => {
-      setCampaign(null)
-      setIsLoading(true)
-      setActiveTab('contributors')
-      setMounted(false)
-    }
-  }, [])
-
-  useEffect(() => {
     if (id) {
       setCampaign(null)
       setIsLoading(true)
@@ -127,7 +118,7 @@ export default function CampaignDetail () {
   }, [id])
 
   const fetchCampaign = async (campaignId: string) => {
-    if (!campaignId) return
+    if (!isHydrated) return
 
     try {
       setIsLoading(true)
@@ -135,7 +126,6 @@ export default function CampaignDetail () {
       const campaignSnap = await getDoc(campaignRef)
 
       if (campaignSnap.exists()) {
-        // Get unique contributors count
         const contributionEventsRef = collection(db, 'contributionEvents')
         const q = query(
           contributionEventsRef,
@@ -143,7 +133,6 @@ export default function CampaignDetail () {
         )
         const querySnapshot = await getDocs(q)
         
-        // Get unique contributors using Set
         const uniqueContributors = new Set<string>()
         querySnapshot.forEach(doc => {
           const data = doc.data()
@@ -157,10 +146,6 @@ export default function CampaignDetail () {
           ...campaignSnap.data(),
           contributors: uniqueContributors.size
         } as Campaign
-        console.log(
-          'Campaign address from Firestore:',
-          campaignData.campaignAddress
-        )
         setCampaign(campaignData)
       } else {
         setCampaign(null)
@@ -174,29 +159,25 @@ export default function CampaignDetail () {
   }
 
   useEffect(() => {
-    if (!mounted || !router.isReady) return
+    if (!isHydrated || !router.isReady) return
 
     const currentId = router.query.id as string
     if (currentId) {
       fetchCampaign(currentId)
     }
-  }, [router.isReady, router.query.id, mounted])
+  }, [router.isReady, router.query.id, isHydrated])
 
-  // New useEffect to fetch aToken balance
   useEffect(() => {
+    if (!isHydrated) return
+    
     const fetchATokenBalance = async () => {
       if (!campaign?.token || !campaign?.campaignAddress || !walletClient) return
 
       try {
         setIsLoadingYield(true)
-        // Get the aToken address for the campaign token
         const aTokenAddress = await getATokenAddress(campaign.token)
-        
-        // Create provider and contract instances
         const provider = new BrowserProvider(walletClient.transport)
         const aTokenContract = new Contract(aTokenAddress, ERC20_ABI, provider)
-        
-        // Get the balance of aTokens held by the campaign
         const balance = await aTokenContract.balanceOf(campaign.campaignAddress)
         setATokenBalance(balance.toString())
       } catch (error) {
@@ -208,20 +189,18 @@ export default function CampaignDetail () {
     }
 
     fetchATokenBalance()
-  }, [campaign?.token, campaign?.campaignAddress, walletClient])
+  }, [campaign?.token, campaign?.campaignAddress, walletClient, isHydrated])
 
-  // New useEffect to fetch token balance
   useEffect(() => {
+    if (!isHydrated) return
+    
     const fetchTokenBalance = async () => {
       if (!campaign?.token || !campaign?.campaignAddress || !walletClient) return
 
       try {
         setIsLoadingBalance(true)
-        // Create provider and contract instances
         const provider = new BrowserProvider(walletClient.transport)
         const tokenContract = new Contract(campaign.token, ERC20_ABI, provider)
-        
-        // Get the balance of tokens held by the campaigngit
         const balance = await tokenContract.balanceOf(campaign.campaignAddress)
         setTokenBalance(balance.toString())
       } catch (error) {
@@ -233,9 +212,9 @@ export default function CampaignDetail () {
     }
 
     fetchTokenBalance()
-  }, [campaign?.token, campaign?.campaignAddress, walletClient])
+  }, [campaign?.token, campaign?.campaignAddress, walletClient, isHydrated])
 
-  if (!mounted || !router.isReady) {
+  if (!isHydrated || !router.isReady) {
     return (
       <div className='min-h-screen bg-gradient-to-b from-blue-50 to-white py-20'>
         <div className='container mx-auto px-4'>

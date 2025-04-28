@@ -57,10 +57,7 @@ export default function CreateCampaignModal({
 
   // Use useEffect only for form reset
   useEffect(() => {
-    // Skip if not hydrated yet
-    if (!isHydrated) return
-    
-    // Reset form when modal is opened
+    // Only reset form when modal is opened
     if (isOpen) {
       setTitle('')
       setDescription('')
@@ -72,7 +69,7 @@ export default function CreateCampaignModal({
       setError(null)
       setIsSubmitting(false)
     }
-  }, [isOpen, isHydrated])
+  }, [isOpen])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()

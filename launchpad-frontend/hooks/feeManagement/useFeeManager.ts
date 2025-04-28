@@ -3,6 +3,7 @@ import { db } from '@/utils/firebase'
 import { useChainId } from 'wagmi'
 import { SUPPORTED_NETWORKS } from '@/config/addresses'
 import { useQuery } from '@tanstack/react-query'
+import { useHydration } from '@/pages/_app'
 
 interface FeeSettings {
   lastOperation: string
@@ -13,6 +14,7 @@ interface FeeSettings {
 }
 
 export function useFeeManager() {
+  const { isHydrated } = useHydration()
   const chainId = useChainId()
 
   const { data: feeSettings, isLoading, error, refetch } = useQuery({
@@ -50,15 +52,17 @@ export function useFeeManager() {
         return () => unsubscribe()
       })
     },
-    enabled: SUPPORTED_NETWORKS.includes(chainId as typeof SUPPORTED_NETWORKS[number]),
-    staleTime: 5 * 60 * 1000, // Consider data fresh for 5 minutes
-    gcTime: 10 * 60 * 1000, // Keep unused data in cache for 10 minutes
+    // Only enable query when both supported network AND component is hydrated
+    enabled: SUPPORTED_NETWORKS.includes(chainId as typeof SUPPORTED_NETWORKS[number]) && isHydrated,
+    staleTime: 5 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
   })
 
   return {
     feeSettings,
     isLoading,
     error: error as Error | null,
-    refetch
+    refetch,
+    isHydrated
   }
 }

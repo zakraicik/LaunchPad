@@ -4,6 +4,7 @@ import { useWalletClient } from 'wagmi'
 import { useQueries } from '@tanstack/react-query'
 import CampaignABI from '../../../artifacts/contracts/Campaign.sol/Campaign.json'
 import toast from 'react-hot-toast'
+import { useHydration } from '../../pages/_app'
 
 interface CampaignContribution {
   campaignId: string
@@ -12,23 +13,36 @@ interface CampaignContribution {
 }
 
 const useRefundStatuses = (campaigns: CampaignContribution[], userAddress?: string) => {
+  const { isHydrated } = useHydration()
   const { data: walletClient } = useWalletClient()
 
-  // Memoize the queries configuration to prevent unnecessary query updates
+  // Only include campaigns that we actually need to check
+  const campaignsToCheck = useMemo(() => 
+    campaigns.filter(c => 
+      c.isRefundEligible && c.campaignAddress && userAddress
+    ),
+    [campaigns, userAddress]
+  )
+
+  // More specific query keys
   const queries = useMemo(() => 
-    campaigns.map(campaign => ({
-      queryKey: ['hasBeenRefunded', campaign.campaignId, campaign.campaignAddress, userAddress],
+    campaignsToCheck.map(campaign => ({
+      queryKey: [
+        'hasBeenRefunded',
+        campaign.campaignId,
+        campaign.campaignAddress,
+        userAddress,
+        'v1' // Add a version if you change the query implementation
+      ],
       queryFn: async () => {
-        if (!walletClient || !campaign.campaignAddress || !userAddress || !campaign.isRefundEligible) {
-          return false
-        }
+        if (!walletClient) return false
 
         try {
           const provider = new BrowserProvider(walletClient.transport)
           const signer = await provider.getSigner()
           
           const campaignContract = new Contract(
-            campaign.campaignAddress,
+            campaign.campaignAddress as string,
             CampaignABI.abi,
             signer
           )
@@ -42,29 +56,25 @@ const useRefundStatuses = (campaigns: CampaignContribution[], userAddress?: stri
           return false
         }
       },
-      enabled: Boolean(
-        walletClient && 
-        campaign.campaignAddress && 
-        userAddress && 
-        campaign.isRefundEligible
-      ),
-      refetchInterval: 30000, // Increased to 30 seconds
-      staleTime: 20000, // Increased to 20 seconds
-      gcTime: 60000, // Increased to 1 minute
+      enabled: Boolean(isHydrated && walletClient),
+      refetchInterval: 30000,
+      staleTime: 20000,
+      gcTime: 60000,
       retry: 2,
     })),
-    [campaigns, userAddress, walletClient]
+    [campaignsToCheck, userAddress, walletClient, isHydrated]
   )
 
   const refundQueries = useQueries({ queries })
 
-  // Memoize the final result to prevent unnecessary object creation
   return useMemo(() => 
     campaigns.reduce<Record<string, boolean>>((acc, campaign, index) => {
-      acc[campaign.campaignId] = refundQueries[index].data ?? false
+      // Find the matching query result
+      const queryIndex = campaignsToCheck.findIndex(c => c.campaignId === campaign.campaignId)
+      acc[campaign.campaignId] = queryIndex >= 0 ? (refundQueries[queryIndex].data ?? false) : false
       return acc
     }, {}),
-    [campaigns, refundQueries]
+    [campaigns, campaignsToCheck, refundQueries]
   )
 }
 

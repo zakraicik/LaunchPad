@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState } from 'react'
 import {
   getAuth,
   signInWithCustomToken,
@@ -9,28 +9,20 @@ import {
 import { useWalletClient, useAccount } from 'wagmi'
 import { db } from '../utils/firebase'
 import { doc, getDoc, setDoc } from 'firebase/firestore'
+import { useHydration } from '../pages/_app'
 
-export function useFirebaseAuth () {
+export function useFirebaseAuth() {
+  const { isHydrated } = useHydration()
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [user, setUser] = useState<User | null>(null)
   const { data: walletClient } = useWalletClient()
   const { address } = useAccount()
-  const [mounted, setMounted] = useState(false)
   const auth = getAuth()
-
-  // Initialize mounted state
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setMounted(true)
-    }, 0)
-    
-    return () => clearTimeout(timer)
-  }, [])
 
   // Handle auth state changes
   useEffect(() => {
-    if (!mounted) return
+    if (!isHydrated) return
 
     let unsubscribe: () => void
 
@@ -48,11 +40,11 @@ export function useFirebaseAuth () {
         unsubscribe()
       }
     }
-  }, [auth, mounted])
+  }, [auth, isHydrated])
 
   // Automatically sign in when wallet is connected
   useEffect(() => {
-    if (!mounted) return
+    if (!isHydrated) return
 
     const autoSignIn = async () => {
       if (!address || !walletClient) {
@@ -80,19 +72,23 @@ export function useFirebaseAuth () {
     }
 
     autoSignIn()
-  }, [address, walletClient, mounted])
+  }, [address, walletClient, isHydrated])
 
   // Handle wallet disconnection
   useEffect(() => {
-    if (!mounted) return
+    if (!isHydrated) return
 
     if (!address && user) {
       const auth = getAuth()
       signOut(auth)
     }
-  }, [address, user, mounted])
+  }, [address, user, isHydrated])
 
   const signInWithWallet = async () => {
+    if (!isHydrated) {
+      throw new Error('Client not yet hydrated')
+    }
+    
     if (!walletClient || !address) {
       throw new Error('Please connect your wallet')
     }
@@ -148,6 +144,7 @@ export function useFirebaseAuth () {
   return {
     user,
     isLoading,
-    error
+    error,
+    isHydrated
   }
 }

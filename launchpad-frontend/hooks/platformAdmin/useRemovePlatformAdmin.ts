@@ -3,14 +3,21 @@ import { getContractAddress } from '@/config/addresses'
 import PlatformAdmin from '../../../artifacts/contracts/PlatformAdmin.sol/PlatformAdmin.json'
 import { ethers } from 'ethers'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useHydration } from '@/pages/_app'
 
 export function useRemovePlatformAdmin() {
+  const { isHydrated } = useHydration()
   const chainId = useChainId()
   const { data: walletClient } = useWalletClient()
   const queryClient = useQueryClient()
 
   const mutation = useMutation({
     mutationFn: async (adminAddress: string) => {
+      // Check for hydration first
+      if (!isHydrated) {
+        throw new Error('Client not yet hydrated')
+      }
+      
       if (!walletClient) {
         throw new Error('Please connect your wallet')
       }
@@ -45,14 +52,17 @@ export function useRemovePlatformAdmin() {
       }
     },
     onSuccess: () => {
-      // Invalidate the platform admins query to trigger a refetch
-      queryClient.invalidateQueries({ queryKey: ['platformAdmins', chainId] })
+      // Only invalidate queries if hydrated
+      if (isHydrated) {
+        queryClient.invalidateQueries({ queryKey: ['platformAdmins', chainId] })
+      }
     }
   })
 
   return {
     removePlatformAdmin: mutation.mutateAsync,
     isRemoving: mutation.isPending,
-    error: mutation.error ? (mutation.error as Error).message : null
+    error: mutation.error ? (mutation.error as Error).message : null,
+    isHydrated
   }
 } 

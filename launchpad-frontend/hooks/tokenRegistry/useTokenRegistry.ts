@@ -3,6 +3,7 @@ import { collection, onSnapshot, query, where } from 'firebase/firestore'
 import { db } from '@/utils/firebase'
 import { useChainId } from 'wagmi'
 import { SUPPORTED_NETWORKS } from '@/config/addresses'
+import { useHydration } from '@/pages/_app'
 
 interface TokenInfo {
   address: string
@@ -16,12 +17,17 @@ interface TokenInfo {
 }
 
 export function useTokenRegistry() {
+  const { isHydrated } = useHydration()
   const chainId = useChainId()
   const [tokens, setTokens] = useState<TokenInfo[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
+    // Skip effect entirely if not hydrated
+    if (!isHydrated) return
+    
+    // Move these inside the effect so they only run after hydration
     setIsLoading(true)
     setError(null)
 
@@ -68,11 +74,12 @@ export function useTokenRegistry() {
 
     // Cleanup subscription on unmount
     return () => unsubscribe()
-  }, [chainId])
+  }, [chainId, isHydrated])
 
   return {
     tokens,
     isLoading,
-    error
+    error,
+    isHydrated
   }
 }

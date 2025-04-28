@@ -6,8 +6,10 @@ import { useRemovePlatformAdmin } from '@/hooks/platformAdmin/useRemovePlatformA
 import { formatDistanceToNow, isValid } from 'date-fns'
 import { Timestamp } from 'firebase/firestore'
 import toast from 'react-hot-toast'
+import { useHydration } from '@/pages/_app'
 
 export default function PlatformAdmins() {
+  const { isHydrated } = useHydration()
   const { admins, isLoading, error, refetch } = usePlatformAdmin()
   const { addPlatformAdmin, isAdding, error: addError } = useAddPlatformAdmin()
   const { removePlatformAdmin, isRemoving, error: removeError } = useRemovePlatformAdmin()
@@ -16,6 +18,8 @@ export default function PlatformAdmins() {
 
   const handleAddAdmin = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (!isHydrated) return
+    
     const toastId = toast.loading('Adding platform admin...')
     try {
       await addPlatformAdmin(newAdminAddress)
@@ -30,6 +34,8 @@ export default function PlatformAdmins() {
   }
 
   const handleRemoveAdmin = async (adminAddress: string) => {
+    if (!isHydrated) return
+    
     const toastId = toast.loading('Removing platform admin...')
     try {
       await removePlatformAdmin(adminAddress)
@@ -43,7 +49,6 @@ export default function PlatformAdmins() {
 
   const formatDate = (timestamp: Timestamp | string) => {
     try {
-      // Handle Firebase Timestamp
       const date = typeof timestamp === 'object' && 'toDate' in timestamp
         ? (timestamp as Timestamp).toDate()
         : new Date(timestamp)
@@ -54,6 +59,16 @@ export default function PlatformAdmins() {
       console.error('Error formatting date:', err)
       return 'Invalid date'
     }
+  }
+
+  if (!isHydrated) {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white pt-32 pb-20">
+        <div className="container mx-auto px-4">
+          <div className="text-center">Loading...</div>
+        </div>
+      </div>
+    )
   }
 
   if (isLoading) {

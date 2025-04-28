@@ -5,10 +5,29 @@ import { RocketLaunchIcon } from '@heroicons/react/24/outline'
 import { useState } from 'react'
 import CreateCampaignModal from '../components/campaigns/CreateCampaignModal'
 import { useAccount } from 'wagmi'
+import { useHydration } from './_app'
 
 export default function Home () {
+  const { isHydrated } = useHydration()
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
   const { isConnected } = useAccount()
+
+  // Show a simple loading state during server-side rendering
+  if (!isHydrated) {
+    return (
+      <main className='min-h-screen bg-white'>
+        <section className='bg-gradient-to-b from-blue-50 to-white pt-32 pb-20'>
+          <div className='container mx-auto px-4'>
+            <div className='max-w-4xl mx-auto text-center'>
+              <h1 className='text-5xl font-bold mb-6'>
+                Powering Web3 Innovation Through Community Contributions
+              </h1>
+            </div>
+          </div>
+        </section>
+      </main>
+    )
+  }
 
   return (
     <main className='min-h-screen bg-white'>
@@ -17,10 +36,10 @@ export default function Home () {
         <div className='container mx-auto px-4'>
           <div className='max-w-4xl mx-auto text-center'>
             <h1 className='text-5xl font-bold mb-6'>
-            Powering Web3 Innovation Through Community Contributions
+              Powering Web3 Innovation Through Community Contributions
             </h1>
             <p className='text-xl text-gray-600 mb-8'>
-            Projects launch with minimal fees thanks to integrated yield generation, while investors receive full refund protection if funding goals aren't met—our blockchain-native platform creates a safer, more efficient fundraising environment for the next generation of web3 builders
+              Projects launch with minimal fees thanks to integrated yield generation, while investors receive full refund protection if funding goals aren't met—our blockchain-native platform creates a safer, more efficient fundraising environment for the next generation of web3 builders
             </p>
             <div className='flex justify-center gap-4'>
               <Link

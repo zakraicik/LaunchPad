@@ -3,14 +3,22 @@ import { getContractAddress } from '@/config/addresses'
 import FeeManager from '../../../artifacts/contracts/FeeManager.sol/FeeManager.json'
 import { useState } from 'react'
 import { ethers } from 'ethers'
+import { useHydration } from '@/pages/_app'
 
 export function useUpdatePlatformTreasury() {
+  const { isHydrated } = useHydration()
   const chainId = useChainId()
   const { data: walletClient } = useWalletClient()
   const [isUpdating, setIsUpdating] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const updatePlatformTreasury = async (treasuryAddress: string) => {
+    // Early return if not hydrated yet
+    if (!isHydrated) {
+      setError('Client not yet hydrated')
+      return null
+    }
+    
     try {
       setIsUpdating(true)
       setError(null)
@@ -48,8 +56,8 @@ export function useUpdatePlatformTreasury() {
         txHash: receipt.hash
       }
     } catch (err) {
-      console.error('Error adding platform admin:', err)
-      const errorMessage = err instanceof Error ? err.message : 'Failed to add platform admin'
+      console.error('Error updating platform treasury:', err)
+      const errorMessage = err instanceof Error ? err.message : 'Failed to update platform treasury'
       setError(errorMessage)
       throw err
     } finally {
@@ -60,6 +68,7 @@ export function useUpdatePlatformTreasury() {
   return {
     updatePlatformTreasury,
     isUpdating,
-    error
+    error,
+    isHydrated
   }
 } 

@@ -5,14 +5,21 @@ import { ethers } from 'ethers'
 import { collection, doc, setDoc } from 'firebase/firestore'
 import { db } from '@/utils/firebase'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useHydration } from '@/pages/_app'
 
 export function useAddPlatformAdmin() {
+  const { isHydrated } = useHydration()
   const chainId = useChainId()
   const { data: walletClient } = useWalletClient()
   const queryClient = useQueryClient()
 
   const mutation = useMutation({
     mutationFn: async (adminAddress: string) => {
+      // Check for hydration first
+      if (!isHydrated) {
+        throw new Error('Client not yet hydrated')
+      }
+      
       if (!walletClient) {
         throw new Error('Please connect your wallet')
       }
@@ -56,14 +63,17 @@ export function useAddPlatformAdmin() {
       }
     },
     onSuccess: () => {
-      // Invalidate the platform admins query to trigger a refetch
-      queryClient.invalidateQueries({ queryKey: ['platformAdmins', chainId] })
+      // Only invalidate queries if hydrated
+      if (isHydrated) {
+        queryClient.invalidateQueries({ queryKey: ['platformAdmins', chainId] })
+      }
     }
   })
 
   return {
     addPlatformAdmin: mutation.mutateAsync,
     isAdding: mutation.isPending,
-    error: mutation.error ? (mutation.error as Error).message : null
+    error: mutation.error ? (mutation.error as Error).message : null,
+    isHydrated
   }
 } 

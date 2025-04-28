@@ -3,6 +3,7 @@ import { db } from '@/utils/firebase'
 import { useChainId } from 'wagmi'
 import { SUPPORTED_NETWORKS } from '@/config/addresses'
 import { useQuery } from '@tanstack/react-query'
+import { useHydration } from '@/pages/_app'
 
 interface PlatformAdmin {
   address: string
@@ -13,6 +14,7 @@ interface PlatformAdmin {
 }
 
 export function usePlatformAdmin() {
+  const { isHydrated } = useHydration()
   const chainId = useChainId()
 
   const { data: admins = [], isLoading, error, refetch } = useQuery({
@@ -61,15 +63,17 @@ export function usePlatformAdmin() {
         return () => unsubscribe()
       })
     },
-    enabled: SUPPORTED_NETWORKS.includes(chainId as typeof SUPPORTED_NETWORKS[number]),
-    staleTime: 5 * 60 * 1000, // Consider data fresh for 5 minutes
-    gcTime: 10 * 60 * 1000, // Keep unused data in cache for 10 minutes
+    // Only enable query when both network is supported AND component is hydrated
+    enabled: SUPPORTED_NETWORKS.includes(chainId as typeof SUPPORTED_NETWORKS[number]) && isHydrated,
+    staleTime: 5 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
   })
 
   return {
     admins,
     isLoading,
     error: error as Error | null,
-    refetch
+    refetch,
+    isHydrated
   }
 }

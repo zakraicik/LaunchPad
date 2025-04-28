@@ -4,6 +4,7 @@ import { useWalletClient } from 'wagmi'
 import { useQueries } from '@tanstack/react-query'
 import CampaignABI from '../../../artifacts/contracts/Campaign.sol/Campaign.json'
 import toast from 'react-hot-toast'
+import { useHydration } from '../../pages/_app'
 
 interface CampaignCheck {
   campaignId: string
@@ -11,9 +12,10 @@ interface CampaignCheck {
 }
 
 export const useIsContributor = (campaigns: CampaignCheck[], userAddress?: string) => {
+  const { isHydrated } = useHydration()
   const { data: walletClient } = useWalletClient()
 
-  // Memoize the queries configuration to prevent unnecessary query updates
+  // Memoize the queries configuration
   const queries = useMemo(() => 
     campaigns.map(campaign => ({
       queryKey: ['isContributor', campaign.campaignId, campaign.campaignAddress, userAddress],
@@ -41,17 +43,19 @@ export const useIsContributor = (campaigns: CampaignCheck[], userAddress?: strin
           return false
         }
       },
+      // Add isHydrated to enabled condition
       enabled: Boolean(
+        isHydrated &&
         walletClient && 
         campaign.campaignAddress && 
         userAddress
       ),
-      refetchInterval: 30000, // 30 seconds
-      staleTime: 20000, // 20 seconds
-      gcTime: 60000, // 1 minute
+      refetchInterval: 30000,
+      staleTime: 20000,
+      gcTime: 60000,
       retry: 2,
     })),
-    [campaigns, userAddress, walletClient]
+    [campaigns, userAddress, walletClient, isHydrated]
   )
 
   const contributorQueries = useQueries({ queries })

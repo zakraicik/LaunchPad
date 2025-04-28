@@ -3,14 +3,22 @@ import { getContractAddress } from '@/config/addresses'
 import TokenRegistry from '../../../artifacts/contracts/TokenRegistry.sol/TokenRegistry.json'
 import { useState } from 'react'
 import { ethers } from 'ethers'
+import { useHydration } from '@/pages/_app'
 
 export function useAddToken() {
+  const { isHydrated } = useHydration()
   const chainId = useChainId()
   const { data: walletClient } = useWalletClient()
   const [isAdding, setIsAdding] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const addToken = async (tokenAddress: string, minContribution: string) => {
+    // Early return if not hydrated yet
+    if (!isHydrated) {
+      setError('Client not yet hydrated')
+      return null
+    }
+    
     try {
       setIsAdding(true)
       setError(null)
@@ -61,6 +69,7 @@ export function useAddToken() {
   return {
     addToken,
     isAdding,
-    error
+    error,
+    isHydrated
   }
 } 
