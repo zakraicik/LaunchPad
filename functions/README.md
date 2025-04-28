@@ -55,7 +55,7 @@
 
 | Operation Code         | Operation Name         | Firebase Collections Updated         | Frontend Integration |
 | ---------------------- | ---------------------- | ------------------------------------ | -------------------- |
-| `OP_ADMIN_ADDED (1)`   | Platform admin added   | `rawEvents`, `adminEvents`, `admins` |                      |
+| `OP_ADMIN_ADDED (1)`   | Platform admin added   | `rawEvents`, `adminEvents`, `admins` | ✅                   |
 | `OP_ADMIN_REMOVED (2)` | Platform admin removed | `rawEvents`, `adminEvents`, `admins` |                      |
 
 ## TokenRegistry Operations
@@ -63,7 +63,7 @@
 | Operation Code                    | Operation Name                      | Firebase Collections Updated         | Frontend Integration |
 | --------------------------------- | ----------------------------------- | ------------------------------------ | -------------------- |
 | `OP_TOKEN_ADDED (1)`              | Token added to registry             | `rawEvents`, `tokenEvents`, `tokens` | ✅                   |
-| `OP_TOKEN_REMOVED (2)`            | Token removed from registry         | `rawEvents`, `tokenEvents`, `tokens` |                      |
-| `OP_TOKEN_SUPPORT_DISABLED (3)`   | Token support disabled              | `rawEvents`, `tokenEvents`, `tokens` |                      |
-| `OP_TOKEN_SUPPORT_ENABLED (4)`    | Token support enabled               | `rawEvents`, `tokenEvents`, `tokens` |                      |
-| `OP_MIN_CONTRIBUTION_UPDATED (5)` | Minimum contribution amount updated | `rawEvents`, `tokenEvents`, `tokens` |                      |
+| `OP_TOKEN_REMOVED (2)`            | Token removed from registry         | `rawEvents`, `tokenEvents`, `tokens` | ✅                   |
+| `OP_TOKEN_SUPPORT_DISABLED (3)`   | Token support disabled              | `rawEvents`, `tokenEvents`, `tokens` | ✅                   |
+| `OP_TOKEN_SUPPORT_ENABLED (4)`    | Token support enabled               | `rawEvents`, `tokenEvents`, `tokens` | ✅                   |
+| `OP_MIN_CONTRIBUTION_UPDATED (5)` | Minimum contribution amount updated | `rawEvents`, `tokenEvents`, `tokens` | ✅                   |

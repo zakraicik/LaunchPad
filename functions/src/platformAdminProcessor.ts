@@ -296,7 +296,6 @@ async function updateAdminRecordByOpType(
 
     // Handle different operation types
     let adminAddedData: AdminData;
-    let adminRemovedData: Partial<AdminData>;
 
     switch (opType) {
     case 1: // ADMIN_ADDED
@@ -315,16 +314,9 @@ async function updateAdminRecordByOpType(
 
     case 2: // ADMIN_REMOVED
       if (adminExists) {
-        // Update the admin record to mark as inactive
-        adminRemovedData = {
-          isActive: false,
-          lastUpdated: new Date(),
-          lastOperation: "ADMIN_REMOVED",
-          networkId,
-        };
-
-        await adminRef.update(adminRemovedData);
-        logger.info(`Admin marked as inactive for ${adminAddress}`);
+        // Delete the admin record entirely
+        await adminRef.delete();
+        logger.info(`Admin record deleted for ${adminAddress}`);
       } else {
         logger.warn(
           `Attempted to remove non-existent admin: ${adminAddress}`,
