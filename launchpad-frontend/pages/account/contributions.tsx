@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useMemo } from 'react'
 import { useAccount } from 'wagmi'
 import { formatUnits } from 'ethers'
 import { useTokens } from '../../hooks/useTokens'
@@ -8,20 +8,21 @@ import { WalletIcon } from '@heroicons/react/24/outline'
 import Link from 'next/link'
 import useRefundStatuses from '../../hooks/campaigns/useRefundStatuses'
 import { useContributions, Campaign, ContributionEvent } from '../../hooks/campaigns/useContributions'
+import { useHydration } from '../../pages/_app'
 
 export default function UserContributions() {
+  const { isHydrated } = useHydration()
   const { address, isConnected } = useAccount()
   const { getTokenByAddress } = useTokens()
-  const [mounted, setMounted] = useState(false)
   const [statusFilter, setStatusFilter] = useState<string>('All')
-  const { data: contributionsData, isLoading } = useContributions(address)
+  
+  // Only fetch data when component is hydrated
+  const { data: contributionsData, isLoading } = useContributions(
+    isHydrated ? address : undefined
+  )
+  
   const contributionEvents = contributionsData?.contributionEvents || []
   const campaigns = contributionsData?.campaigns || {}
-
-  // Handle hydration mismatch
-  useEffect(() => {
-    setMounted(true)
-  }, [])
 
   // Memoize getCampaignStatus function
   const getCampaignStatus = useMemo(() => {
@@ -56,17 +57,14 @@ export default function UserContributions() {
         }
       }
 
-      // If campaign has reached its goal, it's successful
       if (isSuccessful()) {
         return 'Successful'
       }
 
-      // If campaign hasn't ended, it's in progress
       if (!isCampaignEnded()) {
         return 'In Progress'
       }
 
-      // If campaign has ended and wasn't successful, check refund status
       return 'Refund Eligible'
     }
   }, [])
@@ -92,16 +90,16 @@ export default function UserContributions() {
     }))
   }, [contributionEvents, campaigns, campaignStatuses])
 
-  // Get refund statuses for all campaigns
-  const refundStatuses = useRefundStatuses(campaignsForRefundCheck, address)
+  // Only fetch refund statuses when component is hydrated and we have campaigns to check
+  const refundStatuses = useRefundStatuses(
+    isHydrated && campaignsForRefundCheck.length > 0 ? campaignsForRefundCheck : [], 
+    isHydrated ? address : undefined
+  )
 
   // Memoize stats calculation
   const stats = useMemo(() => {
-    if (!mounted) return { totalContributions: 0, uniqueCampaigns: 0, tokenStats: [] }
-    
     const uniqueCampaigns = new Set(contributionEvents.map(event => event.campaignId))
     
-    // Group contributions by token to sum amounts correctly
     const contributionsByToken = contributionEvents.reduce((acc, event) => {
       const campaign = campaigns[event.campaignId]
       const tokenAddress = campaign?.token || ''
@@ -116,7 +114,6 @@ export default function UserContributions() {
       return acc
     }, {} as Record<string, { amounts: string[], count: number }>)
 
-    // Calculate total contributed for each token
     const tokenStats = Object.entries(contributionsByToken).map(([tokenAddress, data]) => {
       const token = getTokenByAddress(tokenAddress)
       if (!token) return null
@@ -143,7 +140,7 @@ export default function UserContributions() {
       uniqueCampaigns: uniqueCampaigns.size,
       tokenStats
     }
-  }, [mounted, contributionEvents, campaigns, getTokenByAddress])
+  }, [contributionEvents, campaigns, getTokenByAddress])
 
   const formatAmount = (amount: string, tokenAddress: string) => {
     const token = getTokenByAddress(tokenAddress)
@@ -177,7 +174,6 @@ export default function UserContributions() {
     Object.values(campaignStatuses).forEach(status => {
       if (status) statuses.add(status)
     })
-    // Add "Refund Received" status if any campaign has been refunded
     if (Object.values(refundStatuses).some(status => status)) {
       statuses.add('Refund Received')
     }
@@ -196,8 +192,15 @@ export default function UserContributions() {
     })
   }
 
-  if (!mounted) {
-    return null // Prevent flash of incorrect content during hydration
+  // Return placeholder during server-side rendering
+  if (!isHydrated) {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white pt-32 pb-20">
+        <div className="container mx-auto px-4">
+          <div className="text-center">Loading...</div>
+        </div>
+      </div>
+    )
   }
 
   if (!isConnected) {
@@ -233,7 +236,6 @@ export default function UserContributions() {
               </div>
             </div>
             
-            {/* Status Filter */}
             {contributionEvents.length > 0 && (
               <div className="flex flex-wrap gap-2">
                 {getAvailableStatuses().map((status) => (
@@ -258,34 +260,30 @@ export default function UserContributions() {
               <div className="bg-white rounded-lg shadow-sm p-6">
                 <dt className="text-sm font-medium text-gray-500">Total Contributions</dt>
                 <dd className="mt-1 text-2xl font-semibold text-gray-900">
-                  {mounted ? stats.totalContributions : '...'}
+                  {stats.totalContributions}
                 </dd>
               </div>
               
               <div className="bg-white rounded-lg shadow-sm p-6">
                 <dt className="text-sm font-medium text-gray-500">Unique Campaigns</dt>
                 <dd className="mt-1 text-2xl font-semibold text-gray-900">
-                  {mounted ? stats.uniqueCampaigns : '...'}
+                  {stats.uniqueCampaigns}
                 </dd>
               </div>
 
               <div className="bg-white rounded-lg shadow-sm p-6">
                 <dt className="text-sm font-medium text-gray-500">Contributions by Token</dt>
                 <dd className="mt-1">
-                  {mounted ? (
-                    stats.tokenStats.map(({ symbol, total, count }) => (
-                      <div key={symbol} className="mb-2 last:mb-0">
-                        <div className="text-2xl font-semibold text-gray-900">
-                          {total} {symbol}
-                        </div>
-                        <div className="text-sm text-gray-500">
-                          {count} contribution{count !== 1 ? 's' : ''}
-                        </div>
+                  {stats.tokenStats.map(({ symbol, total, count }) => (
+                    <div key={symbol} className="mb-2 last:mb-0">
+                      <div className="text-2xl font-semibold text-gray-900">
+                        {total} {symbol}
                       </div>
-                    ))
-                  ) : (
-                    <div>...</div>
-                  )}
+                      <div className="text-sm text-gray-500">
+                        {count} contribution{count !== 1 ? 's' : ''}
+                      </div>
+                    </div>
+                  ))}
                 </dd>
               </div>
             </div>
@@ -300,7 +298,7 @@ export default function UserContributions() {
           ) : (
             <div className="flow-root">
               <ul role="list" className="-mb-8">
-                {mounted ? filterContributions(contributionEvents).map((event) => {
+                {filterContributions(contributionEvents).map((event) => {
                   const campaign = campaigns[event.campaignId]
                   const token = getTokenByAddress(campaign?.token || '')
                   const isUnsuccessful = campaign?.statusText === 'Unsuccessful'
@@ -357,11 +355,7 @@ export default function UserContributions() {
                       </div>
                     </li>
                   )
-                }) : (
-                  <div className="text-center py-4">
-                    <p className="text-gray-500">Loading contributions...</p>
-                  </div>
-                )}
+                })}
               </ul>
             </div>
           )}

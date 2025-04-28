@@ -1,37 +1,34 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/router'
 import { useAccount } from 'wagmi'
 import CustomConnectButton from './ConnectButton'
 import {
   WalletIcon,
-  PlusCircleIcon,
   ChevronDownIcon,
   ShieldCheckIcon,
-  UsersIcon,
-  ChartBarIcon,
-  DocumentTextIcon,
   Bars3Icon,
   XMarkIcon,
   RocketLaunchIcon,
   CurrencyDollarIcon,
   BanknotesIcon,
   UserIcon,
-  ArrowPathIcon
+  ArrowPathIcon,
+  ChartBarIcon
 } from '@heroicons/react/24/outline'
 import { useIsAdmin } from '../utils/admin'
 import { useFirebaseAuth } from '../hooks/useFirebaseAuth'
+import { useHydration } from '../pages/_app'
 
-export default function Navbar () {
+export default function Navbar() {
+  const { isHydrated } = useHydration()
   const router = useRouter()
   const { isConnected, address } = useAccount()
   const { isAdmin, isLoading: isLoadingAdmin } = useIsAdmin(address)
-  const [mounted, setMounted] = useState(false)
   const [isDropdownOpen, setIsDropdownOpen] = useState(false)
   const [isAdminDropdownOpen, setIsAdminDropdownOpen] = useState(false)
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
   const { user, isLoading } = useFirebaseAuth()
-  const mountedRef = useRef(false)
   const initialRenderRef = useRef(true)
 
   const navigation = [
@@ -58,7 +55,7 @@ export default function Navbar () {
     }
   ]
 
-  const accountNavigation = mounted ? [
+  const accountNavigation = [
     {
       name: 'My Campaigns',
       href: '/campaigns/my',
@@ -73,8 +70,13 @@ export default function Navbar () {
       name: 'My Refunds',
       href: '/account/refunds',
       icon: ArrowPathIcon
+    },
+    {
+      name: 'Creator Analytics',
+      href: '/account/creator-analytics',
+      icon: ChartBarIcon
     }
-  ] : []
+  ]
 
   const isActive = (path: string) => {
     // For exact matches (like Home and About)
@@ -93,53 +95,29 @@ export default function Navbar () {
     return false
   }
 
-  // Handle hydration mismatch
-  useEffect(() => {
-    mountedRef.current = true
-    // Use requestAnimationFrame to ensure this runs after the initial render
-    requestAnimationFrame(() => {
-      if (mountedRef.current) {
-        setMounted(true)
-      }
-    })
-
-    return () => {
-      mountedRef.current = false
-    }
-  }, [])
-
   // Close dropdowns when clicking outside
   useEffect(() => {
-    if (!mounted) return // Don't set up event listeners until after hydration
+    if (!isHydrated) return
 
     const handleClickOutside = (event: MouseEvent) => {
       const accountDropdown = document.getElementById('account-dropdown')
       const adminDropdown = document.getElementById('admin-dropdown')
 
       if (accountDropdown && !accountDropdown.contains(event.target as Node)) {
-        // Use requestAnimationFrame to defer state updates during initial render
-        requestAnimationFrame(() => {
-          if (mountedRef.current) {
-            setIsDropdownOpen(false)
-          }
-        })
+        setIsDropdownOpen(false)
       }
       if (adminDropdown && !adminDropdown.contains(event.target as Node)) {
-        requestAnimationFrame(() => {
-          if (mountedRef.current) {
-            setIsAdminDropdownOpen(false)
-          }
-        })
+        setIsAdminDropdownOpen(false)
       }
     }
 
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [mounted])
+  }, [isHydrated])
 
   // Close mobile menu on navigation
   useEffect(() => {
-    if (!mounted) return // Don't update state until after hydration
+    if (!isHydrated) return
 
     // Skip the first render to avoid state updates during hydration
     if (initialRenderRef.current) {
@@ -147,60 +125,41 @@ export default function Navbar () {
       return
     }
 
-    requestAnimationFrame(() => {
-      if (mountedRef.current) {
-        setIsMobileMenuOpen(false)
-        // Don't automatically close dropdowns here
-      }
-    })
-  }, [router.pathname, mounted])
+    setIsMobileMenuOpen(false)
+  }, [router.pathname, isHydrated])
 
   // Handle dropdown toggles
   const handleDropdownToggle = (type: 'account' | 'admin') => {
-    requestAnimationFrame(() => {
-      if (mountedRef.current) {
-        if (type === 'account') {
-          setIsDropdownOpen(prev => !prev)
-          setIsAdminDropdownOpen(false) // Close other dropdown
-        } else {
-          setIsAdminDropdownOpen(prev => !prev)
-          setIsDropdownOpen(false) // Close other dropdown
-        }
-      }
-    })
+    if (type === 'account') {
+      setIsDropdownOpen(prev => !prev)
+      setIsAdminDropdownOpen(false)
+    } else {
+      setIsAdminDropdownOpen(prev => !prev)
+      setIsDropdownOpen(false)
+    }
   }
 
   // Handle mobile menu toggle
   const handleMobileMenuToggle = () => {
-    requestAnimationFrame(() => {
-      if (mountedRef.current) {
-        setIsMobileMenuOpen(prev => !prev)
-      }
-    })
+    setIsMobileMenuOpen(prev => !prev)
   }
 
   // Keep relevant dropdown open if on one of its pages
   useEffect(() => {
-    if (!mounted) return
+    if (!isHydrated) return
     
-    // On first mount only (which includes page refreshes), close all dropdowns
-    // but don't touch them on subsequent route changes
     if (typeof window !== 'undefined') {
-      // Check if this is a fresh page load
       const isPageRefresh = performance.navigation && 
         performance.navigation.type === performance.navigation.TYPE_RELOAD
       
-      // On refresh, always close dropdowns
       if (isPageRefresh || !sessionStorage.getItem('navInitialized')) {
         setIsDropdownOpen(false)
         setIsAdminDropdownOpen(false)
-        // Mark that navigation has been initialized in this session
         sessionStorage.setItem('navInitialized', 'true')
         return
       }
     }
     
-    // On subsequent route changes (not refreshes), we could keep the appropriate dropdown open
     const isOnAccountPage = accountNavigation.some(item => isActive(item.href))
     const isOnAdminPage = adminNavigation.some(item => isActive(item.href))
     
@@ -214,13 +173,14 @@ export default function Navbar () {
       setIsDropdownOpen(false)
       setIsAdminDropdownOpen(false)
     }
-  }, [router.pathname, mounted])
+  }, [router.pathname, isHydrated])
 
   // Don't render wallet-dependent elements until client-side hydration is complete
-  const shouldShowAccount = mounted && isConnected
-  const shouldShowAdmin = mounted && isConnected && isAdmin && !isLoadingAdmin
+  const shouldShowAccount = isHydrated && isConnected
+  const shouldShowAdmin = isHydrated && isConnected && isAdmin && !isLoadingAdmin
 
-  if (!mounted) {
+  // Return a simple placeholder during server-side rendering
+  if (!isHydrated) {
     return (
       <nav className='fixed top-0 left-0 right-0 z-50 bg-white/20 backdrop-blur-md shadow-sm border-b border-gray-100'>
         <div className='max-w-7xl mx-auto px-4 sm:px-6 lg:px-8'>

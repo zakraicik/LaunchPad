@@ -8,6 +8,7 @@ import { formatDistanceToNow } from 'date-fns'
 import { formatUnits } from 'ethers'
 import { useTokens } from '../../hooks/useTokens'
 import toast from 'react-hot-toast'
+import { useHydration } from '../../pages/_app'
 
 interface ContributorsProps {
   campaignId: string
@@ -24,6 +25,7 @@ interface ContributionEvent {
 }
 
 export default function Contributors({ campaignId, tokenAddress }: ContributorsProps) {
+  const { isHydrated } = useHydration()
   const [contributionEvents, setContributionEvents] = useState<ContributionEvent[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [copiedAddress, setCopiedAddress] = useState<string | null>(null)
@@ -31,9 +33,10 @@ export default function Contributors({ campaignId, tokenAddress }: ContributorsP
   const token = getTokenByAddress(tokenAddress)
 
   useEffect(() => {
-    const fetchContributionEvents = async () => {
-      if (!campaignId) return
+    // Skip if not hydrated or missing campaignId
+    if (!isHydrated || !campaignId) return
 
+    const fetchContributionEvents = async () => {
       try {
         setIsLoading(true)
         const contributionEventsRef = collection(db, 'contributionEvents')
@@ -65,7 +68,7 @@ export default function Contributors({ campaignId, tokenAddress }: ContributorsP
     }
 
     fetchContributionEvents()
-  }, [campaignId])
+  }, [campaignId, isHydrated])
 
   const handleCopy = async (text: string) => {
     try {
@@ -88,6 +91,15 @@ export default function Contributors({ campaignId, tokenAddress }: ContributorsP
       console.error('Error formatting amount:', error)
       return '0'
     }
+  }
+
+  // Show loading indicator during SSR/hydration
+  if (!isHydrated) {
+    return (
+      <div className="flex items-center justify-center p-8">
+        <div className="text-gray-500">Loading...</div>
+      </div>
+    )
   }
 
   if (isLoading) {

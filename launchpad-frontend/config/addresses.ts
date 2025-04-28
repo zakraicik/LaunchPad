@@ -19,12 +19,12 @@ export const CONTRACT_ADDRESSES: Record<SupportedNetwork, {
     eventCollector: "0x160322c719deBf43d92d34B0A05C72E4F4be28aa",
   },
   8453: {
-    tokenRegistry: "0xD63D99f60c88eC64AD9c52802319B691b3dF17Ad",
-    campaignFactory: "0x83bEF8918f2c00080dD7aB984B7d22CaF28a5826",
-    defiManager: "0xc49769Bc1bE99967D7496d4EA089B87349F90b31",
-    platformAdmin: "0xE24965D2D6913144d786Ee0FFea80DD088Fe5eA3",
-    feeManager: "0x55082F525152F4fA7bab9f241834d962BFFa0f8b",
-    eventCollector: "0xDF41aa9f24165a057CD1bFda93Ca0A7F3ACC7f69",
+    tokenRegistry: "0xb1CF2E7fa0FfF4434BA8fee25639Ae5f61e555E3",
+    campaignFactory: "0x1757Bd6c4746A995FddB39c38E2B0019E725f3b1",
+    defiManager: "0x0F3159eE738f8cc6a3E256d285e36a5999593d9e",
+    platformAdmin: "0x435488929685FA6A2Bd8Ab645Ad1df4355dB9D24",
+    feeManager: "0xca21e776f0707aE4D9835b4e4F5a4F23599d37Ef",
+    eventCollector: "0xD28e9356b9A9AC2b15c34169DbB82CcCF47702d4",
     
   }
 } as const

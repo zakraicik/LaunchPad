@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { formatTimeLeft } from '../../utils/format'
+import { useHydration } from '../../pages/_app'
 
 interface CampaignTimerProps {
   startTime: number // Unix timestamp in seconds
@@ -8,15 +9,19 @@ interface CampaignTimerProps {
   className?: string
 }
 
-export default function CampaignTimer ({
+export default function CampaignTimer({
   startTime,
   endTime,
   duration,
   className = ''
 }: CampaignTimerProps) {
+  const { isHydrated } = useHydration()
   const [timeLeft, setTimeLeft] = useState<number>(0)
 
   useEffect(() => {
+    // Skip if not hydrated
+    if (!isHydrated) return
+
     const updateTimer = () => {
       const now = Math.floor(Date.now() / 1000)
       if (now < endTime) {
@@ -33,7 +38,12 @@ export default function CampaignTimer ({
     const interval = setInterval(updateTimer, 60 * 1000)
 
     return () => clearInterval(interval)
-  }, [endTime])
+  }, [endTime, isHydrated])
+
+  // Optionally provide a simple placeholder during SSR
+  if (!isHydrated) {
+    return <div className={`text-2xl font-bold ${className}`}>--:--:--</div>
+  }
 
   return (
     <div className={`text-2xl font-bold ${className}`}>

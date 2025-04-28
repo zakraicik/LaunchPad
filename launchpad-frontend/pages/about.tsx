@@ -4,7 +4,10 @@ import {
   ChartBarIcon,
   ArrowPathIcon,
   LockClosedIcon,
-  ScaleIcon
+  ScaleIcon,
+  CurrencyDollarIcon,
+  BuildingLibraryIcon,
+  SparklesIcon
 } from '@heroicons/react/24/outline'
 import { Line } from 'react-chartjs-2'
 import {
@@ -29,7 +32,35 @@ ChartJS.register(
   Legend
 )
 
-export default function About () {
+const features = [
+  {
+    name: 'DeFi Integration',
+    description: 'Funds are automatically deposited into Aave to generate yield while campaigns are active, maximizing value for both creators and contributors.',
+    icon: SparklesIcon,
+  },
+  {
+    name: 'Smart Contract Security',
+    description: 'Built with robust security features including reentrancy guards and strict access controls, ensuring your funds are protected.',
+    icon: ShieldCheckIcon,
+  },
+  {
+    name: 'Transparent Fees',
+    description: 'Clear and upfront fee structure with no hidden costs. Platform fees are automatically handled by smart contracts.',
+    icon: CurrencyDollarIcon,
+  },
+  {
+    name: 'Automatic Refunds',
+    description: 'Built-in refund mechanism for unsuccessful campaigns, allowing contributors to easily reclaim their funds.',
+    icon: ArrowPathIcon,
+  },
+  {
+    name: 'Professional Oversight',
+    description: 'Platform administrators carefully manage token support and provide oversight to ensure platform integrity.',
+    icon: BuildingLibraryIcon,
+  },
+]
+
+export default function About() {
   // Chart data and options
   const chartData = {
     labels: ['0', '30', '60', '90', '120', '150', '180', '210', '240', '270', '300', '330', '360'],
@@ -99,203 +130,90 @@ export default function About () {
   }
 
   return (
-    <div className='min-h-screen bg-gray-50 pt-32 pb-20'>
-      <div className='container mx-auto px-4'>
+    <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white pt-32 pb-20">
+      <div className="container mx-auto px-4">
         {/* Hero Section */}
-        <div className='text-center mb-16'>
-          <h1 className='text-4xl font-bold mb-4'>About LaunchPad</h1>
-          <p className='text-xl text-gray-600 max-w-3xl mx-auto'>
-          Powering Web3 Innovation Through DeFi-Enhanced Seed Funding
+        <div className="text-center mb-16">
+          <h1 className="text-4xl font-bold text-gray-900 mb-4">
+            Decentralized Crowdfunding,{' '}
+            <span className="text-blue-600">Powered by DeFi</span>
+          </h1>
+          <p className="text-xl text-gray-600 max-w-3xl mx-auto">
+            LaunchPad combines traditional crowdfunding with DeFi yield generation to create a more efficient and rewarding fundraising experience.
           </p>
         </div>
 
-        {/* Fee Structure Chart Section */}
-        <div className='bg-white rounded-lg shadow-sm p-8 mb-8'>
-          <h2 className='text-2xl font-bold mb-6 flex items-center'>
-            <BanknotesIcon className='h-8 w-8 text-blue-600 mr-3' />
-            Fee Structure
-          </h2>
-          <div className='mb-4'>
-            <p className='text-gray-600'>
-            Projects launch with minimal fees thanks to integrated yield generation, while investors receive full refund protection if funding goals aren't met—our blockchain-native platform creates a safer, more efficient fundraising environment for the next generation of web3 builders
-            </p>
-          </div>
-          <div className='h-[400px] w-full'>
-            <Line data={chartData} options={chartOptions} />
-          </div>
-          <div className='mt-6 bg-blue-50 rounded-lg p-4'>
-            <h3 className='font-semibold mb-2'>Key Points:</h3>
-            <ul className='space-y-2 text-gray-600'>
-              <li className='flex items-center'>
-                <ArrowPathIcon className='h-5 w-5 text-blue-600 mr-2' />
-                <span>Platform fees start at $10 and increase slightly with yield</span>
-              </li>
-              <li className='flex items-center'>
-                <ArrowPathIcon className='h-5 w-5 text-blue-600 mr-2' />
-                <span>Net fees decrease linearly as yield accumulates</span>
-              </li>
-              <li className='flex items-center'>
-                <ArrowPathIcon className='h-5 w-5 text-blue-600 mr-2' />
-                <span>Campaigns running 150+ days achieve zero net fees through yield generation</span>
-              </li>
-            </ul>
-          </div>
-        </div>
-
-        {/* Core Features Section */}
-        <div className='bg-white rounded-lg shadow-sm p-8 mb-8'>
-          <h2 className='text-2xl font-bold mb-6 flex items-center'>
-            <ChartBarIcon className='h-8 w-8 text-blue-600 mr-3' />
-            How It Works
-          </h2>
-          <div className='grid md:grid-cols-2 gap-8'>
-            <div className='space-y-4'>
-              <p className='text-gray-600'>
-                LaunchPad combines crowdfunding with DeFi to create a sustainable funding model:
-              </p>
-              <ol className='space-y-4 list-decimal list-inside text-gray-600'>
-                <li>
-                  Campaign creators set up their funding goals with minimal platform fees
-                </li>
-                <li>Contributors donate directly to causes they believe in</li>
-                <li>
-                  Funds are automatically deployed to Aave for yield generation
-                </li>
-                <li>
-                  Generated yields cover platform fees while preserving the original capital
-                </li>
-              </ol>
-            </div>
-            <div className='bg-blue-50 rounded-lg p-6'>
-              <h3 className='font-semibold mb-3'>Key Benefits</h3>
-              <ul className='space-y-3'>
-                <li className='flex items-center'>
-                  <ArrowPathIcon className='h-5 w-5 text-blue-600 mr-2' />
-                  <span>Self-funded platform fees through yield</span>
-                </li>
-                <li className='flex items-center'>
-                  <ArrowPathIcon className='h-5 w-5 text-blue-600 mr-2' />
-                  <span>Direct funding to causes</span>
-                </li>
-                <li className='flex items-center'>
-                  <ArrowPathIcon className='h-5 w-5 text-blue-600 mr-2' />
-                  <span>Sustainable yield generation</span>
-                </li>
-                <li className='flex items-center'>
-                  <ArrowPathIcon className='h-5 w-5 text-blue-600 mr-2' />
-                  <span>Capital preservation</span>
-                </li>
-              </ul>
-            </div>
-          </div>
-        </div>
-
-        {/* DeFi Integration Section */}
-        <div className='bg-white rounded-lg shadow-sm p-8 mb-8'>
-          <h2 className='text-2xl font-bold mb-6 flex items-center'>
-            <BanknotesIcon className='h-8 w-8 text-blue-600 mr-3' />
-            DeFi Integration
-          </h2>
-          <div className='grid md:grid-cols-2 gap-8'>
-            <div>
-              <h3 className='font-semibold mb-4'>Aave Integration</h3>
-              <div className='space-y-4'>
-                <div className='flex items-start space-x-3 p-4 bg-gray-50 rounded-lg'>
-                  <ScaleIcon className='h-6 w-6 text-blue-600 flex-shrink-0' />
-                  <div>
-                    <p className='font-medium'>Automated Yield Generation</p>
-                    <p className='text-gray-600'>Funds are automatically deployed to Aave for optimal yield</p>
-                  </div>
-                </div>
-                <div className='flex items-start space-x-3 p-4 bg-gray-50 rounded-lg'>
-                  <ScaleIcon className='h-6 w-6 text-blue-600 flex-shrink-0' />
-                  <div>
-                    <p className='font-medium'>Multiple Token Support</p>
-                    <p className='text-gray-600'>Support for various ERC20 tokens through our Token Registry</p>
-                  </div>
-                </div>
-                <div className='flex items-start space-x-3 p-4 bg-gray-50 rounded-lg'>
-                  <ScaleIcon className='h-6 w-6 text-blue-600 flex-shrink-0' />
-                  <div>
-                    <p className='font-medium'>Secure Fund Management</p>
-                    <p className='text-gray-600'>Funds are locked in Aave until campaign completion (goal reached or deadline passed)</p>
-                  </div>
-                </div>
+        {/* Key Features Grid */}
+        <div className="grid grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-3 mb-16">
+          {features.map((feature) => (
+            <div
+              key={feature.name}
+              className="relative bg-white p-6 rounded-lg shadow-sm hover:shadow-md transition-shadow"
+            >
+              <div className="flex items-center mb-4">
+                <feature.icon className="h-6 w-6 text-blue-600" />
+                <h3 className="ml-3 text-lg font-medium text-gray-900">{feature.name}</h3>
               </div>
+              <p className="text-gray-600">{feature.description}</p>
             </div>
-            <div className='bg-blue-50 rounded-lg p-6'>
-              <h3 className='font-semibold mb-3'>Yield Distribution</h3>
-              <ul className='space-y-3'>
-                <li className='flex items-center'>
-                  <div className='w-full'>
-                    <div className='flex justify-between mb-1'>
-                      <span>Campaign Beneficiary</span>
-                      <span className='font-medium'>99%</span>
-                    </div>
-                    <div className='w-full bg-blue-200 rounded-full h-2'>
-                      <div
-                        className='bg-blue-600 h-2 rounded-full'
-                        style={{ width: '99%' }}
-                      ></div>
-                    </div>
-                  </div>
-                </li>
-                <li className='flex items-center mt-4'>
-                  <div className='w-full'>
-                    <div className='flex justify-between mb-1'>
-                      <span>Platform Operations</span>
-                      <span className='font-medium'>1%</span>
-                    </div>
-                    <div className='w-full bg-blue-200 rounded-full h-2'>
-                      <div
-                        className='bg-blue-600 h-2 rounded-full'
-                        style={{ width: '1%' }}
-                      ></div>
-                    </div>
-                  </div>
-                </li>
-                <li className='mt-4 text-gray-600'>
-                  Platform fees are covered by a small portion of the generated yield, ensuring sustainable operations while maximizing benefits to campaign beneficiaries.
-                </li>
-              </ul>
+          ))}
+        </div>
+
+        {/* How It Works Section */}
+        <div className="bg-white rounded-lg shadow-sm p-8 mb-16">
+          <h2 className="text-3xl font-bold text-gray-900 mb-6">How It Works</h2>
+          <div className="space-y-6">
+            <div className="flex items-start">
+              <div className="flex-shrink-0 flex h-6 w-6 items-center justify-center rounded-full bg-blue-100 text-blue-600">
+                1
+              </div>
+              <p className="ml-4 text-lg text-gray-600">
+                Contributors send supported tokens to campaign smart contracts
+              </p>
+            </div>
+            <div className="flex items-start">
+              <div className="flex-shrink-0 flex h-6 w-6 items-center justify-center rounded-full bg-blue-100 text-blue-600">
+                2
+              </div>
+              <p className="ml-4 text-lg text-gray-600">
+                Funds are automatically deposited into Aave to generate yield during the campaign
+              </p>
+            </div>
+            <div className="flex items-start">
+              <div className="flex-shrink-0 flex h-6 w-6 items-center justify-center rounded-full bg-blue-100 text-blue-600">
+                3
+              </div>
+              <p className="ml-4 text-lg text-gray-600">
+                Successful campaigns receive funds plus generated yield (minus platform fee)
+              </p>
+            </div>
+            <div className="flex items-start">
+              <div className="flex-shrink-0 flex h-6 w-6 items-center justify-center rounded-full bg-blue-100 text-blue-600">
+                4
+              </div>
+              <p className="ml-4 text-lg text-gray-600">
+                Unsuccessful campaigns allow contributors to request refunds
+              </p>
             </div>
           </div>
         </div>
 
-        {/* Security Section */}
-        <div className='bg-white rounded-lg shadow-sm p-8'>
-          <h2 className='text-2xl font-bold mb-6 flex items-center'>
-            <ShieldCheckIcon className='h-8 w-8 text-blue-600 mr-3' />
-            Security & Transparency
-          </h2>
-          <div className='grid md:grid-cols-3 gap-6'>
-            <div className='p-6 bg-gray-50 rounded-lg'>
-              <LockClosedIcon className='h-8 w-8 text-blue-600 mb-4' />
-              <h3 className='font-semibold mb-2'>Smart Contract Security</h3>
-              <ul className='text-gray-600 space-y-2'>
-                <li>• Open-source and verified contracts</li>
-                <li>• Built on battle-tested protocols</li>
-                <li>• Regular security audits</li>
-              </ul>
-            </div>
-            <div className='p-6 bg-gray-50 rounded-lg'>
-              <ShieldCheckIcon className='h-8 w-8 text-blue-600 mb-4' />
-              <h3 className='font-semibold mb-2'>Fund Safety</h3>
-              <ul className='text-gray-600 space-y-2'>
-                <li>• Non-custodial design</li>
-                <li>• Direct Aave integration</li>
-                <li>• Transparent fund tracking</li>
-              </ul>
-            </div>
-            <div className='p-6 bg-gray-50 rounded-lg'>
-              <ShieldCheckIcon className='h-8 w-8 text-blue-600 mb-4' />
-              <h3 className='font-semibold mb-2'>Transparency</h3>
-              <ul className='text-gray-600 space-y-2'>
-                <li>• Real-time yield tracking</li>
-                <li>• On-chain verification</li>
-                <li>• Open contribution history</li>
-              </ul>
-            </div>
+        {/* Token Support Section */}
+        <div className="bg-white rounded-lg shadow-sm p-8">
+          <h2 className="text-3xl font-bold text-gray-900 mb-6">Supported Tokens</h2>
+          <div className="prose max-w-none text-gray-600">
+            <p className="text-lg mb-4">
+              LaunchPad currently supports a carefully curated selection of tokens for campaigns and contributions. Our platform administrators actively manage token support to ensure:
+            </p>
+            <ul className="list-disc pl-6 space-y-2">
+              <li>High liquidity and market stability</li>
+              <li>Integration with Aave lending pools</li>
+              <li>Reliable price feeds and oracles</li>
+              <li>Maximum security for our users</li>
+            </ul>
+            <p className="mt-4 text-lg">
+              The list of supported tokens is regularly reviewed and updated based on market conditions and community needs.
+            </p>
           </div>
         </div>
       </div>

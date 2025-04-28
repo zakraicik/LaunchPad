@@ -16,32 +16,28 @@ export function useFirebaseAuth () {
   const [user, setUser] = useState<User | null>(null)
   const { data: walletClient } = useWalletClient()
   const { address } = useAccount()
-  const mounted = useRef(false)
+  const [mounted, setMounted] = useState(false)
   const auth = getAuth()
 
-  // Initialize mounted ref
+  // Initialize mounted state
   useEffect(() => {
-    mounted.current = true
-    return () => {
-      mounted.current = false
-    }
+    const timer = setTimeout(() => {
+      setMounted(true)
+    }, 0)
+    
+    return () => clearTimeout(timer)
   }, [])
 
   // Handle auth state changes
   useEffect(() => {
+    if (!mounted) return
+
     let unsubscribe: () => void
 
     const setupAuthListener = () => {
       unsubscribe = onAuthStateChanged(auth, (user) => {
-        if (!mounted.current) return
-        
-        // Use requestAnimationFrame to ensure we're not updating state during render
-        requestAnimationFrame(() => {
-          if (mounted.current) {
-            setUser(user)
-            setIsLoading(false)
-          }
-        })
+        setUser(user)
+        setIsLoading(false)
       })
     }
 
@@ -52,19 +48,15 @@ export function useFirebaseAuth () {
         unsubscribe()
       }
     }
-  }, [auth])
+  }, [auth, mounted])
 
   // Automatically sign in when wallet is connected
   useEffect(() => {
-    const autoSignIn = async () => {
-      if (!mounted.current) {
-        return
-      }
+    if (!mounted) return
 
+    const autoSignIn = async () => {
       if (!address || !walletClient) {
-        if (mounted.current) {
-          setIsLoading(false)
-        }
+        setIsLoading(false)
         return
       }
 
@@ -75,37 +67,30 @@ export function useFirebaseAuth () {
         // Check if we're already authenticated
         const currentUser = auth.currentUser
         if (currentUser) {
-          if (mounted.current) {
-            setIsLoading(false)
-          }
+          setIsLoading(false)
           return
         }
 
         await signInWithWallet()
       } catch (err) {
-        if (mounted.current) {
-          setError(err instanceof Error ? err.message : 'Failed to sign in')
-        }
+        setError(err instanceof Error ? err.message : 'Failed to sign in')
       } finally {
-        if (mounted.current) {
-          setIsLoading(false)
-        }
+        setIsLoading(false)
       }
     }
 
-    // Use requestAnimationFrame to ensure we're not updating state during render
-    requestAnimationFrame(() => {
-      autoSignIn()
-    })
-  }, [address, walletClient])
+    autoSignIn()
+  }, [address, walletClient, mounted])
 
   // Handle wallet disconnection
   useEffect(() => {
+    if (!mounted) return
+
     if (!address && user) {
       const auth = getAuth()
       signOut(auth)
     }
-  }, [address, user])
+  }, [address, user, mounted])
 
   const signInWithWallet = async () => {
     if (!walletClient || !address) {
@@ -161,9 +146,8 @@ export function useFirebaseAuth () {
   }
 
   return {
-    signInWithWallet,
+    user,
     isLoading,
-    error,
-    user
+    error
   }
 }

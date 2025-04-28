@@ -5,6 +5,7 @@ import { useTokenRegistry } from '../../hooks/tokenRegistry'
 import { useAccount } from 'wagmi'
 import toast from 'react-hot-toast'
 import { PlusIcon } from '@heroicons/react/24/outline'
+import { useHydration } from '../../pages/_app'
 
 interface Token {
   address: string
@@ -33,12 +34,12 @@ const categories = [
   'Enterprise'
 ]
 
-export default function CreateCampaignModal ({
+export default function CreateCampaignModal({
   isOpen,
   onClose,
   onSuccess
 }: CreateCampaignModalProps) {
-  const [mounted, setMounted] = useState(false)
+  const { isHydrated } = useHydration()
   const { address, isConnected } = useAccount()
   const { createCampaign } = useCampaignFactory()
   const { tokens, isLoading: isLoadingTokens } = useTokenRegistry()
@@ -54,51 +55,34 @@ export default function CreateCampaignModal ({
   const cancelButtonRef = useRef(null)
   const formRef = useRef<HTMLFormElement>(null)
 
-  // Handle hydration
+  // Use useEffect only for form reset
   useEffect(() => {
-    requestAnimationFrame(() => {
-      setMounted(true)
-    })
-    return () => {
-      setMounted(false)
-    }
-  }, [])
-
-  // Reset form when modal is opened
-  useEffect(() => {
-    if (!mounted) return
-
-    const resetForm = () => {
-      requestAnimationFrame(() => {
-        setTitle('')
-        setDescription('')
-        setTargetAmount('')
-        setSelectedToken('')
-        setDuration('')
-        setCategory('')
-        setGithubUrl('')
-        setError(null)
-        setIsSubmitting(false)
-      })
-    }
-
+    // Skip if not hydrated yet
+    if (!isHydrated) return
+    
+    // Reset form when modal is opened
     if (isOpen) {
-      resetForm()
+      setTitle('')
+      setDescription('')
+      setTargetAmount('')
+      setSelectedToken('')
+      setDuration('')
+      setCategory('')
+      setGithubUrl('')
+      setError(null)
+      setIsSubmitting(false)
     }
-  }, [isOpen, mounted])
+  }, [isOpen, isHydrated])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!mounted) return
+    if (!isHydrated) return
 
-    requestAnimationFrame(() => {
-      setError(null)
-    })
+    // Direct state updates instead of requestAnimationFrame
+    setError(null)
 
     if (!isConnected) {
-      requestAnimationFrame(() => {
-        setError('Please connect your wallet')
-      })
+      setError('Please connect your wallet')
       return
     }
 
@@ -111,25 +95,19 @@ export default function CreateCampaignModal ({
       !category ||
       !githubUrl
     ) {
-      requestAnimationFrame(() => {
-        setError('Please fill in all required fields')
-      })
+      setError('Please fill in all required fields')
       return
     }
 
     // Basic GitHub URL validation
     const githubUrlPattern = /^https:\/\/github\.com\/[\w-]+\/[\w.-]+\/?$/
     if (!githubUrlPattern.test(githubUrl)) {
-      requestAnimationFrame(() => {
-        setError('Please enter a valid GitHub repository URL')
-      })
+      setError('Please enter a valid GitHub repository URL')
       return
     }
 
     const toastId = toast.loading('Creating your campaign...')
-    requestAnimationFrame(() => {
-      setIsSubmitting(true)
-    })
+    setIsSubmitting(true)
 
     try {
       toast.loading('Deploying campaign contract...', { id: toastId })
@@ -152,24 +130,21 @@ export default function CreateCampaignModal ({
       console.error('Error creating campaign:', err)
       const errorMessage =
         err instanceof Error ? err.message : 'Failed to create campaign'
-      requestAnimationFrame(() => {
-        setError(errorMessage)
-      })
+      setError(errorMessage)
       toast.error(errorMessage, { id: toastId })
     } finally {
-      requestAnimationFrame(() => {
-        setIsSubmitting(false)
-      })
+      setIsSubmitting(false)
     }
   }
 
   const handleCreateClick = () => {
-    if (formRef.current && mounted) {
+    if (formRef.current && isHydrated) {
       formRef.current.requestSubmit()
     }
   }
 
-  if (!mounted) {
+  // Skip rendering if not hydrated
+  if (!isHydrated) {
     return null
   }
 
