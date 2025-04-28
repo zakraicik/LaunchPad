@@ -97,6 +97,8 @@ interface ConfigUpdateEventData {
  * @property {string} withdrawAmount - Amount of tokens withdrawn
  * @property {Date} lastUpdated - Last update timestamp
  * @property {string} lastOperation - Last operation performed
+ * @property {boolean} treasuryFeesPaid - Whether treasury fees have been paid
+ * @property {string} treasuryFeeAmount - Amount of treasury fees paid
  */
 interface CampaignYieldData {
   campaignId: string
@@ -107,6 +109,8 @@ interface CampaignYieldData {
   withdrawAmount: string
   lastUpdated: Date
   lastOperation: string
+  treasuryFeesPaid: boolean
+  treasuryFeeAmount: string
 }
 
 /**
@@ -126,6 +130,37 @@ interface DefiConfigData {
   lastOperation: string
 }
 
+/**
+ * Interface for withdrawal event data
+ * @interface WithdrawalEventData
+ * @property {string} eventType - Type of event ("Withdrawal")
+ * @property {string} rawEventId - ID of the raw event document
+ * @property {Date} createdAt - When the event was processed
+ * @property {number|null} blockNumber - Block number where event occurred
+ * @property {Date|null} blockTimestamp - Block timestamp
+ * @property {string|null} transactionHash - Transaction hash
+ * @property {string|null} contractAddress - Contract address
+ * @property {string} campaignId - Campaign identifier
+ * @property {string} token - Token address
+ * @property {string} amount - Amount of tokens withdrawn
+ * @property {string} recipient - Address that received the withdrawal
+ * @property {string} withdrawalType - Type of withdrawal ("TREASURY" or "CREATOR")
+ */
+interface WithdrawalEventData {
+  eventType: string
+  rawEventId: string
+  createdAt: Date
+  blockNumber: number | null
+  blockTimestamp: Date | null
+  transactionHash: string | null
+  contractAddress: string | null
+  campaignId: string
+  token: string
+  amount: string
+  recipient: string
+  withdrawalType: string
+}
+
 // Event signatures
 const defiOpSignature = "DefiOperation(uint8,address,address,uint256,bytes32)";
 const configUpdatedSignature = "ConfigUpdated(uint8,address,address)";
@@ -142,10 +177,11 @@ const CONFIG_UPDATED_SIGNATURE = ethers.keccak256(
  */
 const OPERATION_TYPES: Record<number, string> = {
   1: "DEPOSITED",
-  2: "WITHDRAWN",
+  2: "WITHDRAWN_TO_CONTRACT",
   3: "TOKEN_REGISTRY_UPDATED",
   4: "FEE_MANAGER_UPDATED",
   5: "AAVE_POOL_UPDATED",
+  6: "WITHDRAWN_TO_PLATFORM_TREASURY",
 };
 
 /**
@@ -344,11 +380,11 @@ async function processConfigUpdated(log: EnhancedEventLog, rawEventId: string) {
     // The data field contains all parameters
     // since none are indexed in ConfigUpdated
     const decodedData = ethers.AbiCoder.defaultAbiCoder().decode(
-      ["uint8", "address", "address"], // opType, oldAddress, newAddress
+      ["uint8", "address", "address"], // configType, oldAddress, newAddress
       log.data,
     );
 
-    const opType = Number(decodedData[0]);
+    const configType = Number(decodedData[0]);
     const oldAddress = decodedData[1];
     const newAddress = decodedData[2];
 
@@ -368,8 +404,8 @@ async function processConfigUpdated(log: EnhancedEventLog, rawEventId: string) {
       transactionHash: log.transaction?.hash || null,
       contractAddress: log.account?.address || null,
       operation: {
-        code: opType,
-        name: OPERATION_TYPES[opType] || "UNKNOWN",
+        code: configType,
+        name: OPERATION_TYPES[configType] || "UNKNOWN",
       },
       oldAddress: normalizedOldAddress,
       newAddress: normalizedNewAddress,
@@ -386,7 +422,7 @@ async function processConfigUpdated(log: EnhancedEventLog, rawEventId: string) {
 
     // Update defi configuration
     await updateDefiConfiguration(
-      opType,
+      configType,
       normalizedOldAddress,
       normalizedNewAddress,
     );
@@ -414,8 +450,8 @@ async function updateCampaignYieldData(
   amount: string,
 ) {
   try {
-    // Create a composite ID for the campaign yield record
-    const yieldId = `${campaignId}_${token}`;
+    // Use campaignId as the yield ID since one campaign can only have one token
+    const yieldId = campaignId;
 
     // Reference to the campaign yield document
     const yieldRef = db.collection("campaignYield").doc(yieldId);
@@ -436,6 +472,8 @@ async function updateCampaignYieldData(
         withdrawAmount: "0",
         lastUpdated: new Date(),
         lastOperation: "",
+        treasuryFeesPaid: false,
+        treasuryFeeAmount: "0",
       };
 
     // Handle different operation types
@@ -453,17 +491,68 @@ async function updateCampaignYieldData(
       logger.info(`Campaign yield record updated for deposit: ${yieldId}`);
       break;
 
-    case 2: // WITHDRAWN
+    case 2: // WITHDRAWN_TO_CONTRACT
       yieldData = {
         ...yieldData,
         withdrawn: true,
         withdrawAmount: amount,
         lastUpdated: new Date(),
-        lastOperation: "WITHDRAWN",
+        lastOperation: "WITHDRAWN_TO_CONTRACT",
       };
 
       await yieldRef.set(yieldData, {merge: true});
-      logger.info(`Campaign yield record updated for withdrawal: ${yieldId}`);
+      logger.info(`Campaign yield record updated for withdrawal to contract: ${yieldId}`);
+
+      // Store withdrawal event
+      const withdrawalEvent: WithdrawalEventData = {
+        eventType: "Withdrawal",
+        rawEventId: yieldId,
+        createdAt: new Date(),
+        blockNumber: null, // These would be populated from the event log if available
+        blockTimestamp: null,
+        transactionHash: null,
+        contractAddress: null,
+        campaignId,
+        token,
+        amount,
+        recipient: sender, // The contract that received the withdrawal
+        withdrawalType: "CREATOR",
+      };
+
+      await db.collection("withdrawalEvents").add(withdrawalEvent);
+      logger.info(`Withdrawal event stored for campaign ${yieldId}`);
+      break;
+
+    case 6: // WITHDRAWN_TO_PLATFORM_TREASURY
+      yieldData = {
+        ...yieldData,
+        treasuryFeesPaid: true,
+        treasuryFeeAmount: amount,
+        lastUpdated: new Date(),
+        lastOperation: "WITHDRAWN_TO_PLATFORM_TREASURY",
+      };
+
+      await yieldRef.set(yieldData, {merge: true});
+      logger.info(`Campaign yield record updated for treasury fees: ${yieldId}`);
+
+      // Store treasury withdrawal event
+      const treasuryWithdrawalEvent: WithdrawalEventData = {
+        eventType: "Withdrawal",
+        rawEventId: yieldId,
+        createdAt: new Date(),
+        blockNumber: null, // These would be populated from the event log if available
+        blockTimestamp: null,
+        transactionHash: null,
+        contractAddress: null,
+        campaignId,
+        token,
+        amount,
+        recipient: sender, // The treasury address that received the withdrawal
+        withdrawalType: "TREASURY",
+      };
+
+      await db.collection("withdrawalEvents").add(treasuryWithdrawalEvent);
+      logger.info(`Treasury withdrawal event stored for campaign ${yieldId}`);
       break;
 
     default:
@@ -478,12 +567,12 @@ async function updateCampaignYieldData(
  * Updates the DeFi configuration in the defiConfig collection
  * @async
  * @function updateDefiConfiguration
- * @param {number} opType - The operation type code
+ * @param {number} configType - The operation type code
  * @param {string} oldAddress - The previous address
  * @param {string} newAddress - The new address
  */
 async function updateDefiConfiguration(
-  opType: number,
+  configType: number,
   oldAddress: string,
   newAddress: string,
 ) {
@@ -509,7 +598,7 @@ async function updateDefiConfiguration(
       };
 
     // Update based on the operation code
-    switch (opType) {
+    switch (configType) {
     case 3: // OP_TOKEN_REGISTRY_UPDATED
       configData.tokenRegistryAddress = newAddress;
       configData.lastOperation = "TOKEN_REGISTRY_UPDATED";
@@ -526,7 +615,7 @@ async function updateDefiConfiguration(
       break;
 
     default:
-      logger.warn(`Unknown operation type: ${opType}`);
+      logger.warn(`Unknown operation type: ${configType}`);
       configData.lastOperation = "UNKNOWN_CONFIG_UPDATED";
       return;
     }
