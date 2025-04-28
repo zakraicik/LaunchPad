@@ -18,7 +18,7 @@ export default function UserContributions() {
   
   // Only fetch data when component is hydrated
   const { data: contributionsData, isLoading } = useContributions(
-    isHydrated ? address : undefined
+    isHydrated && address ? address : undefined
   )
   
   const contributionEvents = contributionsData?.contributionEvents || []
@@ -171,12 +171,28 @@ export default function UserContributions() {
 
   const getAvailableStatuses = () => {
     const statuses = new Set(['All'])
-    Object.values(campaignStatuses).forEach(status => {
-      if (status) statuses.add(status)
+
+    // Check if there are any refund eligible (not refunded) contributions
+    const hasRefundEligible = contributionEvents.some(event => {
+      const campaignStatus = campaignStatuses[event.campaignId]
+      const hasRefund = refundStatuses[event.campaignId]
+      return campaignStatus === 'Refund Eligible' && !hasRefund
     })
-    if (Object.values(refundStatuses).some(status => status)) {
-      statuses.add('Refund Received')
-    }
+    if (hasRefundEligible) statuses.add('Refund Eligible')
+
+    // Check if there are any refund received contributions
+    const hasRefundReceived = contributionEvents.some(event => {
+      const campaignStatus = campaignStatuses[event.campaignId]
+      const hasRefund = refundStatuses[event.campaignId]
+      return campaignStatus === 'Refund Eligible' && hasRefund
+    })
+    if (hasRefundReceived) statuses.add('Refund Received')
+
+    // Check for other statuses (e.g., Successful, In Progress)
+    Object.values(campaignStatuses).forEach(status => {
+      if (status && status !== 'Refund Eligible') statuses.add(status)
+    })
+
     return Array.from(statuses)
   }
 
@@ -185,8 +201,13 @@ export default function UserContributions() {
 
     return events.filter(event => {
       const campaignStatus = campaignStatuses[event.campaignId]
+      const hasRefund = refundStatuses[event.campaignId]
+
       if (statusFilter === 'Refund Received') {
-        return campaignStatus === 'Refund Eligible' && refundStatuses[event.campaignId]
+        return campaignStatus === 'Refund Eligible' && hasRefund
+      }
+      if (statusFilter === 'Refund Eligible') {
+        return campaignStatus === 'Refund Eligible' && !hasRefund
       }
       return campaignStatus === statusFilter
     })

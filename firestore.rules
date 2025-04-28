@@ -83,6 +83,10 @@ service cloud.firestore {
       allow read: if true;
     }
 
+    match /authorizedCampaigns/{docId} {
+      allow read: if true;
+    }
+
     // Default rule - deny all other access
     match /{document=**} {
       allow read: if false;

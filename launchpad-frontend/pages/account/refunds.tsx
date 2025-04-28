@@ -15,7 +15,7 @@ export default function RefundsPage() {
   const { getTokenByAddress } = useTokens()
   
   const { data: refundsData, isLoading } = useRefunds(
-    isHydrated ? address : undefined
+    isHydrated && address ? address : undefined
   )
   
   const refundEvents = refundsData?.refundEvents || []

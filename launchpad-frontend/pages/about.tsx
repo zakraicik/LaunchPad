@@ -139,7 +139,7 @@ export default function About() {
             <span className="text-blue-600">Powered by DeFi</span>
           </h1>
           <p className="text-xl text-gray-600 max-w-3xl mx-auto">
-            LaunchPad combines traditional crowdfunding with DeFi yield generation to create a more efficient and rewarding fundraising experience.
+            LaunchPad combines traditional crowdfunding with DeFi yield generation to offer lower fees for creators and power new web3 projects.
           </p>
         </div>
 

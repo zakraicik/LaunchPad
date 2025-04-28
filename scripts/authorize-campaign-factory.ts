@@ -1,4 +1,4 @@
-// npx hardhat run scripts/authorize-campaign-factory.ts --network baseSepolia
+// npx hardhat run scripts/authorize-campaign-factory.ts --network baseMainnet
 
 import { ethers } from 'hardhat'
 import {

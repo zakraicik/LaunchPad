@@ -152,10 +152,10 @@ export default function CreateCampaignModal({
       className='relative z-50'
       initialFocus={cancelButtonRef}
     >
-      <div className='fixed inset-0 bg-black/30' aria-hidden='true' />
+      <div className='fixed inset-0 bg-black/30 backdrop-blur-md' aria-hidden='true' />
 
       <div className='fixed inset-0 flex items-center justify-center p-4'>
-        <Dialog.Panel className='mx-auto max-w-2xl w-full bg-white/90 backdrop-blur-md rounded-xl shadow-xl flex flex-col max-h-[90vh] border border-gray-100'>
+        <Dialog.Panel className='mx-auto max-w-2xl w-full bg-white/90 rounded-xl shadow-xl flex flex-col max-h-[90vh] border border-gray-100'>
           <Dialog.Title className='text-lg font-medium text-blue-600 p-6 border-b bg-gray-50 rounded-t-xl'>
             Create New Campaign
           </Dialog.Title>

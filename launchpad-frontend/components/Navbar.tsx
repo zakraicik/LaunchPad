@@ -52,6 +52,11 @@ export default function Navbar() {
       name: 'Fee Management',
       href: '/admin/fee-management',
       icon: BanknotesIcon
+    },
+    {
+      name: 'Platform Metrics',
+      href: '/admin/platform-metrics',
+      icon: ChartBarIcon
     }
   ]
 
@@ -222,7 +227,7 @@ export default function Navbar() {
               <div className='relative' id='account-dropdown'>
                 <button
                   onClick={() => handleDropdownToggle('account')}
-                  className='inline-flex items-center px-3 py-1.5 rounded-lg bg-blue-50/80 text-blue-600 hover:bg-blue-100/90 transition-colors shadow-sm'
+                  className={`inline-flex items-center text-blue-700 font-medium transition-colors hover:text-blue-900 ${accountNavigation.some(item => isActive(item.href)) ? 'font-semibold' : ''}`}
                 >
                   <UserIcon className='w-4 h-4 mr-2' />
                   <div className={`relative ${accountNavigation.some(item => isActive(item.href)) ? 'font-semibold after:absolute after:bottom-[-2px] after:left-0 after:right-0 after:h-0.5 after:bg-current' : ''}`}>
@@ -234,14 +239,14 @@ export default function Navbar() {
                 </button>
 
                 {isDropdownOpen && (
-                  <div className='absolute right-0 mt-2 w-48 bg-white/90 backdrop-blur-md rounded-md shadow-lg py-1 z-10 border border-gray-100'>
+                  <div className='absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-10 border border-gray-100'>
                     {accountNavigation.map(item => (
                       <Link
                         key={item.name}
                         href={item.href}
                         className={`block px-4 py-2 text-sm ${
                           isActive(item.href)
-                            ? 'bg-blue-50 text-blue-600 font-medium'
+                            ? 'bg-blue-50 text-blue-600 font-medium underline'
                             : 'text-gray-700 hover:bg-gray-50'
                         } flex items-center`}
                         onClick={() => {
@@ -263,7 +268,7 @@ export default function Navbar() {
               <div className='relative' id='admin-dropdown'>
                 <button
                   onClick={() => handleDropdownToggle('admin')}
-                  className='inline-flex items-center px-3 py-1.5 rounded-lg bg-purple-50/80 text-purple-600 hover:bg-purple-100/90 transition-colors shadow-sm'
+                  className={`inline-flex items-center text-purple-700 font-medium transition-colors hover:text-purple-900 ${adminNavigation.some(item => isActive(item.href)) ? 'font-semibold' : ''}`}
                 >
                   <ShieldCheckIcon className='w-4 h-4 mr-2' />
                   <div className={`relative ${adminNavigation.some(item => isActive(item.href)) ? 'font-semibold after:absolute after:bottom-[-2px] after:left-0 after:right-0 after:h-0.5 after:bg-current' : ''}`}>
@@ -275,14 +280,14 @@ export default function Navbar() {
                 </button>
 
                 {isAdminDropdownOpen && (
-                  <div className='absolute right-0 mt-2 w-48 bg-white/90 backdrop-blur-md rounded-md shadow-lg py-1 z-10 border border-gray-100'>
+                  <div className='absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-10 border border-gray-100'>
                     {adminNavigation.map(item => (
                       <Link
                         key={item.name}
                         href={item.href}
                         className={`block px-4 py-2 text-sm ${
                           isActive(item.href)
-                            ? 'bg-purple-50 text-purple-600 font-medium'
+                            ? 'bg-purple-50 text-purple-600 font-medium underline'
                             : 'text-gray-700 hover:bg-gray-50'
                         } flex items-center`}
                         onClick={() => {
@@ -328,7 +333,7 @@ export default function Navbar() {
 
       {/* Mobile menu */}
       {isMobileMenuOpen && (
-        <div className='md:hidden bg-white/90 backdrop-blur-sm border-t border-gray-100'>
+        <div className='md:hidden bg-white border-t border-gray-100'>
           <div className='px-2 pt-2 pb-3 space-y-1'>
             {/* Main Navigation */}
             {navigation.map(item => (

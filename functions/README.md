@@ -4,15 +4,15 @@
 
 | Operation Code            | Operation Name            | Firebase Collections Updated              | Frontend Integration |
 | ------------------------- | ------------------------- | ----------------------------------------- | -------------------- |
-| `OP_CAMPAIGN_CREATED (1)` | Campaign contract created | `rawEvents`, `factoryEvents`, `campaigns` |                      |
+| `OP_CAMPAIGN_CREATED (1)` | Campaign contract created | `rawEvents`, `factoryEvents`, `campaigns` | ✅                   |
 
 ## CampaignEventCollector Operations
 
 | Operation Code                 | Operation Name                           | Firebase Collections Updated                                   | Frontend Integration |
 | ------------------------------ | ---------------------------------------- | -------------------------------------------------------------- | -------------------- |
-| `OP_FACTORY_AUTHORIZED (1)`    | Factory authorized to register campaigns | `rawEvents`, `eventCollectorOperations`, `authorizedFactories` |                      |
-| `OP_FACTORY_DEAUTHORIZED (2)`  | Factory authorization revoked            | `rawEvents`, `eventCollectorOperations`, `authorizedFactories` |                      |
-| `OP_CAMPAIGN_AUTHORIZED (3)`   | Campaign authorized to emit events       | `rawEvents`, `eventCollectorOperations`, `authorizedCampaigns` |                      |
+| `OP_FACTORY_AUTHORIZED (1)`    | Factory authorized to register campaigns | `rawEvents`, `eventCollectorOperations`, `authorizedFactories` | ✅                   |
+| `OP_FACTORY_DEAUTHORIZED (2)`  | Factory authorization revoked            | `rawEvents`, `eventCollectorOperations`, `authorizedFactories` | ✅                   |
+| `OP_CAMPAIGN_AUTHORIZED (3)`   | Campaign authorized to emit events       | `rawEvents`, `eventCollectorOperations`, `authorizedCampaigns` | ✅                   |
 | `OP_CAMPAIGN_DEAUTHORIZED (4)` | Campaign authorization revoked           | `rawEvents`, `eventCollectorOperations`, `authorizedCampaigns` |                      |
 
 ## Campaign Events (via CampaignEventCollector)
@@ -48,15 +48,15 @@
 
 | Operation Code            | Operation Name                        | Firebase Collections Updated          | Frontend Integration |
 | ------------------------- | ------------------------------------- | ------------------------------------- | -------------------- |
-| `OP_TREASURY_UPDATED (1)` | Platform treasury address updated     | `rawEvents`, `feeEvents`, `feeConfig` |                      |
-| `OP_SHARE_UPDATED (2)`    | Platform fee share percentage updated | `rawEvents`, `feeEvents`, `feeConfig` |                      |
+| `OP_TREASURY_UPDATED (1)` | Platform treasury address updated     | `rawEvents`, `feeEvents`, `feeConfig` | ✅                   |
+| `OP_SHARE_UPDATED (2)`    | Platform fee share percentage updated | `rawEvents`, `feeEvents`, `feeConfig` | ✅                   |
 
 ## PlatformAdmin Operations
 
 | Operation Code         | Operation Name         | Firebase Collections Updated         | Frontend Integration |
 | ---------------------- | ---------------------- | ------------------------------------ | -------------------- |
 | `OP_ADMIN_ADDED (1)`   | Platform admin added   | `rawEvents`, `adminEvents`, `admins` | ✅                   |
-| `OP_ADMIN_REMOVED (2)` | Platform admin removed | `rawEvents`, `adminEvents`, `admins` |                      |
+| `OP_ADMIN_REMOVED (2)` | Platform admin removed | `rawEvents`, `adminEvents`, `admins` | ✅                   |
 
 ## TokenRegistry Operations
 
