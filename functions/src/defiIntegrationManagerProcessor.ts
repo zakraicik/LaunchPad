@@ -476,6 +476,9 @@ async function updateCampaignYieldData(
         treasuryFeeAmount: "0",
       };
 
+    // Declare withdrawal events outside switch
+    let withdrawalEvent: WithdrawalEventData | null = null;
+
     // Handle different operation types
     switch (opType) {
     case 1: // DEPOSITED
@@ -503,24 +506,21 @@ async function updateCampaignYieldData(
       await yieldRef.set(yieldData, {merge: true});
       logger.info(`Campaign yield record updated for withdrawal to contract: ${yieldId}`);
 
-      // Store withdrawal event
-      const withdrawalEvent: WithdrawalEventData = {
+      // Create withdrawal event
+      withdrawalEvent = {
         eventType: "Withdrawal",
         rawEventId: yieldId,
         createdAt: new Date(),
-        blockNumber: null, // These would be populated from the event log if available
+        blockNumber: null,
         blockTimestamp: null,
         transactionHash: null,
         contractAddress: null,
         campaignId,
         token,
         amount,
-        recipient: sender, // The contract that received the withdrawal
+        recipient: sender,
         withdrawalType: "CREATOR",
       };
-
-      await db.collection("withdrawalEvents").add(withdrawalEvent);
-      logger.info(`Withdrawal event stored for campaign ${yieldId}`);
       break;
 
     case 6: // WITHDRAWN_TO_PLATFORM_TREASURY
@@ -535,28 +535,31 @@ async function updateCampaignYieldData(
       await yieldRef.set(yieldData, {merge: true});
       logger.info(`Campaign yield record updated for treasury fees: ${yieldId}`);
 
-      // Store treasury withdrawal event
-      const treasuryWithdrawalEvent: WithdrawalEventData = {
+      // Create treasury withdrawal event
+      withdrawalEvent = {
         eventType: "Withdrawal",
         rawEventId: yieldId,
         createdAt: new Date(),
-        blockNumber: null, // These would be populated from the event log if available
+        blockNumber: null,
         blockTimestamp: null,
         transactionHash: null,
         contractAddress: null,
         campaignId,
         token,
         amount,
-        recipient: sender, // The treasury address that received the withdrawal
+        recipient: sender,
         withdrawalType: "TREASURY",
       };
-
-      await db.collection("withdrawalEvents").add(treasuryWithdrawalEvent);
-      logger.info(`Treasury withdrawal event stored for campaign ${yieldId}`);
       break;
 
     default:
       logger.warn(`Unknown operation type for campaign yield: ${opType}`);
+    }
+
+    // Store withdrawal event if one was created
+    if (withdrawalEvent) {
+      await db.collection("withdrawalEvents").add(withdrawalEvent);
+      logger.info(`Withdrawal event stored for campaign ${yieldId}`);
     }
   } catch (error) {
     logger.error(`Error updating campaign yield data: ${error}`);
