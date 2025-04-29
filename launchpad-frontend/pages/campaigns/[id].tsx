@@ -7,6 +7,10 @@ import {
   BanknotesIcon,
   FlagIcon,
   ShieldCheckIcon,
+  PauseIcon,
+  KeyIcon,
+  StopIcon,
+  TrashIcon,
 } from "@heroicons/react/24/outline";
 import Contributors from "../../components/campaigns/Contributors";
 import CampaignDetails from "../../components/campaigns/CampaignDetails";
@@ -41,10 +45,11 @@ import Link from "next/link";
 import { useHydration } from "@/pages/_app";
 import { useIsAdmin } from "../../utils/admin";
 import { useDeauthorizeCampaign } from "../../hooks/campaigns/useDeauthorizeCampaign";
-import { useAuthorizeCampaign } from "../../hooks/campaigns/useAuthorizeCampaign";
 import { CONTRACT_ADDRESSES, SUPPORTED_NETWORKS } from "../../config/addresses";
 import { useChainId } from "wagmi";
 import { useCampaignAuthorization } from "../../hooks/campaigns/useCampaignAuthorization";
+import { useSetAdminOverride } from "@/hooks/campaigns/useSetAdminOverride";
+import { useAdminOverrideStatus } from "@/hooks/campaigns/useAdminOverrideStatus";
 
 interface Campaign {
   id: string;
@@ -94,10 +99,21 @@ export default function CampaignDetail() {
   const [isLoadingBalance, setIsLoadingBalance] = useState(false);
   const { isAdmin, isLoading: isLoadingAdmin } = useIsAdmin(address);
   const { deauthorizeCampaign, isDeauthorizing } = useDeauthorizeCampaign();
-  const { authorizeCampaign, isAuthorizing } = useAuthorizeCampaign();
   const chainId = useChainId();
   const { isAuthorized, isLoading: isLoadingAuthorization } =
     useCampaignAuthorization(campaign?.campaignAddress);
+  const [isPaused, setIsPaused] = useState(false);
+  const { setAdminOverride, isSettingOverride } = useSetAdminOverride();
+  const [adminOverrideEnabled, setAdminOverrideEnabled] = useState(false);
+  const { isOverrideEnabled, isLoading: isLoadingOverride } =
+    useAdminOverrideStatus(campaign?.campaignAddress);
+
+  // Update the adminOverrideEnabled state when isOverrideEnabled changes
+  useEffect(() => {
+    if (!isLoadingOverride) {
+      setAdminOverrideEnabled(isOverrideEnabled);
+    }
+  }, [isOverrideEnabled, isLoadingOverride]);
 
   const isSuccessful = (): boolean => {
     if (!campaign?.totalContributions || !campaign?.goalAmountSmallestUnits)
@@ -442,30 +458,6 @@ export default function CampaignDetail() {
     }
   };
 
-  const handleAuthorizeCampaign = async () => {
-    if (!campaign?.campaignAddress) {
-      toast.error("Campaign address not found");
-      return;
-    }
-
-    try {
-      // Get the event collector address from the config
-      const eventCollectorAddress = CONTRACT_ADDRESSES[
-        chainId as (typeof SUPPORTED_NETWORKS)[number]
-      ].eventCollector as `0x${string}`;
-
-      await authorizeCampaign(eventCollectorAddress, campaign.campaignAddress);
-
-      // Refresh campaign data after authorization
-      await fetchCampaign(campaign.id);
-    } catch (error: any) {
-      console.error("Error authorizing campaign:", error);
-      if (error.code !== "ACTION_REJECTED") {
-        toast.error("Failed to restore campaign");
-      }
-    }
-  };
-
   // Function to handle admin button click based on campaign state
   const handleAdminAction = () => {
     if (isAuthorized) {
@@ -478,7 +470,7 @@ export default function CampaignDetail() {
 
   // Function to determine if the user can interact with the campaign
   const canInteractWithCampaign = (): boolean => {
-    return isAuthorized === true;
+    return isAuthorized === true && !isPaused && !adminOverrideEnabled;
   };
 
   // Updated functions to include authorization check
@@ -515,8 +507,8 @@ export default function CampaignDetail() {
 
         {/* Campaign Title and Description Row */}
         <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
-          <div className="flex justify-between">
-            <div>
+          <div className="flex justify-between items-start gap-8">
+            <div className="flex-1 min-w-0">
               <div className="flex items-center gap-3 mb-2">
                 <h1 className="text-2xl font-bold text-gray-900">
                   {campaign.title}
@@ -532,31 +524,91 @@ export default function CampaignDetail() {
                   </span>
                 )}
               </div>
-              <p className="text-sm text-gray-600">{campaign.description}</p>
+              <p className="text-sm text-gray-600 pr-4 break-words">
+                {campaign.description}
+              </p>
             </div>
 
-            {/* Admin Action Button - aligned to center of container */}
-            <div className="flex items-center ml-4">
-              {isHydrated && isAdmin && !isLoadingAdmin && isAuthorized && (
-                <button
-                  className="bg-purple-600 hover:bg-purple-700 text-white px-3 py-1.5 rounded-md text-sm font-medium inline-flex items-center gap-1.5 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
-                  onClick={handleAdminAction}
-                  disabled={isDeauthorizing || !campaign?.campaignAddress}
-                >
-                  {isDeauthorizing ? (
-                    <>
-                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                      <span>Processing...</span>
-                    </>
-                  ) : (
-                    <>
-                      <ShieldCheckIcon className="h-4 w-4" />
-                      <span>Terminate Campaign</span>
-                    </>
-                  )}
-                </button>
-              )}
-            </div>
+            {/* Admin Action Buttons and Toggles */}
+            {isHydrated && isAdmin && !isLoadingAdmin && isAuthorized && (
+              <div className="flex-shrink-0 flex flex-col gap-2">
+                <div className="flex items-center justify-end">
+                  <button
+                    className="group relative p-2 text-purple-600 hover:text-purple-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    onClick={handleAdminAction}
+                    disabled={isDeauthorizing || !campaign?.campaignAddress}
+                  >
+                    {isDeauthorizing ? (
+                      <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-purple-600"></div>
+                    ) : (
+                      <>
+                        <TrashIcon className="h-6 w-6" />
+                        <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 text-xs font-medium text-white bg-gray-900 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
+                          Terminate Campaign
+                        </span>
+                      </>
+                    )}
+                  </button>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-purple-400 focus:ring-offset-2 ${
+                      false
+                        ? "cursor-not-allowed opacity-50"
+                        : isPaused
+                        ? "bg-purple-600"
+                        : "bg-gray-200"
+                    }`}
+                    onClick={() => {
+                      // Will connect to hook later
+                      setIsPaused(!isPaused);
+                    }}
+                    disabled={!campaign?.campaignAddress}
+                  >
+                    <span
+                      className={`${
+                        isPaused ? "translate-x-6" : "translate-x-1"
+                      } inline-block h-4 w-4 transform rounded-full transition-transform bg-white`}
+                    />
+                  </button>
+                  <PauseIcon className="h-5 w-5 text-purple-600" />
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-purple-400 focus:ring-offset-2 ${
+                      isSettingOverride
+                        ? "cursor-not-allowed opacity-50"
+                        : adminOverrideEnabled
+                        ? "bg-purple-600"
+                        : "bg-gray-200"
+                    }`}
+                    onClick={async () => {
+                      if (!campaign?.campaignAddress || isSettingOverride)
+                        return;
+                      try {
+                        await setAdminOverride(
+                          campaign.campaignAddress,
+                          !adminOverrideEnabled
+                        );
+                        setAdminOverrideEnabled(!adminOverrideEnabled);
+                      } catch (error) {
+                        // Error handling is done in the hook
+                      }
+                    }}
+                    disabled={isSettingOverride || !campaign?.campaignAddress}
+                  >
+                    <span
+                      className={`${
+                        adminOverrideEnabled ? "translate-x-6" : "translate-x-1"
+                      } inline-block h-4 w-4 transform rounded-full transition-transform bg-white`}
+                    />
+                  </button>
+                  <ShieldCheckIcon className="h-5 w-5 text-purple-600" />
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
@@ -659,6 +711,33 @@ export default function CampaignDetail() {
                   This campaign has been terminated by a platform administrator.
                   All functionality including contributions, refunds, and fund
                   claims has been disabled permanently.
+                </p>
+              </div>
+            </div>
+          ) : isPaused ? (
+            <div className="bg-yellow-50 border border-yellow-200 rounded-lg shadow-sm p-8 h-full flex flex-col justify-center">
+              <div className="flex flex-col items-center text-center py-6">
+                <PauseIcon className="h-12 w-12 text-yellow-500 mb-4" />
+                <h2 className="text-xl font-bold text-yellow-700 mb-3">
+                  Campaign Paused
+                </h2>
+                <p className="text-sm text-yellow-600 max-w-md">
+                  This campaign is currently paused by a platform administrator.
+                  All functionality including contributions and fund claims is
+                  temporarily disabled.
+                </p>
+              </div>
+            </div>
+          ) : adminOverrideEnabled ? (
+            <div className="bg-purple-50 border border-purple-200 rounded-lg shadow-sm p-8 h-full flex flex-col justify-center">
+              <div className="flex flex-col items-center text-center py-6">
+                <ShieldCheckIcon className="h-12 w-12 text-purple-500 mb-4" />
+                <h2 className="text-xl font-bold text-purple-700 mb-3">
+                  Admin Override Active
+                </h2>
+                <p className="text-sm text-purple-600 max-w-md">
+                  The admin has temporarily suspended some campaign
+                  functionality
                 </p>
               </div>
             </div>

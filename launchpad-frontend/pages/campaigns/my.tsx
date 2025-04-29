@@ -14,6 +14,7 @@ import {
 import { Timestamp } from "firebase/firestore";
 import { SUPPORTED_NETWORKS } from "../../config/addresses";
 import { useHydration } from "@/pages/_app";
+import { useBulkCampaignAuthorization } from "../../hooks/campaigns/useBulkCampaignAuthorization";
 
 interface Campaign extends BaseCampaign {
   statusText: string;
@@ -45,6 +46,12 @@ export default function MyCampaigns() {
   } = useCampaigns({ filterByOwner: true });
   const { getTokenByAddress } = useTokens();
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [statusFilter, setStatusFilter] = useState<string>("All");
+
+  // Get campaign authorization statuses
+  const { authorizationMap } = useBulkCampaignAuthorization(
+    realCampaigns.map((campaign) => campaign.campaignAddress || "")
+  );
 
   // Refresh campaigns when chain ID changes
   useEffect(() => {
@@ -99,16 +106,68 @@ export default function MyCampaigns() {
     [memoizedGetTokenByAddress, isHydrated]
   );
 
+  // Add isSuccessful function
+  const isSuccessful = useCallback(
+    (campaign: CampaignWithCalculations): boolean => {
+      if (!campaign.totalContributions || !campaign.goalAmountSmallestUnits)
+        return false;
+      try {
+        const totalContributions = BigInt(campaign.totalContributions);
+        const goalAmount = BigInt(campaign.goalAmountSmallestUnits);
+        return totalContributions >= goalAmount;
+      } catch (error) {
+        console.error("Error checking if campaign is successful:", error);
+        return false;
+      }
+    },
+    []
+  );
+
+  // Add isCampaignEnded function
   const isCampaignEnded = useCallback(
-    (createdAt: Timestamp, duration: number): boolean => {
-      if (!isHydrated) return false;
-      const startDate = createdAt.toDate();
+    (campaign: CampaignWithCalculations): boolean => {
+      if (!campaign.createdAt || !campaign.duration) return false;
+
+      let createdAtDate: Date;
+      if (typeof campaign.createdAt === "string") {
+        createdAtDate = new Date(campaign.createdAt);
+      } else if (campaign.createdAt instanceof Date) {
+        createdAtDate = campaign.createdAt;
+      } else {
+        createdAtDate = campaign.createdAt.toDate();
+      }
+
       const endDate = new Date(
-        startDate.getTime() + duration * 24 * 60 * 60 * 1000
+        createdAtDate.getTime() +
+          parseInt(campaign.duration.toString()) * 24 * 60 * 60 * 1000
       );
       return new Date() > endDate;
     },
-    [isHydrated]
+    []
+  );
+
+  // Add getCampaignStatus function
+  const getCampaignStatus = useCallback(
+    (campaign: CampaignWithCalculations): string => {
+      // Check if campaign is terminated first
+      if (
+        campaign.campaignAddress &&
+        !authorizationMap[campaign.campaignAddress]
+      ) {
+        return "Terminated";
+      }
+
+      if (isSuccessful(campaign)) {
+        return "Successful";
+      }
+
+      if (isCampaignEnded(campaign)) {
+        return "Unsuccessful";
+      }
+
+      return "Active";
+    },
+    [isSuccessful, isCampaignEnded, authorizationMap]
   );
 
   // Process campaigns directly
@@ -128,7 +187,16 @@ export default function MyCampaigns() {
         token
       );
 
-      const isEnded = isCampaignEnded(campaign.createdAt, duration);
+      const isEnded = isCampaignEnded({
+        ...campaign,
+        duration,
+        goalAmountSmallestUnits,
+        token,
+        progress,
+        formattedRaised: formatAmount(campaign.totalContributions, token),
+        formattedTarget: formatAmount(goalAmountSmallestUnits, token),
+      } as CampaignWithCalculations);
+
       const hasReachedGoal = progress >= 100;
 
       // Determine status based on time and goal progress
@@ -172,6 +240,27 @@ export default function MyCampaigns() {
     if (!isHydrated) return;
     router.push(`/campaigns/${campaignId}`);
   };
+
+  // Update getAvailableStatuses function
+  const getAvailableStatuses = useCallback(() => {
+    const statuses = new Set(["All"]);
+    processedCampaigns.forEach((campaign) => {
+      const status = getCampaignStatus(campaign);
+      statuses.add(status);
+    });
+    return Array.from(statuses);
+  }, [processedCampaigns, getCampaignStatus]);
+
+  // Update filterCampaigns function
+  const filterCampaigns = useCallback(
+    (campaigns: CampaignWithCalculations[]) => {
+      if (statusFilter === "All") return campaigns;
+      return campaigns.filter(
+        (campaign) => getCampaignStatus(campaign) === statusFilter
+      );
+    },
+    [statusFilter, getCampaignStatus]
+  );
 
   if (!isHydrated) {
     return (
@@ -274,8 +363,26 @@ export default function MyCampaigns() {
           </button>
         </div>
 
+        {processedCampaigns.length > 0 && (
+          <div className="flex flex-wrap gap-2 mb-6">
+            {getAvailableStatuses().map((status) => (
+              <button
+                key={status}
+                onClick={() => setStatusFilter(status)}
+                className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
+                  statusFilter === status
+                    ? "bg-blue-600 text-white"
+                    : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                }`}
+              >
+                {status}
+              </button>
+            ))}
+          </div>
+        )}
+
         <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-          {processedCampaigns.map((campaign) => (
+          {filterCampaigns(processedCampaigns).map((campaign) => (
             <div key={campaign.id} className="relative">
               {campaign.canClaimFunds && (
                 <div className="absolute top-2 right-2 z-10">

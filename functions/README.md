@@ -23,7 +23,7 @@
 | `RefundIssued`          | `rawEvents`, `refundEvents`, `campaigns` (updates totalRefunds)             |                      |
 | `FundsClaimed`          | `rawEvents`, `claimEvents`, `campaigns` (updates totalClaims)               | ✅                   |
 | `CampaignStatusChanged` | `rawEvents`, `campaignStatusEvents`, `campaigns` (updates status)           | ✅                   |
-| `AdminOverrideSet`      | `rawEvents`, `adminOverrideEvents`, `campaigns` (updates adminOverride)     |                      |
+| `AdminOverrideSet`      | `rawEvents`, `adminOverrideEvents`, `campaigns` (updates adminOverride)     | ✅                   |
 | `FundsOperation`        | `rawEvents`, `fundsOperationEvents`, `campaigns` (updates tokenBalances)    | ✅                   |
 
 ## Campaign Funds Operations (via CampaignEventCollector)
