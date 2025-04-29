@@ -383,6 +383,7 @@ async function processDefiOperation(log: EnhancedEventLog, rawEventId: string) {
       campaignId,
       amount.toString(),
       networkId,
+      log,
     );
   } catch (error) {
     logger.error(`Error processing DefiOperation: ${error}`);
@@ -492,6 +493,7 @@ async function processConfigUpdated(log: EnhancedEventLog, rawEventId: string) {
  * @param {string} campaignId - ID of the campaign
  * @param {string} amount - Amount of tokens
  * @param {number} networkId - Network ID of the chain where campaign yield is tracked
+ * @param {EnhancedEventLog} log - The original event log containing blockchain metadata
  */
 async function updateCampaignYieldData(
   opType: number,
@@ -500,6 +502,7 @@ async function updateCampaignYieldData(
   campaignId: string,
   amount: string,
   networkId: number,
+  log: EnhancedEventLog,
 ) {
   try {
     // Use campaignId as the yield ID since one campaign can only have one token
@@ -568,10 +571,12 @@ async function updateCampaignYieldData(
         eventType: "Withdrawal",
         rawEventId: yieldId,
         createdAt: new Date(),
-        blockNumber: null,
-        blockTimestamp: null,
-        transactionHash: null,
-        contractAddress: null,
+        blockNumber: log.block?.number || null,
+        blockTimestamp: log.block?.timestamp ?
+          new Date(log.block.timestamp * 1000) :
+          null,
+        transactionHash: log.transaction?.hash || null,
+        contractAddress: log.account?.address || null,
         campaignId,
         token,
         amount,
@@ -600,10 +605,12 @@ async function updateCampaignYieldData(
         eventType: "Withdrawal",
         rawEventId: yieldId,
         createdAt: new Date(),
-        blockNumber: null,
-        blockTimestamp: null,
-        transactionHash: null,
-        contractAddress: null,
+        blockNumber: log.block?.number || null,
+        blockTimestamp: log.block?.timestamp ?
+          new Date(log.block.timestamp * 1000) :
+          null,
+        transactionHash: log.transaction?.hash || null,
+        contractAddress: log.account?.address || null,
         campaignId,
         token,
         amount,

@@ -9,7 +9,7 @@ import { useHydration } from "../../pages/_app";
 export const useAuthorizeCampaign = () => {
   const { isHydrated } = useHydration();
   const { data: walletClient } = useWalletClient();
-  const [isDeauthorizing, setIsDeauthorizing] = useState(false);
+  const [isAuthorizing, setIsAuthorizing] = useState(false);
 
   const authorizeCampaign = async (
     campaignEventCollectorAddress: string,
@@ -26,8 +26,8 @@ export const useAuthorizeCampaign = () => {
       return;
     }
 
-    setIsDeauthorizing(true);
-    let toastId = toast.loading("Initiating deauthorization...");
+    setIsAuthorizing(true);
+    let toastId = toast.loading("Initiating authorization...");
 
     try {
       const provider = new BrowserProvider(walletClient.transport);
@@ -41,10 +41,11 @@ export const useAuthorizeCampaign = () => {
       );
 
       // Call contribute function
-      const tx = await campaignEventCollectorContract.deauthorizeCampaign(
-        campaignAddress,
-        { gasLimit: 1000000 }
-      );
+      const tx =
+        await campaignEventCollectorContract.authorizeCampaignFromFactory(
+          campaignAddress,
+          { gasLimit: 1000000 }
+        );
       toast.dismiss(toastId);
       toastId = toast.loading("Transaction sent. Waiting for confirmation...");
 
@@ -62,9 +63,9 @@ export const useAuthorizeCampaign = () => {
       }
       throw error;
     } finally {
-      setIsDeauthorizing(false);
+      setIsAuthorizing(false);
     }
   };
 
-  return { deauthorizeCampaign, isDeauthorizing, isHydrated };
+  return { authorizeCampaign, isAuthorizing, isHydrated };
 };

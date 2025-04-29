@@ -34,6 +34,7 @@ export interface Campaign {
   canClaimFunds?: boolean;
   statusText: string;
   statusColor: string;
+  campaignAddress?: string;
 }
 
 interface UseCampaignsOptions {
@@ -141,6 +142,7 @@ const fetchCampaigns = async (
           canClaimFunds: data.canClaimFunds || false,
           statusText: data.statusText || "",
           statusColor: data.statusColor || "",
+          campaignAddress: data.campaignAddress || "",
         });
       }
     } catch (err) {
@@ -156,6 +158,7 @@ export function useCampaigns({
 }: UseCampaignsOptions = {}) {
   const { address } = useAccount();
   const chainId = useChainId();
+  const { isHydrated } = useHydration();
 
   const {
     data: campaigns = [],
@@ -167,10 +170,22 @@ export function useCampaigns({
     queryFn: () => fetchCampaigns(chainId, address, filterByOwner),
     staleTime: 30000, // Consider data fresh for 30 seconds
     gcTime: 5 * 60 * 1000, // Keep in cache for 5 minutes
-    enabled: SUPPORTED_NETWORKS.includes(
-      chainId as (typeof SUPPORTED_NETWORKS)[number]
-    ),
+    enabled:
+      isHydrated &&
+      SUPPORTED_NETWORKS.includes(
+        chainId as (typeof SUPPORTED_NETWORKS)[number]
+      ),
   });
+
+  // Return empty array if not hydrated
+  if (!isHydrated) {
+    return {
+      campaigns: [],
+      isLoading: true,
+      error: null,
+      refresh: refetch,
+    };
+  }
 
   return {
     campaigns,
