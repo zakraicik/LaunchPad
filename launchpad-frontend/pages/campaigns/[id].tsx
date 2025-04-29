@@ -509,7 +509,7 @@ export default function CampaignDetail() {
         <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
           <div className="flex justify-between items-start gap-8">
             <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-3 mb-2">
+              <div className="flex items-center gap-3 mb-3">
                 <h1 className="text-2xl font-bold text-gray-900">
                   {campaign.title}
                 </h1>
@@ -524,88 +524,92 @@ export default function CampaignDetail() {
                   </span>
                 )}
               </div>
-              <p className="text-sm text-gray-600 pr-4 break-words">
+              <p className="text-sm text-gray-600 pr-8 break-words">
                 {campaign.description}
               </p>
             </div>
 
             {/* Admin Action Buttons and Toggles */}
             {isHydrated && isAdmin && !isLoadingAdmin && isAuthorized && (
-              <div className="flex-shrink-0 flex flex-col gap-2">
-                <div className="flex items-center justify-end">
-                  <button
-                    className="group relative p-2 text-purple-600 hover:text-purple-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                    onClick={handleAdminAction}
-                    disabled={isDeauthorizing || !campaign?.campaignAddress}
-                  >
-                    {isDeauthorizing ? (
-                      <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-purple-600"></div>
-                    ) : (
-                      <>
-                        <TrashIcon className="h-6 w-6" />
-                        <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 text-xs font-medium text-white bg-gray-900 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
-                          Terminate Campaign
-                        </span>
-                      </>
-                    )}
-                  </button>
-                </div>
+              <div className="flex-shrink-0 flex items-center gap-4 pl-8 ml-8 border-l border-gray-200">
+                <div className="flex flex-col gap-4">
+                  <div className="flex items-center gap-2 justify-end">
+                    <button
+                      className="group relative text-purple-600 hover:text-purple-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      onClick={handleAdminAction}
+                      disabled={isDeauthorizing || !campaign?.campaignAddress}
+                    >
+                      {isDeauthorizing ? (
+                        <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-purple-600"></div>
+                      ) : (
+                        <>
+                          <TrashIcon className="h-5 w-5" />
+                          <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 text-xs font-medium text-white bg-gray-900 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
+                            Terminate Campaign
+                          </span>
+                        </>
+                      )}
+                    </button>
+                  </div>
 
-                <div className="flex items-center gap-2">
-                  <button
-                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-purple-400 focus:ring-offset-2 ${
-                      false
-                        ? "cursor-not-allowed opacity-50"
-                        : isPaused
-                        ? "bg-purple-600"
-                        : "bg-gray-200"
-                    }`}
-                    onClick={() => {
-                      // Will connect to hook later
-                      setIsPaused(!isPaused);
-                    }}
-                    disabled={!campaign?.campaignAddress}
-                  >
-                    <span
-                      className={`${
-                        isPaused ? "translate-x-6" : "translate-x-1"
-                      } inline-block h-4 w-4 transform rounded-full transition-transform bg-white`}
-                    />
-                  </button>
-                  <PauseIcon className="h-5 w-5 text-purple-600" />
-                </div>
+                  <div className="flex items-center gap-2 justify-end">
+                    <button
+                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-purple-400 focus:ring-offset-2 ${
+                        false
+                          ? "cursor-not-allowed opacity-50"
+                          : isPaused
+                          ? "bg-purple-600"
+                          : "bg-gray-200"
+                      }`}
+                      onClick={() => {
+                        // Will connect to hook later
+                        setIsPaused(!isPaused);
+                      }}
+                      disabled={!campaign?.campaignAddress}
+                    >
+                      <span
+                        className={`${
+                          isPaused ? "translate-x-6" : "translate-x-1"
+                        } inline-block h-4 w-4 transform rounded-full transition-transform bg-white`}
+                      />
+                    </button>
+                    <PauseIcon className="h-5 w-5 text-purple-600" />
+                  </div>
 
-                <div className="flex items-center gap-2">
-                  <button
-                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-purple-400 focus:ring-offset-2 ${
-                      isSettingOverride
-                        ? "cursor-not-allowed opacity-50"
-                        : adminOverrideEnabled
-                        ? "bg-purple-600"
-                        : "bg-gray-200"
-                    }`}
-                    onClick={async () => {
-                      if (!campaign?.campaignAddress || isSettingOverride)
-                        return;
-                      try {
-                        await setAdminOverride(
-                          campaign.campaignAddress,
-                          !adminOverrideEnabled
-                        );
-                        setAdminOverrideEnabled(!adminOverrideEnabled);
-                      } catch (error) {
-                        // Error handling is done in the hook
-                      }
-                    }}
-                    disabled={isSettingOverride || !campaign?.campaignAddress}
-                  >
-                    <span
-                      className={`${
-                        adminOverrideEnabled ? "translate-x-6" : "translate-x-1"
-                      } inline-block h-4 w-4 transform rounded-full transition-transform bg-white`}
-                    />
-                  </button>
-                  <ShieldCheckIcon className="h-5 w-5 text-purple-600" />
+                  <div className="flex items-center gap-2 justify-end">
+                    <button
+                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-purple-400 focus:ring-offset-2 ${
+                        isSettingOverride
+                          ? "cursor-not-allowed opacity-50"
+                          : adminOverrideEnabled
+                          ? "bg-purple-600"
+                          : "bg-gray-200"
+                      }`}
+                      onClick={async () => {
+                        if (!campaign?.campaignAddress || isSettingOverride)
+                          return;
+                        try {
+                          await setAdminOverride(
+                            campaign.campaignAddress,
+                            !adminOverrideEnabled
+                          );
+                          setAdminOverrideEnabled(!adminOverrideEnabled);
+                        } catch (error) {
+                          // Error handling is done in the hook
+                        }
+                      }}
+                      disabled={isSettingOverride || !campaign?.campaignAddress}
+                    >
+                      <span
+                        className={`${
+                          adminOverrideEnabled
+                            ? "translate-x-6"
+                            : "translate-x-1"
+                        } inline-block h-4 w-4 transform rounded-full transition-transform bg-white`}
+                      />
+                    </button>
+                    <ShieldCheckIcon className="h-5 w-5 text-purple-600" />
+                  </div>
                 </div>
               </div>
             )}
