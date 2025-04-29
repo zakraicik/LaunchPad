@@ -15,6 +15,7 @@ import { Timestamp } from "firebase/firestore";
 import { SUPPORTED_NETWORKS } from "../../config/addresses";
 import { useHydration } from "@/pages/_app";
 import { useBulkCampaignAuthorization } from "../../hooks/campaigns/useBulkCampaignAuthorization";
+import SpeedDialSimple from "../../components/SpeedDialSimple";
 
 interface Campaign extends BaseCampaign {
   statusText: string;
@@ -316,17 +317,21 @@ export default function MyCampaigns() {
               You haven't created any campaigns yet. Start your first campaign
               and begin raising funds today!
             </p>
-            <div className="mt-8">
-              <button
-                onClick={() => setIsCreateModalOpen(true)}
-                className="inline-flex items-center px-4 py-2 bg-green-600 text-white hover:bg-green-700 rounded-lg font-medium transition-colors"
-              >
-                <RocketLaunchIcon className="w-5 h-5 mr-2" />
-                Create Campaign
-              </button>
-            </div>
           </div>
         </div>
+
+        {/* SpeedDial */}
+        {isHydrated && (
+          <SpeedDialSimple
+            mainAction={{
+              icon: <PlusIcon className="h-6 w-6" />,
+              label: "Create Campaign",
+              onClick: () => setIsCreateModalOpen(true),
+            }}
+          />
+        )}
+
+        {/* Create Campaign Modal */}
         {isHydrated && (
           <CreateCampaignModal
             isOpen={isCreateModalOpen}
@@ -354,13 +359,6 @@ export default function MyCampaigns() {
               </p>
             </div>
           </div>
-          <button
-            onClick={() => setIsCreateModalOpen(true)}
-            className="inline-flex items-center px-4 py-2 bg-green-600 text-white hover:bg-green-700 rounded-lg font-medium transition-colors"
-          >
-            <RocketLaunchIcon className="w-5 h-5 mr-2" />
-            Create Campaign
-          </button>
         </div>
 
         {processedCampaigns.length > 0 && (
@@ -399,6 +397,19 @@ export default function MyCampaigns() {
           ))}
         </div>
       </div>
+
+      {/* SpeedDial */}
+      {isHydrated && (
+        <SpeedDialSimple
+          mainAction={{
+            icon: <PlusIcon className="h-6 w-6" />,
+            label: "Create Campaign",
+            onClick: () => setIsCreateModalOpen(true),
+          }}
+        />
+      )}
+
+      {/* Create Campaign Modal */}
       {isHydrated && (
         <CreateCampaignModal
           isOpen={isCreateModalOpen}

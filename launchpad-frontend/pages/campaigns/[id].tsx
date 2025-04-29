@@ -7,7 +7,6 @@ import {
   BanknotesIcon,
   FlagIcon,
   ShieldCheckIcon,
-  PauseIcon,
   KeyIcon,
   StopIcon,
   TrashIcon,
@@ -50,6 +49,7 @@ import { useChainId } from "wagmi";
 import { useCampaignAuthorization } from "../../hooks/campaigns/useCampaignAuthorization";
 import { useSetAdminOverride } from "@/hooks/campaigns/useSetAdminOverride";
 import { useAdminOverrideStatus } from "@/hooks/campaigns/useAdminOverrideStatus";
+import SpeedDial from "../../components/SpeedDial";
 
 interface Campaign {
   id: string;
@@ -102,11 +102,11 @@ export default function CampaignDetail() {
   const chainId = useChainId();
   const { isAuthorized, isLoading: isLoadingAuthorization } =
     useCampaignAuthorization(campaign?.campaignAddress);
-  const [isPaused, setIsPaused] = useState(false);
-  const { setAdminOverride, isSettingOverride } = useSetAdminOverride();
   const [adminOverrideEnabled, setAdminOverrideEnabled] = useState(false);
+  const { setAdminOverride, isSettingOverride } = useSetAdminOverride();
   const { isOverrideEnabled, isLoading: isLoadingOverride } =
     useAdminOverrideStatus(campaign?.campaignAddress);
+  const [isOpen, setIsOpen] = useState(false);
 
   // Update the adminOverrideEnabled state when isOverrideEnabled changes
   useEffect(() => {
@@ -276,7 +276,7 @@ export default function CampaignDetail() {
 
   if (!isHydrated || !router.isReady) {
     return (
-      <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white py-20">
+      <div className="min-h-screen py-20">
         <div className="container mx-auto px-4">
           <div className="text-center">Loading...</div>
         </div>
@@ -286,7 +286,7 @@ export default function CampaignDetail() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white py-20">
+      <div className="min-h-screen py-20">
         <div className="container mx-auto px-4">
           <div className="text-center">Loading campaign...</div>
         </div>
@@ -296,7 +296,7 @@ export default function CampaignDetail() {
 
   if (!campaign) {
     return (
-      <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white py-20">
+      <div className="min-h-screen py-20">
         <div className="container mx-auto px-4">
           <div className="text-center">Campaign not found</div>
         </div>
@@ -470,7 +470,7 @@ export default function CampaignDetail() {
 
   // Function to determine if the user can interact with the campaign
   const canInteractWithCampaign = (): boolean => {
-    return isAuthorized === true && !isPaused && !adminOverrideEnabled;
+    return isAuthorized === true && !adminOverrideEnabled;
   };
 
   // Updated functions to include authorization check
@@ -493,8 +493,27 @@ export default function CampaignDetail() {
     );
   };
 
+  // Add share handler
+  const handleShare = async () => {
+    try {
+      if (navigator.share) {
+        await navigator.share({
+          title: campaign?.title || "Campaign",
+          text: campaign?.description || "",
+          url: window.location.href,
+        });
+      } else {
+        // Fallback to copying to clipboard
+        await navigator.clipboard.writeText(window.location.href);
+        toast.success("Link copied to clipboard!");
+      }
+    } catch (error) {
+      console.error("Error sharing:", error);
+    }
+  };
+
   return (
-    <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white py-20">
+    <div className="min-h-screen py-20">
       <div className="container mx-auto px-4">
         {/* Back Button */}
         <button
@@ -505,119 +524,50 @@ export default function CampaignDetail() {
           Back to Campaigns
         </button>
 
-        {/* Campaign Title and Description Row */}
-        <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
-          <div className="flex justify-between items-start gap-8">
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-3 mb-3">
-                <h1 className="text-2xl font-bold text-gray-900">
-                  {campaign.title}
-                </h1>
-                {isOwner && (
-                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                    Owner
-                  </span>
-                )}
-                {!isAuthorized && (
-                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
-                    Terminated
-                  </span>
-                )}
-              </div>
-              <p className="text-sm text-gray-600 pr-8 break-words">
-                {campaign.description}
-              </p>
-            </div>
-
-            {/* Admin Action Buttons and Toggles */}
-            {isHydrated && isAdmin && !isLoadingAdmin && isAuthorized && (
-              <div className="flex-shrink-0 flex items-center gap-4 pl-8 ml-8 border-l border-gray-200">
-                <div className="flex flex-col gap-4">
-                  <div className="flex items-center gap-2 justify-end">
-                    <button
-                      className="group relative text-purple-600 hover:text-purple-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                      onClick={handleAdminAction}
-                      disabled={isDeauthorizing || !campaign?.campaignAddress}
-                    >
-                      {isDeauthorizing ? (
-                        <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-purple-600"></div>
-                      ) : (
-                        <>
-                          <TrashIcon className="h-5 w-5" />
-                          <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 text-xs font-medium text-white bg-gray-900 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
-                            Terminate Campaign
-                          </span>
-                        </>
-                      )}
-                    </button>
-                  </div>
-
-                  <div className="flex items-center gap-2 justify-end">
-                    <button
-                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-purple-400 focus:ring-offset-2 ${
-                        false
-                          ? "cursor-not-allowed opacity-50"
-                          : isPaused
-                          ? "bg-purple-600"
-                          : "bg-gray-200"
-                      }`}
-                      onClick={() => {
-                        // Will connect to hook later
-                        setIsPaused(!isPaused);
-                      }}
-                      disabled={!campaign?.campaignAddress}
-                    >
-                      <span
-                        className={`${
-                          isPaused ? "translate-x-6" : "translate-x-1"
-                        } inline-block h-4 w-4 transform rounded-full transition-transform bg-white`}
-                      />
-                    </button>
-                    <PauseIcon className="h-5 w-5 text-purple-600" />
-                  </div>
-
-                  <div className="flex items-center gap-2 justify-end">
-                    <button
-                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-purple-400 focus:ring-offset-2 ${
-                        isSettingOverride
-                          ? "cursor-not-allowed opacity-50"
-                          : adminOverrideEnabled
-                          ? "bg-purple-600"
-                          : "bg-gray-200"
-                      }`}
-                      onClick={async () => {
-                        if (!campaign?.campaignAddress || isSettingOverride)
-                          return;
-                        try {
-                          await setAdminOverride(
-                            campaign.campaignAddress,
-                            !adminOverrideEnabled
-                          );
-                          setAdminOverrideEnabled(!adminOverrideEnabled);
-                        } catch (error) {
-                          // Error handling is done in the hook
-                        }
-                      }}
-                      disabled={isSettingOverride || !campaign?.campaignAddress}
-                    >
-                      <span
-                        className={`${
-                          adminOverrideEnabled
-                            ? "translate-x-6"
-                            : "translate-x-1"
-                        } inline-block h-4 w-4 transform rounded-full transition-transform bg-white`}
-                      />
-                    </button>
-                    <ShieldCheckIcon className="h-5 w-5 text-purple-600" />
-                  </div>
+        {/* Top Row: Campaign Info and Details in separate containers */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6 mb-6">
+          {/* Campaign Title and Description Container */}
+          <div className="col-span-1 md:col-span-2 bg-white/10 backdrop-blur-md rounded-lg p-4 md:p-6 shadow-[0_0_10px_rgba(191,219,254,0.2)]">
+            <div className="flex items-start justify-between">
+              <div className="flex-1">
+                <div className="flex items-center gap-3 mb-3">
+                  <h1 className="text-xl md:text-2xl font-bold text-gray-900">
+                    {campaign.title}
+                  </h1>
+                  {isOwner && (
+                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                      Owner
+                    </span>
+                  )}
+                  {!isAuthorized && (
+                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                      Terminated
+                    </span>
+                  )}
                 </div>
+                <p className="text-sm text-gray-600 break-words">
+                  {campaign.description}
+                </p>
               </div>
-            )}
+            </div>
+          </div>
+
+          {/* Campaign Details Container */}
+          <div className="col-span-1 bg-white/10 backdrop-blur-md rounded-lg p-4 md:p-6 shadow-[0_0_10px_rgba(191,219,254,0.2)]">
+            <h3 className="text-base md:text-lg font-semibold text-gray-900 mb-4">
+              Campaign Details
+            </h3>
+            <CampaignDetails
+              category={campaign.category}
+              campaignAddress={campaign.campaignAddress}
+              owner={campaign.creator}
+              githubUrl={campaign.githubUrl}
+            />
           </div>
         </div>
 
         {/* Quick Stats Row */}
-        <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
+        <div className="bg-white/10 backdrop-blur-md rounded-lg p-4 md:p-6 mb-6 shadow-[0_0_10px_rgba(191,219,254,0.2)]">
           <div className="grid grid-cols-3 gap-4">
             <div className="text-center">
               <p className="text-base font-medium">
@@ -701,338 +651,9 @@ export default function CampaignDetail() {
           </div>
         </div>
 
-        {/* Campaign Details and Contribution Section */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6 items-stretch">
-          {/* Contribution Form or Owner Actions or Paused Notice (left) */}
-          {!isAuthorized ? (
-            <div className="bg-red-50 border border-red-200 rounded-lg shadow-sm p-8 h-full flex flex-col justify-center">
-              <div className="flex flex-col items-center text-center py-6">
-                <FlagIcon className="h-12 w-12 text-red-500 mb-4" />
-                <h2 className="text-xl font-bold text-red-700 mb-3">
-                  Campaign Terminated
-                </h2>
-                <p className="text-sm text-red-600 max-w-md">
-                  This campaign has been terminated by a platform administrator.
-                  All functionality including contributions, refunds, and fund
-                  claims has been disabled permanently.
-                </p>
-              </div>
-            </div>
-          ) : isPaused ? (
-            <div className="bg-yellow-50 border border-yellow-200 rounded-lg shadow-sm p-8 h-full flex flex-col justify-center">
-              <div className="flex flex-col items-center text-center py-6">
-                <PauseIcon className="h-12 w-12 text-yellow-500 mb-4" />
-                <h2 className="text-xl font-bold text-yellow-700 mb-3">
-                  Campaign Paused
-                </h2>
-                <p className="text-sm text-yellow-600 max-w-md">
-                  This campaign is currently paused by a platform administrator.
-                  All functionality including contributions and fund claims is
-                  temporarily disabled.
-                </p>
-              </div>
-            </div>
-          ) : adminOverrideEnabled ? (
-            <div className="bg-purple-50 border border-purple-200 rounded-lg shadow-sm p-8 h-full flex flex-col justify-center">
-              <div className="flex flex-col items-center text-center py-6">
-                <ShieldCheckIcon className="h-12 w-12 text-purple-500 mb-4" />
-                <h2 className="text-xl font-bold text-purple-700 mb-3">
-                  Admin Override Active
-                </h2>
-                <p className="text-sm text-purple-600 max-w-md">
-                  The admin has temporarily suspended some campaign
-                  functionality
-                </p>
-              </div>
-            </div>
-          ) : canContributeToday() ? (
-            <div className="bg-white rounded-lg shadow-sm flex flex-col justify-center p-8 h-full">
-              <div className="flex items-center gap-8 mb-6">
-                <div className="flex-1">
-                  <div className="flex flex-col items-center text-center">
-                    <RocketLaunchIcon className="h-8 w-8 text-blue-600 mb-2" />
-                    <h2 className="text-xl font-bold text-gray-900">
-                      Make a Contribution
-                    </h2>
-                    <p className="text-sm text-gray-600">
-                      Support this campaign and help make it a reality
-                    </p>
-                  </div>
-                </div>
-                <div className="flex-1">
-                  <label
-                    htmlFor="amount"
-                    className="block text-sm font-medium text-gray-700 mb-1"
-                  >
-                    Amount
-                  </label>
-                  <div className="relative mt-1">
-                    <input
-                      id="amount"
-                      type="number"
-                      min="0"
-                      value={contributionAmount}
-                      onChange={(e) => setContributionAmount(e.target.value)}
-                      placeholder="Enter amount"
-                      className="w-full px-4 py-2.5 bg-white border-2 border-gray-200 rounded-lg text-base font-medium focus:outline-none focus:ring-2 focus:ring-gray-100 focus:border-gray-400 transition-all"
-                      disabled={isContributing || !isAuthorized}
-                    />
-                    <div className="absolute inset-y-0 right-0 flex items-center pr-4 pointer-events-none">
-                      <span className="text-gray-900 font-medium">
-                        {token?.symbol}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <div className="relative">
-                <button
-                  onClick={handleContribute}
-                  disabled={
-                    !isConnected ||
-                    isContributing ||
-                    !contributionAmount ||
-                    !campaign?.campaignAddress ||
-                    !isAuthorized
-                  }
-                  className="w-full bg-blue-600 text-white py-2.5 px-6 rounded-full text-base font-medium hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 group"
-                >
-                  {isContributing ? (
-                    <>
-                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                      <span>Contributing...</span>
-                    </>
-                  ) : (
-                    <>
-                      <RocketLaunchIcon className="h-4 w-4" />
-                      <span>Contribute</span>
-                    </>
-                  )}
-                  {/* Tooltip - only show when button is disabled for proper reasons */}
-                  {(!isConnected ||
-                    !contributionAmount ||
-                    !campaign?.campaignAddress) && (
-                    <div className="absolute -top-12 left-1/2 -translate-x-1/2 px-3 py-2 bg-gray-900 text-white text-sm rounded-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all pointer-events-none whitespace-nowrap">
-                      {!isConnected
-                        ? "Please connect your wallet to contribute"
-                        : !contributionAmount
-                        ? "Please enter an amount"
-                        : !campaign?.campaignAddress
-                        ? "Campaign contract address not found"
-                        : null}
-                      {/* Tooltip arrow */}
-                      <div className="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-full w-0 h-0 border-l-8 border-l-transparent border-r-8 border-r-transparent border-t-8 border-t-gray-900"></div>
-                    </div>
-                  )}
-                  {!isAuthorized && (
-                    <div className="absolute -top-12 left-1/2 -translate-x-1/2 px-3 py-2 bg-red-700 text-white text-sm rounded-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all pointer-events-none whitespace-nowrap">
-                      This campaign is currently paused
-                      {/* Tooltip arrow */}
-                      <div className="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-full w-0 h-0 border-l-8 border-l-transparent border-r-8 border-r-transparent border-t-8 border-t-red-700"></div>
-                    </div>
-                  )}
-                </button>
-              </div>
-            </div>
-          ) : (
-            <div className="bg-white rounded-lg shadow-sm p-8 h-full flex flex-col justify-center">
-              {/* Campaign Owner Actions */}
-              {isOwner && (isSuccessful() || isCampaignEnded()) && (
-                <div className="mb-6">
-                  {hasClaimed ? (
-                    <div className="text-center py-8">
-                      {isSuccessful() ? (
-                        <>
-                          <RocketLaunchIcon className="h-12 w-12 mx-auto mb-4 text-blue-600 animate-bounce" />
-                          <h3 className="text-xl font-bold text-gray-900 mb-2">
-                            Funds Successfully Claimed!
-                          </h3>
-                          <p className="text-sm text-gray-600">
-                            You have the funds. Now go build something amazing!
-                            🚀
-                          </p>
-                        </>
-                      ) : (
-                        <>
-                          <BanknotesIcon className="h-12 w-12 mx-auto mb-4 text-blue-600" />
-                          <h3 className="text-xl font-bold text-gray-900 mb-2">
-                            Funds Successfully Claimed
-                          </h3>
-                          <p className="text-sm text-gray-600">
-                            Contributors can now request refunds for their
-                            contributions.
-                          </p>
-                        </>
-                      )}
-                    </div>
-                  ) : (
-                    <div className="flex flex-col items-center justify-center py-6">
-                      <div className="flex flex-col items-center text-center">
-                        <BanknotesIcon className="h-8 w-8 text-blue-600 mb-3" />
-                        <h2 className="text-xl font-bold text-gray-900 mb-1.5">
-                          {isSuccessful()
-                            ? "Claim Campaign Funds"
-                            : "Enable Refunds"}
-                        </h2>
-                        <p className="text-sm text-gray-600 mb-4">
-                          {isSuccessful()
-                            ? "Claim your funds to start building."
-                            : "Claim funds to enable refunds for your contributors."}
-                        </p>
-                        <button
-                          onClick={handleClaimFunds}
-                          disabled={isClaiming || !isAuthorized}
-                          className="w-64 bg-blue-600 text-white py-2.5 px-4 rounded-full text-sm font-medium hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 group relative"
-                        >
-                          {isClaiming ? (
-                            <>
-                              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                              <span>Claiming...</span>
-                            </>
-                          ) : (
-                            <span>
-                              {isSuccessful()
-                                ? "Claim Funds"
-                                : "Enable Refunds"}
-                            </span>
-                          )}
-
-                          {!isAuthorized && (
-                            <div className="absolute -top-12 left-1/2 -translate-x-1/2 px-3 py-2 bg-red-700 text-white text-sm rounded-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all pointer-events-none whitespace-nowrap">
-                              Campaign is currently paused
-                              {/* Tooltip arrow */}
-                              <div className="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-full w-0 h-0 border-l-8 border-l-transparent border-r-8 border-r-transparent border-t-8 border-t-red-700"></div>
-                            </div>
-                          )}
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Contributor Actions */}
-              {!isOwner && (
-                <div>
-                  {isSuccessful() ? (
-                    <div className="text-center py-8">
-                      <RocketLaunchIcon className="h-12 w-12 mx-auto mb-4 text-blue-600 animate-bounce" />
-                      <h3 className="text-xl font-bold text-gray-900 mb-2">
-                        Owner is Building! 🚀
-                      </h3>
-                      <p className="text-sm text-gray-600">
-                        Campaign was successful, which means it was no longer
-                        accepting contributions.
-                      </p>
-                    </div>
-                  ) : isCampaignEnded() && isContributor && !hasBeenRefunded ? (
-                    <div className="flex flex-col items-center justify-center text-center py-6">
-                      <div className="flex flex-col items-center text-center">
-                        <BanknotesIcon className="h-8 w-8 text-blue-600 mb-3" />
-                        <h2 className="text-xl font-bold text-gray-900 mb-1.5">
-                          Request Refund
-                        </h2>
-                        <p className="text-sm text-gray-600 mb-4">
-                          {hasClaimed
-                            ? "You can now request a refund for your contribution."
-                            : "Refunds will be available once the owner claims funds."}
-                        </p>
-                        <button
-                          onClick={handleRequestRefund}
-                          disabled={
-                            !hasClaimed || isRequestingRefund || !isAuthorized
-                          }
-                          className="w-64 bg-red-600 text-white py-2.5 px-4 rounded-full text-sm font-medium hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 group relative"
-                        >
-                          {isRequestingRefund
-                            ? "Requesting..."
-                            : "Request Refund"}
-                          {/* Tooltip - only show when button is disabled and refunds are not yet available */}
-                          {!hasClaimed && !isRequestingRefund && (
-                            <span className="absolute -top-10 left-1/2 -translate-x-1/2 bg-gray-800 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
-                              Refunds will be available after owner claims
-                              funds.
-                            </span>
-                          )}
-
-                          {!isAuthorized && (
-                            <div className="absolute -top-12 left-1/2 -translate-x-1/2 px-3 py-2 bg-red-700 text-white text-sm rounded-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all pointer-events-none whitespace-nowrap">
-                              Campaign is currently paused
-                              {/* Tooltip arrow */}
-                              <div className="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-full w-0 h-0 border-l-8 border-l-transparent border-r-8 border-r-transparent border-t-8 border-t-red-700"></div>
-                            </div>
-                          )}
-                        </button>
-                      </div>
-                    </div>
-                  ) : isCampaignEnded() && isContributor && hasBeenRefunded ? (
-                    <div className="text-center py-8">
-                      <BanknotesIcon className="h-12 w-12 mx-auto mb-4 text-green-600" />
-                      <h3 className="text-xl font-bold text-gray-900 mb-2">
-                        Refund Received
-                      </h3>
-                      <p className="text-sm text-gray-600">
-                        You have already received your refund for this campaign.
-                      </p>
-                    </div>
-                  ) : (
-                    isCampaignEnded() &&
-                    !isContributor && (
-                      <div className="text-center py-8">
-                        <FlagIcon className="h-12 w-12 mx-auto mb-4 text-gray-600" />
-                        <h3 className="text-xl font-bold text-gray-900 mb-2">
-                          Campaign Has Concluded
-                        </h3>
-                        <p className="text-sm text-gray-600">
-                          This campaign has ended. Check out other active
-                          campaigns you can contribute to!
-                        </p>
-                        <Link
-                          href="/campaigns"
-                          className="mt-4 inline-flex items-center text-blue-600 hover:text-blue-800 gap-1 text-sm"
-                        >
-                          View Active Campaigns
-                          <svg
-                            className="w-4 h-4"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={2}
-                              d="M9 5l7 7-7 7"
-                            />
-                          </svg>
-                        </Link>
-                      </div>
-                    )
-                  )}
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Campaign Details Card (right) - vertically centered */}
-          <div className="bg-white rounded-lg shadow-sm h-full flex items-center">
-            <div className="p-6 w-full">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">
-                Campaign Details
-              </h3>
-              <CampaignDetails
-                category={campaign.category}
-                campaignAddress={campaign.campaignAddress}
-                owner={campaign.creator}
-                githubUrl={campaign.githubUrl}
-              />
-            </div>
-          </div>
-        </div>
-
         {/* Navigation Tabs */}
-        <div className="bg-white rounded-lg shadow-sm mb-6">
-          <div className="border-b">
+        <div className="bg-white/10 backdrop-blur-md rounded-lg mb-6 shadow-[0_0_10px_rgba(191,219,254,0.2)]">
+          <div className="border-b border-gray-200">
             <nav className="flex overflow-x-auto scrollbar-hide">
               <button
                 onClick={() => setActiveTab("contributors")}
@@ -1070,11 +691,11 @@ export default function CampaignDetail() {
 
             {activeTab === "balances" && (
               <div className="space-y-6">
-                <div className="bg-gray-50 rounded-lg p-4">
+                <div className="bg-white/0 backdrop-blur-md rounded-lg p-4 ">
                   <h3 className="text-sm font-medium text-gray-900 mb-4">
                     Campaign Token Balances
                   </h3>
-                  <div className="space-y-4">
+                  <div className="bg-white/0 space-y-4">
                     <div className="flex justify-between items-center">
                       <span className="text-sm text-gray-500">
                         Amount in Contract
@@ -1101,6 +722,117 @@ export default function CampaignDetail() {
             )}
           </div>
         </div>
+
+        {/* Contribution Modal */}
+        {isOpen && (
+          <div
+            id="contribution-section"
+            className="fixed inset-0 bg-white/50 backdrop-blur-sm flex items-center justify-center z-50"
+            onClick={() => setIsOpen(false)}
+          >
+            <div
+              className="bg-white backdrop-blur-xl rounded-lg p-6 max-w-md w-full mx-4 shadow-[0_0_10px_rgba(191,219,254,0.2)] border border-gray-100"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="text-center mb-6">
+                <RocketLaunchIcon className="h-8 w-8 text-blue-600 mx-auto mb-2" />
+                <h2 className="text-xl font-bold text-gray-900">
+                  Make a Contribution
+                </h2>
+                <p className="text-sm text-gray-600">
+                  Support this campaign and help make it a reality
+                </p>
+              </div>
+
+              <div className="mb-6">
+                <label
+                  htmlFor="amount"
+                  className="block text-sm font-medium text-gray-700 mb-1"
+                >
+                  Amount
+                </label>
+                <div className="relative mt-1">
+                  <input
+                    id="amount"
+                    type="number"
+                    min="0"
+                    value={contributionAmount}
+                    onChange={(e) => setContributionAmount(e.target.value)}
+                    placeholder="Enter amount"
+                    className="w-full px-4 py-2.5 bg-white border-2 border-gray-200 rounded-lg text-base font-medium focus:outline-none focus:ring-2 focus:ring-gray-100 focus:border-gray-400 transition-all"
+                    disabled={isContributing || !isAuthorized}
+                  />
+                  <div className="absolute inset-y-0 right-0 flex items-center pr-4 pointer-events-none">
+                    <span className="text-gray-900 font-medium">
+                      {token?.symbol}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <button
+                onClick={handleContribute}
+                disabled={
+                  !isConnected ||
+                  isContributing ||
+                  !contributionAmount ||
+                  !campaign?.campaignAddress ||
+                  !isAuthorized
+                }
+                className="w-full bg-blue-600 text-white py-2.5 px-6 rounded-full text-base font-medium hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              >
+                {isContributing ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                    <span>Contributing...</span>
+                  </>
+                ) : (
+                  <>
+                    <RocketLaunchIcon className="h-4 w-4" />
+                    <span>Contribute</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* SpeedDial */}
+        {campaign && (
+          <SpeedDial
+            canContribute={canContributeToday()}
+            canRequestRefund={canRequestRefundToday()}
+            canClaimFunds={canClaimFundsToday()}
+            onContribute={() => {
+              setIsOpen(true);
+            }}
+            onRequestRefund={handleRequestRefund}
+            onClaimFunds={handleClaimFunds}
+            onShare={handleShare}
+            isContributing={isContributing}
+            isRequestingRefund={isRequestingRefund}
+            isClaiming={isClaiming}
+            // Admin props
+            isAdmin={isHydrated && isAdmin && !isLoadingAdmin}
+            isAuthorized={isAuthorized}
+            isDeauthorizing={isDeauthorizing}
+            adminOverrideEnabled={adminOverrideEnabled}
+            isSettingOverride={isSettingOverride}
+            onDeauthorize={handleAdminAction}
+            onToggleOverride={async () => {
+              if (!campaign?.campaignAddress || isSettingOverride) return;
+              try {
+                await setAdminOverride(
+                  campaign.campaignAddress,
+                  !adminOverrideEnabled
+                );
+                setAdminOverrideEnabled(!adminOverrideEnabled);
+              } catch (error) {
+                // Error handling is done in the hook
+              }
+            }}
+          />
+        )}
       </div>
     </div>
   );

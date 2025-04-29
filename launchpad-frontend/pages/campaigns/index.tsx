@@ -3,6 +3,7 @@ import {
   MagnifyingGlassIcon,
   FunnelIcon,
   RocketLaunchIcon,
+  PlusIcon,
 } from "@heroicons/react/24/outline";
 import CampaignCard from "../../components/campaigns/CampaignCard";
 import CampaignFilters from "../../components/campaigns/CampaignFilters";
@@ -12,6 +13,7 @@ import { useRouter } from "next/router";
 import { useChainId, useAccount } from "wagmi";
 import { useHydration } from "@/pages/_app";
 import { useBulkCampaignAuthorization } from "../../hooks/campaigns/useBulkCampaignAuthorization";
+import SpeedDialSimple from "../../components/SpeedDialSimple";
 
 export default function CampaignsDiscovery() {
   const { isHydrated } = useHydration();
@@ -143,7 +145,7 @@ export default function CampaignsDiscovery() {
 
   if (!isHydrated) {
     return (
-      <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white pt-32 pb-20">
+      <div className="min-h-screen pt-32 pb-20">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center">Loading...</div>
         </div>
@@ -152,48 +154,28 @@ export default function CampaignsDiscovery() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white pt-32 pb-20">
+    <div className="min-h-screen pt-32 pb-20">
       <div className="container mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex justify-between items-start mb-8">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900">
-              Discover Campaigns
-            </h1>
-            <p className="mt-2 text-sm text-gray-500">
-              Explore and support campaigns
-            </p>
-          </div>
-          {sortedCampaigns.length > 0 && (
-            <button
-              onClick={() => setIsCreateModalOpen(true)}
-              disabled={!isConnected}
-              className="inline-flex items-center px-4 py-2 bg-green-600 text-white hover:bg-green-700 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed group relative"
-            >
-              <RocketLaunchIcon className="w-5 h-5 mr-2" />
-              Create Campaign
-              {!isConnected && (
-                <span className="absolute -top-10 left-1/2 -translate-x-1/2 bg-gray-800 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
-                  Connect wallet to create campaign
-                </span>
-              )}
-            </button>
-          )}
+        <div className="flex flex-col mb-8 relative z-30">
+          <h1 className="text-3xl font-bold text-gray-900">
+            Discover Campaigns
+          </h1>
+          <p className="mt-2 text-sm text-gray-500">
+            Explore and support campaigns
+          </p>
         </div>
 
         {/* Search and Filter Bar */}
-        <div className="flex flex-col md:flex-row gap-4 mb-6">
+        <div className="flex flex-col md:flex-row gap-4 mb-6 relative z-30">
           {/* Search Input */}
           <div className="flex-1 relative">
-            {/* <label htmlFor="search" className='block text-sm font-medium text-gray-700 mb-1'>
-              Search
-            </label> */}
             <div className="relative">
-              <MagnifyingGlassIcon className="absolute left-4 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+              <MagnifyingGlassIcon className="absolute left-4 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-600 z-10" />
               <input
                 type="text"
                 id="search"
                 placeholder="Search campaigns..."
-                className="w-full pl-12 pr-4 py-2.5 bg-white border-2 border-gray-200 rounded-lg text-base font-medium focus:outline-none focus:ring-2 focus:ring-gray-100 focus:border-gray-400 transition-all"
+                className="w-full pl-12 pr-4 py-2.5 bg-white/80 backdrop-blur-md border border-gray-200 rounded-lg text-base font-medium focus:outline-none focus:border-blue-300 focus:ring-2 focus:ring-blue-100 shadow-sm transition-all"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
@@ -204,7 +186,7 @@ export default function CampaignsDiscovery() {
           <div className="flex items-end">
             <button
               onClick={() => setShowFilters(!showFilters)}
-              className="px-4 py-2.5 border-2 border-gray-200 rounded-lg hover:border-gray-300 hover:bg-gray-50 transition-all text-base font-medium"
+              className="px-4 py-2.5 bg-white/80 backdrop-blur-md border border-gray-200 rounded-lg hover:border-gray-300 transition-all text-base font-medium shadow-sm hover:shadow-md focus:outline-none focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
             >
               <FunnelIcon className="h-5 w-5 mr-2 inline-block" />
               Filters
@@ -214,7 +196,7 @@ export default function CampaignsDiscovery() {
 
         {/* Filters Panel */}
         {showFilters && (
-          <div className="mt-4 bg-white rounded-lg shadow-sm p-6 mb-6">
+          <div className="mt-4 bg-white/80 backdrop-blur-md rounded-lg p-6 mb-6 border border-gray-200 shadow-sm relative z-20">
             <CampaignFilters
               selectedCategory={selectedCategory}
               setSelectedCategory={handleCategoryChange}
@@ -230,7 +212,7 @@ export default function CampaignsDiscovery() {
             {[...Array(6)].map((_, i) => (
               <div
                 key={i}
-                className="bg-white rounded-lg shadow-sm p-6 animate-pulse"
+                className="bg-white/10 backdrop-blur-md rounded-lg shadow-[0_0_10px_rgba(191,219,254,0.2)] p-6 "
               >
                 <div className="h-4 bg-gray-200 rounded w-3/4 mb-4"></div>
                 <div className="h-20 bg-gray-200 rounded mb-4"></div>
@@ -248,6 +230,7 @@ export default function CampaignsDiscovery() {
                 key={campaign.id}
                 campaign={campaign}
                 onClick={() => handleCampaignClick(campaign.id)}
+                containerClassName="bg-white/50 backdrop-blur-md shadow-[0_0_10px_rgba(191,219,254,0.2)]"
               />
             ))}
           </div>
@@ -257,19 +240,6 @@ export default function CampaignsDiscovery() {
             <p className="text-gray-600 mb-6">
               Be the first to create a campaign!
             </p>
-            <button
-              onClick={() => setIsCreateModalOpen(true)}
-              disabled={!isConnected}
-              className="inline-flex items-center px-4 py-2 bg-green-600 text-white hover:bg-green-700 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed group relative"
-            >
-              <RocketLaunchIcon className="w-5 h-5 mr-2" />
-              Create Campaign
-              {!isConnected && (
-                <span className="absolute -top-10 left-1/2 -translate-x-1/2 bg-gray-800 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
-                  Connect wallet to create campaign
-                </span>
-              )}
-            </button>
           </div>
         )}
 
@@ -279,6 +249,19 @@ export default function CampaignsDiscovery() {
             isOpen={isCreateModalOpen}
             onClose={() => setIsCreateModalOpen(false)}
             onSuccess={refresh}
+          />
+        )}
+
+        {/* SpeedDial */}
+        {isHydrated && (
+          <SpeedDialSimple
+            mainAction={{
+              icon: <PlusIcon className="h-6 w-6" />,
+              label: "Create Campaign",
+              onClick: () => setIsCreateModalOpen(true),
+              disabled: !isConnected,
+              disabledTooltip: "Connect wallet to create campaign",
+            }}
           />
         )}
       </div>
