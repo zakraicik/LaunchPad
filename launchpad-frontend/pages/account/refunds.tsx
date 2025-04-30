@@ -87,7 +87,7 @@ export default function RefundsPage() {
 
   if (!isHydrated) {
     return (
-      <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white pt-32 pb-20">
+      <div className="min-h-screen pt-32 pb-20">
         <div className="container mx-auto px-4">
           <div className="text-center">Loading...</div>
         </div>
@@ -97,7 +97,7 @@ export default function RefundsPage() {
 
   if (!isConnected) {
     return (
-      <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white pt-32 pb-20">
+      <div className="min-h-screen pt-32 pb-20">
         <div className="container mx-auto px-4">
           <div className="text-center">
             Please connect your wallet to view your refunds
@@ -109,7 +109,7 @@ export default function RefundsPage() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white pt-32 pb-20">
+      <div className="min-h-screen pt-32 pb-20">
         <div className="container mx-auto px-4">
           <div className="text-center">Loading your refunds...</div>
         </div>
@@ -118,7 +118,7 @@ export default function RefundsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white pt-32 pb-20">
+    <div className="min-h-screen pt-32 pb-20">
       <div className="container mx-auto px-4">
         {refundEvents.length > 0 ? (
           <>
@@ -136,7 +136,7 @@ export default function RefundsPage() {
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                <div className="bg-white rounded-lg shadow-sm p-6">
+                <div className="bg-white/80 backdrop-blur-sm rounded-lg shadow-sm p-6">
                   <dt className="text-sm font-medium text-gray-500">
                     Total Refunds
                   </dt>
@@ -145,7 +145,7 @@ export default function RefundsPage() {
                   </dd>
                 </div>
 
-                <div className="bg-white rounded-lg shadow-sm p-6">
+                <div className="bg-white/80 backdrop-blur-sm rounded-lg shadow-sm p-6">
                   <dt className="text-sm font-medium text-gray-500">
                     Unique Campaigns
                   </dt>
@@ -154,7 +154,7 @@ export default function RefundsPage() {
                   </dd>
                 </div>
 
-                <div className="bg-white rounded-lg shadow-sm p-6">
+                <div className="bg-white/80 backdrop-blur-sm rounded-lg shadow-sm p-6">
                   <dt className="text-sm font-medium text-gray-500">
                     Refunds by Token
                   </dt>
@@ -174,7 +174,7 @@ export default function RefundsPage() {
               </div>
             </div>
 
-            <div className="bg-white rounded-lg shadow-sm p-6">
+            <div className="bg-white/80 backdrop-blur-sm rounded-lg shadow-sm p-6">
               <div className="flow-root">
                 <ul role="list" className="-mb-8">
                   {refundEvents.map((event) => {

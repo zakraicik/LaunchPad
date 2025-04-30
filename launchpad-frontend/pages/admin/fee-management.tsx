@@ -153,25 +153,21 @@ export default function FeeManagement() {
 
   if (!isHydrated) {
     return (
-      <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white pt-32 pb-20">
-        <div className="container mx-auto px-4">
-          <div className="text-center">Loading...</div>
-        </div>
+      <div className="container mx-auto px-4 py-8">
+        <div className="text-center">Loading...</div>
       </div>
     );
   }
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white pt-32 pb-20">
-        <div className="container mx-auto px-4">
-          <div className="flex justify-between items-center mb-6">
-            <h1 className="text-2xl font-bold">Fee Management</h1>
-          </div>
-          <div className="bg-white rounded-lg shadow p-6">
-            <div className="flex justify-center items-center h-32">
-              <div className="text-gray-600">Loading fee settings...</div>
-            </div>
+      <div className="container mx-auto px-4 py-8">
+        <div className="flex justify-between items-center mb-6">
+          <h1 className="text-2xl font-bold">Fee Management</h1>
+        </div>
+        <div className="bg-white/80 backdrop-blur-sm rounded-lg shadow-sm p-6">
+          <div className="flex justify-center items-center h-32">
+            <div className="text-gray-600">Loading fee settings...</div>
           </div>
         </div>
       </div>
@@ -180,24 +176,22 @@ export default function FeeManagement() {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white pt-32 pb-20">
-        <div className="container mx-auto px-4">
-          <div className="flex justify-between items-center mb-6">
-            <h1 className="text-2xl font-bold">Fee Management</h1>
-            <button
-              onClick={() => refetch()}
-              className="text-blue-600 hover:text-blue-800 flex items-center gap-2"
-            >
-              <ArrowPathIcon className="h-5 w-5" />
-              Retry
-            </button>
-          </div>
-          <div className="bg-white rounded-lg shadow">
-            <div className="p-6">
-              <div className="bg-red-50 text-red-600 p-4 rounded-lg">
-                Error loading fee settings:{" "}
-                {error instanceof Error ? error.message : "Unknown error"}
-              </div>
+      <div className="container mx-auto px-4 py-8">
+        <div className="flex justify-between items-center mb-6">
+          <h1 className="text-2xl font-bold">Fee Management</h1>
+          <button
+            onClick={() => refetch()}
+            className="text-blue-600 hover:text-blue-800 flex items-center gap-2"
+          >
+            <ArrowPathIcon className="h-5 w-5" />
+            Retry
+          </button>
+        </div>
+        <div className="bg-white/80 backdrop-blur-sm rounded-lg shadow-sm">
+          <div className="p-6">
+            <div className="bg-red-50/90 backdrop-blur-sm text-red-600 p-4 rounded-lg">
+              Error loading fee settings:{" "}
+              {error instanceof Error ? error.message : "Unknown error"}
             </div>
           </div>
         </div>
@@ -206,15 +200,30 @@ export default function FeeManagement() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white pt-32 pb-20">
-      <div className="container mx-auto px-4">
-        <div className="flex justify-between items-center mb-6">
-          <h1 className="text-2xl font-bold">Fee Management</h1>
+    <div className="container mx-auto px-4 py-8 mt-20 min-h-[calc(100vh-80px)]">
+      <div className="flex justify-between items-center mb-6">
+        <div className="flex items-center gap-4">
+          <ArrowPathIcon className="h-8 w-8 text-blue-600" />
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">Fee Management</h1>
+            <p className="mt-1 text-sm text-gray-500">
+              Configure platform fees and treasury settings
+            </p>
+          </div>
         </div>
+        <button
+          onClick={() => refetch()}
+          className="text-blue-600 hover:text-blue-800 flex items-center gap-2"
+        >
+          <ArrowPathIcon className="h-5 w-5" />
+          Refresh
+        </button>
+      </div>
 
-        <div className="bg-white rounded-lg shadow">
+      <div className="bg-white/10 backdrop-blur-md rounded-lg shadow-sm shadow-[0_0_10px_rgba(191,219,254,0.2)]">
+        <div className="p-6">
           {feeSettings ? (
-            <div className="p-6 space-y-6">
+            <div className="space-y-6">
               <div className="flex items-center justify-between">
                 <div>
                   <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wider">
@@ -350,131 +359,131 @@ export default function FeeManagement() {
             </div>
           )}
         </div>
-
-        {/* Edit Fee Share Modal */}
-        {isEditFeeShareModalOpen && (
-          <div className="fixed inset-0 z-50">
-            <div
-              className="fixed inset-0 bg-black/30 backdrop-blur-md"
-              aria-hidden="true"
-            />
-            <div className="fixed inset-0 flex items-center justify-center p-4">
-              <div className="mx-auto max-w-2xl w-full bg-white/90 rounded-xl shadow-xl border border-gray-100 flex flex-col p-6">
-                <h2 className="text-lg font-medium mb-4">
-                  Edit Platform Fee Share
-                </h2>
-                <form
-                  onSubmit={(e) => {
-                    e.preventDefault();
-                    handleSaveFeeShare();
-                  }}
-                  className="space-y-4"
-                >
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Platform Fee Share (basis points)
-                    </label>
-                    <input
-                      type="number"
-                      min="0"
-                      value={feeShare}
-                      onChange={(e) =>
-                        setFeeShare(
-                          e.target.value === "" ? "" : Number(e.target.value)
-                        )
-                      }
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                      placeholder="Enter fee share in basis points"
-                      required
-                    />
-                  </div>
-                  {feeShareError && (
-                    <div className="text-red-600 text-sm">{feeShareError}</div>
-                  )}
-                  <div className="flex justify-end gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setIsEditFeeShareModalOpen(false)}
-                      className="px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 rounded-md"
-                      disabled={isSavingFeeShare}
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="submit"
-                      disabled={isSavingFeeShare || isUpdatingFeeShare}
-                      className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md disabled:opacity-50"
-                    >
-                      {isSavingFeeShare || isUpdatingFeeShare
-                        ? "Saving..."
-                        : "Save"}
-                    </button>
-                  </div>
-                </form>
-              </div>
-            </div>
-          </div>
-        )}
-        {/* Edit Treasury Address Modal */}
-        {isEditTreasuryModalOpen && (
-          <div className="fixed inset-0 z-50">
-            <div
-              className="fixed inset-0 bg-black/30 backdrop-blur-md"
-              aria-hidden="true"
-            />
-            <div className="fixed inset-0 flex items-center justify-center p-4">
-              <div className="mx-auto max-w-2xl w-full bg-white/90 rounded-xl shadow-xl border border-gray-100 flex flex-col p-6">
-                <h2 className="text-lg font-medium mb-4">
-                  Edit Treasury Address
-                </h2>
-                <form
-                  onSubmit={(e) => {
-                    e.preventDefault();
-                    handleSaveTreasury();
-                  }}
-                  className="space-y-4"
-                >
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Treasury Address
-                    </label>
-                    <input
-                      type="text"
-                      value={treasuryAddress}
-                      onChange={(e) => setTreasuryAddress(e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                      placeholder="0x..."
-                      required
-                    />
-                  </div>
-                  {treasuryError && (
-                    <div className="text-red-600 text-sm">{treasuryError}</div>
-                  )}
-                  <div className="flex justify-end gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setIsEditTreasuryModalOpen(false)}
-                      className="px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 rounded-md"
-                      disabled={isSavingTreasury}
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="submit"
-                      disabled={isSavingTreasury || isUpdatingTreasury}
-                      className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md disabled:opacity-50"
-                    >
-                      {isSavingTreasury || isUpdatingTreasury
-                        ? "Saving..."
-                        : "Save"}
-                    </button>
-                  </div>
-                </form>
-              </div>
-            </div>
-          </div>
-        )}
       </div>
+
+      {/* Edit Fee Share Modal */}
+      {isEditFeeShareModalOpen && (
+        <div className="fixed inset-0 z-50">
+          <div
+            className="fixed inset-0 bg-black/30 backdrop-blur-md"
+            aria-hidden="true"
+          />
+          <div className="fixed inset-0 flex items-center justify-center p-4">
+            <div className="mx-auto max-w-2xl w-full bg-white/90 rounded-xl shadow-xl border border-gray-100 flex flex-col p-6">
+              <h2 className="text-lg font-medium mb-4">
+                Edit Platform Fee Share
+              </h2>
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  handleSaveFeeShare();
+                }}
+                className="space-y-4"
+              >
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Platform Fee Share (basis points)
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={feeShare}
+                    onChange={(e) =>
+                      setFeeShare(
+                        e.target.value === "" ? "" : Number(e.target.value)
+                      )
+                    }
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                    placeholder="Enter fee share in basis points"
+                    required
+                  />
+                </div>
+                {feeShareError && (
+                  <div className="text-red-600 text-sm">{feeShareError}</div>
+                )}
+                <div className="flex justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsEditFeeShareModalOpen(false)}
+                    className="px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 rounded-md"
+                    disabled={isSavingFeeShare}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isSavingFeeShare || isUpdatingFeeShare}
+                    className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md disabled:opacity-50"
+                  >
+                    {isSavingFeeShare || isUpdatingFeeShare
+                      ? "Saving..."
+                      : "Save"}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Edit Treasury Address Modal */}
+      {isEditTreasuryModalOpen && (
+        <div className="fixed inset-0 z-50">
+          <div
+            className="fixed inset-0 bg-black/30 backdrop-blur-md"
+            aria-hidden="true"
+          />
+          <div className="fixed inset-0 flex items-center justify-center p-4">
+            <div className="mx-auto max-w-2xl w-full bg-white/90 rounded-xl shadow-xl border border-gray-100 flex flex-col p-6">
+              <h2 className="text-lg font-medium mb-4">
+                Edit Treasury Address
+              </h2>
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  handleSaveTreasury();
+                }}
+                className="space-y-4"
+              >
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Treasury Address
+                  </label>
+                  <input
+                    type="text"
+                    value={treasuryAddress}
+                    onChange={(e) => setTreasuryAddress(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                    placeholder="0x..."
+                    required
+                  />
+                </div>
+                {treasuryError && (
+                  <div className="text-red-600 text-sm">{treasuryError}</div>
+                )}
+                <div className="flex justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsEditTreasuryModalOpen(false)}
+                    className="px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 rounded-md"
+                    disabled={isSavingTreasury}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isSavingTreasury || isUpdatingTreasury}
+                    className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md disabled:opacity-50"
+                  >
+                    {isSavingTreasury || isUpdatingTreasury
+                      ? "Saving..."
+                      : "Save"}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -265,7 +265,7 @@ export default function MyCampaigns() {
 
   if (!isHydrated) {
     return (
-      <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white pt-32 pb-20">
+      <div className="min-h-screen pt-32 pb-20">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center">Loading...</div>
         </div>
@@ -275,7 +275,7 @@ export default function MyCampaigns() {
 
   if (!address) {
     return (
-      <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white pt-32 pb-20">
+      <div className="min-h-screen pt-32 pb-20">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center">
             <p className="text-base font-semibold text-blue-600">
@@ -292,7 +292,7 @@ export default function MyCampaigns() {
 
   if (isLoadingCampaigns) {
     return (
-      <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white pt-32 pb-20">
+      <div className="min-h-screen pt-32 pb-20">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center">
             <p className="text-base font-semibold text-blue-600">Loading</p>
@@ -307,7 +307,7 @@ export default function MyCampaigns() {
 
   if (processedCampaigns.length === 0) {
     return (
-      <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white pt-32 pb-20">
+      <div className="min-h-screen pt-32 pb-20">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center">
             <h1 className="text-3xl font-bold tracking-tight text-gray-900 sm:text-4xl">
@@ -347,7 +347,7 @@ export default function MyCampaigns() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white pt-32 pb-20">
+    <div className="min-h-screen pt-32 pb-20">
       <div className="container mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-start mb-8">
           <div className="flex items-center gap-4">
@@ -370,7 +370,7 @@ export default function MyCampaigns() {
                 className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
                   statusFilter === status
                     ? "bg-blue-600 text-white"
-                    : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                    : "bg-gray-100/80 backdrop-blur-sm text-gray-600 hover:bg-gray-200/80"
                 }`}
               >
                 {status}
@@ -384,7 +384,7 @@ export default function MyCampaigns() {
             <div key={campaign.id} className="relative">
               {campaign.canClaimFunds && (
                 <div className="absolute top-2 right-2 z-10">
-                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100/80 backdrop-blur-sm text-green-800">
                     Ready to Claim
                   </span>
                 </div>

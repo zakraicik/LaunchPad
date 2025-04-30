@@ -232,7 +232,7 @@ export default function UserContributions() {
   // Return placeholder during server-side rendering
   if (!isHydrated) {
     return (
-      <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white pt-32 pb-20">
+      <div className="min-h-screen pt-32 pb-20">
         <div className="container mx-auto px-4">
           <div className="text-center">Loading...</div>
         </div>
@@ -242,7 +242,7 @@ export default function UserContributions() {
 
   if (!isConnected) {
     return (
-      <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white pt-32 pb-20">
+      <div className="min-h-screen pt-32 pb-20">
         <div className="container mx-auto px-4">
           <div className="text-center">
             Please connect your wallet to view your contributions
@@ -254,7 +254,7 @@ export default function UserContributions() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white pt-32 pb-20">
+      <div className="min-h-screen pt-32 pb-20">
         <div className="container mx-auto px-4">
           <div className="text-center">Loading your contributions...</div>
         </div>
@@ -263,43 +263,25 @@ export default function UserContributions() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white pt-32 pb-20">
+    <div className="min-h-screen pt-32 pb-20">
       <div className="container mx-auto px-4">
         {contributionEvents.length > 0 ? (
           <>
             <div className="mb-6">
-              <div className="flex flex-col space-y-4 sm:space-y-0 sm:flex-row sm:items-start sm:justify-between mb-6">
-                <div className="flex items-center gap-4">
-                  <WalletIcon className="h-8 w-8 text-blue-600" />
-                  <div>
-                    <h1 className="text-2xl font-bold text-gray-900">
-                      Your Contributions
-                    </h1>
-                    <p className="mt-1 text-sm text-gray-500">
-                      Track your campaign contributions
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex flex-wrap gap-2">
-                  {getAvailableStatuses().map((status) => (
-                    <button
-                      key={status}
-                      onClick={() => setStatusFilter(status)}
-                      className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
-                        statusFilter === status
-                          ? "bg-blue-600 text-white"
-                          : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-                      }`}
-                    >
-                      {status}
-                    </button>
-                  ))}
+              <div className="flex items-center gap-4 mb-6">
+                <WalletIcon className="h-8 w-8 text-blue-600" />
+                <div>
+                  <h1 className="text-2xl font-bold text-gray-900">
+                    Your Contributions
+                  </h1>
+                  <p className="mt-1 text-sm text-gray-500">
+                    Track your campaign contributions
+                  </p>
                 </div>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                <div className="bg-white rounded-lg shadow-sm p-6">
+                <div className="bg-white/80 backdrop-blur-sm rounded-lg shadow-sm p-6">
                   <dt className="text-sm font-medium text-gray-500">
                     Total Contributions
                   </dt>
@@ -308,7 +290,7 @@ export default function UserContributions() {
                   </dd>
                 </div>
 
-                <div className="bg-white rounded-lg shadow-sm p-6">
+                <div className="bg-white/80 backdrop-blur-sm rounded-lg shadow-sm p-6">
                   <dt className="text-sm font-medium text-gray-500">
                     Unique Campaigns
                   </dt>
@@ -317,7 +299,7 @@ export default function UserContributions() {
                   </dd>
                 </div>
 
-                <div className="bg-white rounded-lg shadow-sm p-6">
+                <div className="bg-white/80 backdrop-blur-sm rounded-lg shadow-sm p-6">
                   <dt className="text-sm font-medium text-gray-500">
                     Contributions by Token
                   </dt>
@@ -337,7 +319,7 @@ export default function UserContributions() {
               </div>
             </div>
 
-            <div className="bg-white rounded-lg shadow-sm p-6">
+            <div className="bg-white/80 backdrop-blur-sm rounded-lg shadow-sm p-6">
               <div className="flow-root">
                 <ul role="list" className="-mb-8">
                   {filterContributions(contributionEvents).map((event) => {
