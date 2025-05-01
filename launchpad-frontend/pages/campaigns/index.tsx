@@ -230,7 +230,6 @@ export default function CampaignsDiscovery() {
                 key={campaign.id}
                 campaign={campaign}
                 onClick={() => handleCampaignClick(campaign.id)}
-                containerClassName="bg-white/50 backdrop-blur-md shadow-[0_0_10px_rgba(191,219,254,0.2)]"
               />
             ))}
           </div>
@@ -254,15 +253,17 @@ export default function CampaignsDiscovery() {
 
         {/* SpeedDial */}
         {isHydrated && (
-          <SpeedDialSimple
-            mainAction={{
-              icon: <PlusIcon className="h-6 w-6" />,
-              label: "Create Campaign",
-              onClick: () => setIsCreateModalOpen(true),
-              disabled: !isConnected,
-              disabledTooltip: "Connect wallet to create campaign",
-            }}
-          />
+          <div className="fixed bottom-8 right-8 z-[100]">
+            <SpeedDialSimple
+              mainAction={{
+                icon: <PlusIcon className="h-8 w-8" />,
+                label: "Create Campaign",
+                onClick: () => setIsCreateModalOpen(true),
+                disabled: !isConnected,
+                disabledTooltip: "Connect wallet to create campaign",
+              }}
+            />
+          </div>
         )}
       </div>
     </div>

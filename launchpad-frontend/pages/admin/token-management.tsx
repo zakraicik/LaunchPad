@@ -26,6 +26,7 @@ import { useHydration } from "@/pages/_app";
 import { formatDistanceToNow, isValid } from "date-fns";
 import { Timestamp } from "firebase/firestore";
 import { XMarkIcon, ArrowPathIcon } from "@heroicons/react/24/outline";
+import SpeedDialSimple from "../../components/SpeedDialSimple";
 
 interface TokenInfo {
   address: string;
@@ -397,15 +398,6 @@ export default function TokenManagement() {
     <div className="container mx-auto px-4 py-8 mt-20 min-h-[calc(100vh-80px)]">
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold">Token Management</h1>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setIsAddModalOpen(true)}
-            className="bg-blue-600 text-white p-2 md:px-4 md:py-2 rounded-lg flex items-center gap-2"
-          >
-            <PlusIcon className="h-5 w-5" />
-            <span className="hidden md:inline">Add Token</span>
-          </button>
-        </div>
       </div>
 
       {/* Card Grid Layout */}
@@ -594,22 +586,31 @@ export default function TokenManagement() {
             <p className="text-gray-600 mb-6">
               Add your first token to get started!
             </p>
-            <button
-              onClick={() => setIsAddModalOpen(true)}
-              className="bg-blue-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 mx-auto"
-            >
-              <PlusIcon className="h-5 w-5" />
-              Add Token
-            </button>
           </div>
         )}
       </div>
+
+      {/* SpeedDial */}
+      {isHydrated && (
+        <div className="fixed bottom-8 right-8 z-[100]">
+          <SpeedDialSimple
+            mainAction={{
+              icon: <PlusIcon className="h-8 w-8" />,
+              label: "Add Token",
+              onClick: () => setIsAddModalOpen(true),
+              disabled: !isAdmin,
+              disabledTooltip: "Only admins can add tokens",
+            }}
+            variant="purple"
+          />
+        </div>
+      )}
 
       {/* Edit Modal */}
       {isEditModalOpen && (
         <div className="fixed inset-0 z-50">
           <div
-            className="fixed inset-0 bg-black/30 backdrop-blur-md"
+            className="fixed inset-0 bg-white/30 backdrop-blur-md"
             aria-hidden="true"
           />
           <div className="fixed inset-0 flex items-center justify-center p-4">
@@ -650,7 +651,7 @@ export default function TokenManagement() {
       {isAddModalOpen && (
         <div className="fixed inset-0 z-50">
           <div
-            className="fixed inset-0 bg-black/30 backdrop-blur-md"
+            className="fixed inset-0 bg-white/30 backdrop-blur-md"
             aria-hidden="true"
           />
           <div className="fixed inset-0 flex items-center justify-center p-4">
@@ -728,7 +729,7 @@ export default function TokenManagement() {
       {isRemoveModalOpen && (
         <div className="fixed inset-0 z-50">
           <div
-            className="fixed inset-0 bg-black/30 backdrop-blur-md"
+            className="fixed inset-0 bg-white/30 backdrop-blur-md"
             aria-hidden="true"
           />
           <div className="fixed inset-0 flex items-center justify-center p-4">
@@ -767,7 +768,7 @@ export default function TokenManagement() {
       {isMinAmountModalOpen && (
         <div className="fixed inset-0 z-50">
           <div
-            className="fixed inset-0 bg-black/30 backdrop-blur-md"
+            className="fixed inset-0 bg-white/30 backdrop-blur-md"
             aria-hidden="true"
           />
           <div className="fixed inset-0 flex items-center justify-center p-4">

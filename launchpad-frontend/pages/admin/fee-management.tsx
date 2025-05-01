@@ -211,13 +211,6 @@ export default function FeeManagement() {
             </p>
           </div>
         </div>
-        <button
-          onClick={() => refetch()}
-          className="text-blue-600 hover:text-blue-800 flex items-center gap-2"
-        >
-          <ArrowPathIcon className="h-5 w-5" />
-          Refresh
-        </button>
       </div>
 
       <div className="bg-white/10 backdrop-blur-md rounded-lg shadow-sm shadow-[0_0_10px_rgba(191,219,254,0.2)]">
@@ -365,7 +358,7 @@ export default function FeeManagement() {
       {isEditFeeShareModalOpen && (
         <div className="fixed inset-0 z-50">
           <div
-            className="fixed inset-0 bg-black/30 backdrop-blur-md"
+            className="fixed inset-0 bg-white/30 backdrop-blur-md"
             aria-hidden="true"
           />
           <div className="fixed inset-0 flex items-center justify-center p-4">
@@ -429,7 +422,7 @@ export default function FeeManagement() {
       {isEditTreasuryModalOpen && (
         <div className="fixed inset-0 z-50">
           <div
-            className="fixed inset-0 bg-black/30 backdrop-blur-md"
+            className="fixed inset-0 bg-white/30 backdrop-blur-md"
             aria-hidden="true"
           />
           <div className="fixed inset-0 flex items-center justify-center p-4">

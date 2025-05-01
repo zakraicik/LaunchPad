@@ -400,13 +400,15 @@ export default function MyCampaigns() {
 
       {/* SpeedDial */}
       {isHydrated && (
-        <SpeedDialSimple
-          mainAction={{
-            icon: <PlusIcon className="h-6 w-6" />,
-            label: "Create Campaign",
-            onClick: () => setIsCreateModalOpen(true),
-          }}
-        />
+        <div className="fixed bottom-8 right-8 z-[100]">
+          <SpeedDialSimple
+            mainAction={{
+              icon: <PlusIcon className="h-8 w-8" />,
+              label: "Create Campaign",
+              onClick: () => setIsCreateModalOpen(true),
+            }}
+          />
+        </div>
       )}
 
       {/* Create Campaign Modal */}

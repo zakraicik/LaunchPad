@@ -13,6 +13,7 @@ import { formatDistanceToNow, isValid } from "date-fns";
 import { Timestamp } from "firebase/firestore";
 import toast from "react-hot-toast";
 import { useHydration } from "@/pages/_app";
+import SpeedDialSimple from "../../components/SpeedDialSimple";
 
 export default function PlatformAdmins() {
   const { isHydrated } = useHydration();
@@ -126,78 +127,9 @@ export default function PlatformAdmins() {
     <div className="container mx-auto px-4 py-8 mt-20 min-h-[calc(100vh-80px)]">
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold">Platform Administrators</h1>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setIsModalOpen(true)}
-            className="bg-blue-600 text-white p-2 md:px-4 md:py-2 rounded-lg flex items-center gap-2"
-          >
-            <PlusIcon className="h-5 w-5" />
-            <span className="hidden md:inline">Add Admin</span>
-          </button>
-        </div>
       </div>
 
-      {/* Add Admin Modal */}
-      {isModalOpen && (
-        <div className="fixed inset-0 z-50">
-          <div
-            className="fixed inset-0 bg-black/30 backdrop-blur-md"
-            aria-hidden="true"
-          />
-          <div className="fixed inset-0 flex items-center justify-center p-4">
-            <div className="mx-auto max-w-2xl w-full bg-white/70 backdrop-blur-sm rounded-lg shadow-lg border border-gray-100 flex flex-col p-6">
-              <div className="flex justify-between items-center mb-4">
-                <h2 className="text-xl font-semibold">Add New Admin</h2>
-                <button
-                  onClick={() => setIsModalOpen(false)}
-                  className="text-gray-500 hover:text-gray-700"
-                >
-                  <XMarkIcon className="h-6 w-6" />
-                </button>
-              </div>
-              <form onSubmit={handleAddAdmin} className="space-y-4">
-                <div>
-                  <label
-                    htmlFor="adminAddress"
-                    className="block text-sm font-medium text-gray-700 mb-1"
-                  >
-                    Admin Address
-                  </label>
-                  <input
-                    type="text"
-                    id="adminAddress"
-                    value={newAdminAddress}
-                    onChange={(e) => setNewAdminAddress(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="0x..."
-                    required
-                  />
-                </div>
-                {addError && (
-                  <div className="text-red-600 text-sm">{addError}</div>
-                )}
-                <div className="flex justify-end gap-3">
-                  <button
-                    type="button"
-                    onClick={() => setIsModalOpen(false)}
-                    className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-md"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={isAdding}
-                    className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
-                  >
-                    {isAdding ? "Adding..." : "Add Admin"}
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
-        </div>
-      )}
-
+      {/* Card Grid Layout */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {admins.map((admin) => (
           <div
@@ -264,13 +196,84 @@ export default function PlatformAdmins() {
             <p className="text-gray-600 mb-6">
               Add your first platform administrator to get started!
             </p>
-            <button className="bg-blue-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 mx-auto">
-              <PlusIcon className="h-5 w-5" />
-              Add Admin
-            </button>
           </div>
         )}
       </div>
+
+      {/* SpeedDial */}
+      {isHydrated && (
+        <div className="fixed bottom-8 right-8 z-[100]">
+          <SpeedDialSimple
+            mainAction={{
+              icon: <PlusIcon className="h-8 w-8" />,
+              label: "Add Admin",
+              onClick: () => setIsModalOpen(true),
+            }}
+            variant="purple"
+          />
+        </div>
+      )}
+
+      {/* Add Admin Modal */}
+      {isModalOpen && (
+        <div className="fixed inset-0 z-50">
+          <div
+            className="fixed inset-0 bg-white/30 backdrop-blur-md"
+            aria-hidden="true"
+          />
+          <div className="fixed inset-0 flex items-center justify-center p-4">
+            <div className="mx-auto max-w-2xl w-full bg-white/70 backdrop-blur-sm rounded-lg shadow-lg border border-gray-100 flex flex-col p-6">
+              <div className="flex justify-between items-center mb-4">
+                <h2 className="text-xl font-semibold">Add New Admin</h2>
+                <button
+                  onClick={() => setIsModalOpen(false)}
+                  className="text-gray-500 hover:text-gray-700"
+                >
+                  <XMarkIcon className="h-6 w-6" />
+                </button>
+              </div>
+              <form onSubmit={handleAddAdmin} className="space-y-4">
+                <div>
+                  <label
+                    htmlFor="adminAddress"
+                    className="block text-sm font-medium text-gray-700 mb-1"
+                  >
+                    Admin Address
+                  </label>
+                  <input
+                    type="text"
+                    id="adminAddress"
+                    value={newAdminAddress}
+                    onChange={(e) => setNewAdminAddress(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="0x..."
+                    required
+                  />
+                </div>
+                {addError && (
+                  <div className="text-red-600 text-sm">{addError}</div>
+                )}
+                <div className="flex justify-end gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setIsModalOpen(false)}
+                    className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-md"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isAdding}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
+                  >
+                    {isAdding ? "Adding..." : "Add Admin"}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

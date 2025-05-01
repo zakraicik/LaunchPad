@@ -488,9 +488,16 @@ export default function CampaignDetail() {
       isCampaignEnded() &&
       !isSuccessful() &&
       !hasBeenRefunded &&
-      hasClaimed === true &&
       canInteractWithCampaign()
     );
+  };
+
+  const isRefundWaitingForOwnerClaim = (): boolean => {
+    return canRequestRefundToday() && !hasClaimed;
+  };
+
+  const isRefundEnabled = (): boolean => {
+    return canRequestRefundToday() && hasClaimed;
   };
 
   // Add share handler
@@ -799,39 +806,42 @@ export default function CampaignDetail() {
 
         {/* SpeedDial */}
         {campaign && (
-          <SpeedDial
-            canContribute={canContributeToday()}
-            canRequestRefund={canRequestRefundToday()}
-            canClaimFunds={canClaimFundsToday()}
-            onContribute={() => {
-              setIsOpen(true);
-            }}
-            onRequestRefund={handleRequestRefund}
-            onClaimFunds={handleClaimFunds}
-            onShare={handleShare}
-            isContributing={isContributing}
-            isRequestingRefund={isRequestingRefund}
-            isClaiming={isClaiming}
-            // Admin props
-            isAdmin={isHydrated && isAdmin && !isLoadingAdmin}
-            isAuthorized={isAuthorized}
-            isDeauthorizing={isDeauthorizing}
-            adminOverrideEnabled={adminOverrideEnabled}
-            isSettingOverride={isSettingOverride}
-            onDeauthorize={handleAdminAction}
-            onToggleOverride={async () => {
-              if (!campaign?.campaignAddress || isSettingOverride) return;
-              try {
-                await setAdminOverride(
-                  campaign.campaignAddress,
-                  !adminOverrideEnabled
-                );
-                setAdminOverrideEnabled(!adminOverrideEnabled);
-              } catch (error) {
-                // Error handling is done in the hook
-              }
-            }}
-          />
+          <div className="fixed bottom-8 right-8 z-[100]">
+            <SpeedDial
+              canContribute={canContributeToday()}
+              canRequestRefund={canRequestRefundToday()}
+              canClaimFunds={canClaimFundsToday()}
+              onContribute={() => {
+                setIsOpen(true);
+              }}
+              onRequestRefund={handleRequestRefund}
+              onClaimFunds={handleClaimFunds}
+              onShare={handleShare}
+              isContributing={isContributing}
+              isRequestingRefund={isRequestingRefund}
+              isClaiming={isClaiming}
+              isRefundWaitingForOwnerClaim={isRefundWaitingForOwnerClaim()}
+              // Admin props
+              isAdmin={isHydrated && isAdmin && !isLoadingAdmin}
+              isAuthorized={isAuthorized}
+              isDeauthorizing={isDeauthorizing}
+              adminOverrideEnabled={adminOverrideEnabled}
+              isSettingOverride={isSettingOverride}
+              onDeauthorize={handleAdminAction}
+              onToggleOverride={async () => {
+                if (!campaign?.campaignAddress || isSettingOverride) return;
+                try {
+                  await setAdminOverride(
+                    campaign.campaignAddress,
+                    !adminOverrideEnabled
+                  );
+                  setAdminOverrideEnabled(!adminOverrideEnabled);
+                } catch (error) {
+                  // Error handling is done in the hook
+                }
+              }}
+            />
+          </div>
         )}
       </div>
     </div>

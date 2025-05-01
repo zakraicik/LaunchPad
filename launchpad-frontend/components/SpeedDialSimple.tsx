@@ -2,20 +2,36 @@ import { Fragment, useState, useEffect, useRef } from "react";
 
 // Update animation classes
 const pulseAnimation = `
-@keyframes pulse {
+@keyframes pulse-blue {
   0% {
-    box-shadow: 0 0 0 0 rgba(22, 163, 74, 0.4);
+    box-shadow: 0 0 0 0 rgba(37, 99, 235, 0.4);
   }
   70% {
-    box-shadow: 0 0 0 10px rgba(22, 163, 74, 0);
+    box-shadow: 0 0 0 10px rgba(37, 99, 235, 0);
   }
   100% {
-    box-shadow: 0 0 0 0 rgba(22, 163, 74, 0);
+    box-shadow: 0 0 0 0 rgba(37, 99, 235, 0);
   }
 }
 
-.pulse {
-  animation: pulse 2s infinite;
+@keyframes pulse-purple {
+  0% {
+    box-shadow: 0 0 0 0 rgba(147, 51, 234, 0.4);
+  }
+  70% {
+    box-shadow: 0 0 0 10px rgba(147, 51, 234, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(147, 51, 234, 0);
+  }
+}
+
+.pulse-blue {
+  animation: pulse-blue 2s infinite;
+}
+
+.pulse-purple {
+  animation: pulse-purple 2s infinite;
 }
 `;
 
@@ -27,17 +43,26 @@ interface SpeedDialProps {
     disabled?: boolean;
     disabledTooltip?: string;
   };
+  variant?: "blue" | "purple";
 }
 
-export default function SpeedDialSimple({ mainAction }: SpeedDialProps) {
+export default function SpeedDialSimple({
+  mainAction,
+  variant = "blue",
+}: SpeedDialProps) {
+  const baseColors =
+    variant === "purple"
+      ? "bg-purple-600 hover:bg-purple-700"
+      : "bg-blue-600 hover:bg-blue-700";
+
   return (
     <>
       <style>{pulseAnimation}</style>
-      <div className="fixed bottom-6 right-6 z-20">
+      <div className="fixed bottom-8 right-8 z-[100]">
         <button
           onClick={mainAction.onClick}
           disabled={mainAction.disabled}
-          className="bg-blue-600 hover:bg-blue-700 text-white p-3 rounded-full shadow-lg hover:shadow-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed relative group"
+          className={`${baseColors} text-white p-3 rounded-full shadow-lg hover:shadow-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed relative group pulse-${variant}`}
           title={
             mainAction.disabled ? mainAction.disabledTooltip : mainAction.label
           }

@@ -89,30 +89,30 @@ export default function CampaignCard({
   return (
     <div
       onClick={onClick}
-      className={`relative z-10 bg-white/80 backdrop-blur-sm rounded-lg p-6 cursor-pointer transition-all duration-200 hover:shadow-lg border border-gray-100 ${containerClassName}`}
+      className={`relative z-10 bg-white/10 backdrop-blur-sm rounded-lg cursor-pointer transition-all duration-200 shadow-[0_0_10px_rgba(191,219,254,0.2)] hover:shadow-[0_0_15px_rgba(191,219,254,0.3)] hover:scale-[1.02] border border-gray-100 h-[280px] ${containerClassName}`}
     >
-      <div className="p-3 flex flex-col flex-grow">
-        <div className="flex justify-between items-start mb-1.5">
-          <h3 className="text-lg font-semibold bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent line-clamp-1">
+      <div className="p-5 flex flex-col h-full">
+        <div className="flex justify-between items-start mb-2">
+          <h3 className="text-lg font-semibold bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent line-clamp-1 flex-1 mr-3">
             {campaign.title}
           </h3>
           <div className="flex items-center gap-1.5 flex-shrink-0">
-            <div className="bg-gradient-to-r from-blue-500 to-blue-600 text-white px-2 py-0.5 rounded-full text-xs font-medium">
+            <div className="bg-gradient-to-r from-blue-500 to-blue-600 text-white px-2 py-0.5 rounded-full text-xs font-medium whitespace-nowrap">
               {campaign.category}
             </div>
             {token && (
-              <div className="bg-gradient-to-r from-gray-100 to-gray-200 text-gray-700 px-2 py-0.5 rounded-full text-xs font-medium">
+              <div className="bg-gradient-to-r from-gray-100 to-gray-200 text-gray-700 px-2 py-0.5 rounded-full text-xs font-medium whitespace-nowrap">
                 {token.symbol}
               </div>
             )}
           </div>
         </div>
 
-        <p className="text-gray-600 text-sm mb-2 flex-shrink-0">
-          {truncateDescription(campaign.description)}
+        <p className="text-gray-600 text-sm mb-2 line-clamp-2 flex-shrink-0">
+          {campaign.description}
         </p>
 
-        <div className="space-y-2 mt-auto">
+        <div className="space-y-2.5 mt-auto">
           <div>
             <div className="flex justify-between text-sm mb-1">
               <span className="text-gray-600">Progress</span>
@@ -128,24 +128,24 @@ export default function CampaignCard({
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3 text-sm">
+          <div className="grid grid-cols-2 gap-2 text-sm">
             <div>
-              <span className="text-gray-600">Raised</span>
+              <span className="text-gray-600 block">Raised</span>
               <p className="font-medium bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent truncate">
                 {formatAmount(campaign.totalContributions)} {token?.symbol}
               </p>
             </div>
             <div>
-              <span className="text-gray-600">Target</span>
+              <span className="text-gray-600 block">Target</span>
               <p className="font-medium bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent truncate">
                 {formatAmount(campaign.goalAmountSmallestUnits)} {token?.symbol}
               </p>
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3 text-sm">
+          <div className="grid grid-cols-2 gap-2 text-sm">
             <div>
-              <span className="text-gray-600">Backers</span>
+              <span className="text-gray-600 block">Backers</span>
               <p className="font-medium bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent">
                 {campaign.contributors || 0}
               </p>
@@ -161,7 +161,7 @@ export default function CampaignCard({
                 </div>
               ) : (
                 <>
-                  <span className="text-gray-600">Time Left</span>
+                  <span className="text-gray-600 block">Time Left</span>
                   <p className="font-medium bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent">
                     {timeLeft}
                   </p>
