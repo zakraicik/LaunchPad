@@ -281,7 +281,7 @@ export default function UserContributions() {
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                <div className="bg-white/80 backdrop-blur-sm rounded-lg shadow-sm p-6">
+                <div className="bg-white/20 backdrop-blur-sm rounded-lg shadow-sm p-6">
                   <dt className="text-sm font-medium text-gray-500">
                     Total Contributions
                   </dt>
@@ -290,7 +290,7 @@ export default function UserContributions() {
                   </dd>
                 </div>
 
-                <div className="bg-white/80 backdrop-blur-sm rounded-lg shadow-sm p-6">
+                <div className="bg-white/20 backdrop-blur-sm rounded-lg shadow-sm p-6">
                   <dt className="text-sm font-medium text-gray-500">
                     Unique Campaigns
                   </dt>
@@ -299,7 +299,7 @@ export default function UserContributions() {
                   </dd>
                 </div>
 
-                <div className="bg-white/80 backdrop-blur-sm rounded-lg shadow-sm p-6">
+                <div className="bg-white/20 backdrop-blur-sm rounded-lg shadow-sm p-6">
                   <dt className="text-sm font-medium text-gray-500">
                     Contributions by Token
                   </dt>
@@ -319,7 +319,7 @@ export default function UserContributions() {
               </div>
             </div>
 
-            <div className="bg-white/80 backdrop-blur-sm rounded-lg shadow-sm p-6">
+            <div className="bg-white/20 backdrop-blur-sm rounded-lg shadow-sm p-6">
               <div className="flow-root">
                 <ul role="list" className="-mb-8">
                   {filterContributions(contributionEvents).map((event) => {

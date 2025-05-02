@@ -18,7 +18,7 @@ const categories = [
     icon: CurrencyDollarIcon,
     description:
       "Lending protocols, DEXs, yield optimization, insurance protocols",
-    color: "bg-blue-50",
+
     textColor: "text-blue-600",
   },
   {
@@ -26,7 +26,7 @@ const categories = [
     icon: WrenchScrewdriverIcon,
     description:
       "Layer 1/2 solutions, developer tools, oracles, security solutions",
-    color: "bg-blue-50",
+
     textColor: "text-blue-600",
   },
   {
@@ -34,7 +34,7 @@ const categories = [
     icon: UserGroupIcon,
     description:
       "Community organizations, protocol governance, investment DAOs, coordination tools",
-    color: "bg-blue-50",
+
     textColor: "text-blue-600",
   },
   {
@@ -42,7 +42,7 @@ const categories = [
     icon: PhotoIcon,
     description:
       "Marketplaces, creator platforms, metaverse assets, gaming assets",
-    color: "bg-blue-50",
+
     textColor: "text-blue-600",
   },
   {
@@ -50,7 +50,7 @@ const categories = [
     icon: RocketLaunchIcon,
     description:
       "Play-to-earn, virtual worlds, gaming guilds, gaming infrastructure",
-    color: "bg-blue-50",
+
     textColor: "text-blue-600",
   },
   {
@@ -58,7 +58,7 @@ const categories = [
     icon: FingerPrintIcon,
     description:
       "Decentralized identity, social platforms, reputation systems, privacy tools",
-    color: "bg-blue-50",
+
     textColor: "text-blue-600",
   },
   {
@@ -66,7 +66,7 @@ const categories = [
     icon: BuildingLibraryIcon,
     description:
       "Tokenized real estate, carbon credits, commodities, securities",
-    color: "bg-blue-50",
+
     textColor: "text-blue-600",
   },
   {
@@ -74,7 +74,7 @@ const categories = [
     icon: GlobeAmericasIcon,
     description:
       "Protocol research, open-source infrastructure, education initiatives",
-    color: "bg-blue-50",
+
     textColor: "text-blue-600",
   },
   {
@@ -82,26 +82,26 @@ const categories = [
     icon: SunIcon,
     description:
       "Regenerative finance (ReFi), climate tech, impact measurement, green crypto",
-    color: "bg-blue-50",
+
     textColor: "text-blue-600",
   },
   {
     name: "Enterprise",
     icon: BuildingOfficeIcon,
     description: "Enterprise and institutional blockchain solutions",
-    color: "bg-blue-50",
+
     textColor: "text-blue-600",
   },
 ];
 
 export default function CampaignCategories() {
   return (
-    <section className="py-12 bg-white/0">
+    <section className="py-12 bg-white/10">
       <div className="container mx-auto px-4">
         <h2 className="text-3xl font-bold mb-8 text-center">
-          Campaign Categories
+          Every Block in the Chain: Find Your Category
         </h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 sm:gap-4">
           {categories.map((category) => (
             <Link
               key={category.name}
@@ -109,16 +109,16 @@ export default function CampaignCategories() {
               className="relative group cursor-pointer h-full"
             >
               <div
-                className={`p-4 rounded-lg ${category.color} border border-gray-100 transition-all duration-300 hover:scale-105 hover:shadow-md h-full flex flex-col`}
+                className={`p-4 rounded-lg bg-white/10 backdrop-blur-md shadow-[0_0_10px_rgba(191,219,254,0.2)] hover:shadow-[0_0_15px_rgba(191,219,254,0.3)] border border-gray-100 transition-all duration-300 hover:scale-105 h-full flex flex-col`}
               >
                 <div className="flex flex-col items-center text-center flex-grow">
                   <category.icon
-                    className={`w-8 h-8 ${category.textColor} mb-3`}
+                    className={`w-8 h-8 ${category.textColor} mb-2`}
                   />
-                  <h3 className="text-lg font-semibold mb-1 text-gray-900">
+                  <h3 className="text-base sm:text-lg font-semibold mb-1 text-gray-900">
                     {category.name}
                   </h3>
-                  <p className="text-sm text-gray-600">
+                  <p className="text-xs sm:text-sm text-gray-600">
                     {category.description}
                   </p>
                 </div>

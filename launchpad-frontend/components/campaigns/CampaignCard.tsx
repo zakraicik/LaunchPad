@@ -89,7 +89,7 @@ export default function CampaignCard({
   return (
     <div
       onClick={onClick}
-      className={`relative z-10 bg-white/10 backdrop-blur-sm rounded-lg cursor-pointer transition-all duration-200 shadow-[0_0_10px_rgba(191,219,254,0.2)] hover:shadow-[0_0_15px_rgba(191,219,254,0.3)] hover:scale-[1.02] border border-gray-100 h-[280px] ${containerClassName}`}
+      className={`relative z-10 bg-white/10 backdrop-blur-md rounded-lg cursor-pointer transition-all duration-200 shadow-[0_0_10px_rgba(191,219,254,0.2)] hover:shadow-[0_0_15px_rgba(191,219,254,0.3)] hover:scale-[1.02] border border-gray-100 h-[280px] ${containerClassName}`}
     >
       <div className="p-5 flex flex-col h-full">
         <div className="flex justify-between items-start mb-2">

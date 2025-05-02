@@ -1,4 +1,5 @@
 import { EnvelopeIcon } from "@heroicons/react/24/outline";
+import Link from "next/link";
 
 export default function Footer() {
   return (
@@ -15,8 +16,13 @@ export default function Footer() {
               hi@getlaunched.xyz
             </a>
           </div>
-          <div className="text-sm text-gray-400 text-center sm:text-left">
-            © {new Date().getFullYear()} LaunchPad. All rights reserved.
+          <div className="flex flex-col items-center sm:items-end space-y-2">
+            <Link href="/about" className="text-gray-600 hover:text-blue-600">
+              About
+            </Link>
+            <div className="text-sm text-gray-400">
+              © {new Date().getFullYear()} LaunchPad. All rights reserved.
+            </div>
           </div>
         </div>
       </div>

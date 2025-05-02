@@ -1,5 +1,5 @@
 import CampaignCategories from "../components/home/CampaignCategories";
-import HowItWorks from "../components/home/HowItWorks";
+import ValueProposition from "../components/home/ValueProposition";
 import Link from "next/link";
 import { RocketLaunchIcon } from "@heroicons/react/24/outline";
 import { useState } from "react";
@@ -48,17 +48,20 @@ export default function Home() {
             <div className="flex justify-center gap-4">
               <Link
                 href="/campaigns"
-                className="inline-flex items-center px-6 py-3 bg-blue-600 text-white hover:bg-blue-700 rounded-lg font-medium transition-colors"
+                className="inline-flex items-center px-6 py-3 bg-transparent text-blue-600 border-2 border-blue-600 hover:bg-blue-50 rounded-lg font-medium transition-colors"
               >
                 Discover Campaigns
               </Link>
               <button
                 onClick={() => setIsCreateModalOpen(true)}
                 disabled={!isConnected}
-                className="inline-flex items-center px-6 py-3 bg-green-600 text-white hover:bg-green-700 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed group relative"
+                className="inline-flex items-center px-6 py-3 bg-purple-600 text-white hover:bg-purple-700 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed group relative overflow-hidden"
               >
-                <RocketLaunchIcon className="w-5 h-5 mr-2" />
-                Create Campaign
+                <div className="absolute inset-0 bg-gradient-to-r from-purple-500/0 via-purple-500/60 to-purple-500/0 animate-shimmer" />
+                <div className="absolute inset-0 bg-gradient-to-r from-purple-500/0 via-purple-500/40 to-purple-500/0 animate-shimmer [animation-delay:1s]" />
+                <div className="absolute inset-0 bg-gradient-to-r from-purple-500/0 via-purple-500/30 to-purple-500/0 animate-shimmer [animation-delay:2s]" />
+                <RocketLaunchIcon className="w-5 h-5 mr-2 relative z-10" />
+                <span className="relative z-10">Create Campaign</span>
                 {!isConnected && (
                   <span className="absolute -top-10 left-1/2 -translate-x-1/2 bg-gray-800 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
                     Connect wallet to create campaign
@@ -73,8 +76,8 @@ export default function Home() {
       {/* Campaign Categories */}
       <CampaignCategories />
 
-      {/* How It Works */}
-      <HowItWorks />
+      {/* Value Proposition */}
+      <ValueProposition />
 
       {/* Create Campaign Modal */}
       <CreateCampaignModal

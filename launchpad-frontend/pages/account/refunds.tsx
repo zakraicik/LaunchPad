@@ -136,7 +136,7 @@ export default function RefundsPage() {
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                <div className="bg-white/80 backdrop-blur-sm rounded-lg shadow-sm p-6">
+                <div className="bg-white/20 backdrop-blur-sm rounded-lg shadow-sm p-6">
                   <dt className="text-sm font-medium text-gray-500">
                     Total Refunds
                   </dt>
@@ -145,7 +145,7 @@ export default function RefundsPage() {
                   </dd>
                 </div>
 
-                <div className="bg-white/80 backdrop-blur-sm rounded-lg shadow-sm p-6">
+                <div className="bg-white/20 backdrop-blur-sm rounded-lg shadow-sm p-6">
                   <dt className="text-sm font-medium text-gray-500">
                     Unique Campaigns
                   </dt>
@@ -154,7 +154,7 @@ export default function RefundsPage() {
                   </dd>
                 </div>
 
-                <div className="bg-white/80 backdrop-blur-sm rounded-lg shadow-sm p-6">
+                <div className="bg-white/20 backdrop-blur-sm rounded-lg shadow-sm p-6">
                   <dt className="text-sm font-medium text-gray-500">
                     Refunds by Token
                   </dt>
@@ -174,7 +174,7 @@ export default function RefundsPage() {
               </div>
             </div>
 
-            <div className="bg-white/80 backdrop-blur-sm rounded-lg shadow-sm p-6">
+            <div className="bg-white/20 backdrop-blur-sm rounded-lg shadow-sm p-6">
               <div className="flow-root">
                 <ul role="list" className="-mb-8">
                   {refundEvents.map((event) => {

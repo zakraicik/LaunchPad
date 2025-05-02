@@ -34,7 +34,7 @@ export default function Navbar() {
   const navigation = [
     { name: "Home", href: "/" },
     { name: "Discover", href: "/campaigns?category=all" },
-    { name: "About", href: "/about" },
+    { name: "FAQ", href: "/faq" },
   ];
 
   const adminNavigation = [
@@ -53,11 +53,6 @@ export default function Navbar() {
       href: "/admin/fee-management",
       icon: BanknotesIcon,
     },
-    {
-      name: "Platform Metrics",
-      href: "/admin/platform-metrics",
-      icon: ChartBarIcon,
-    },
   ];
 
   const accountNavigation = [
@@ -75,11 +70,6 @@ export default function Navbar() {
       name: "My Refunds",
       href: "/account/refunds",
       icon: ArrowPathIcon,
-    },
-    {
-      name: "Creator Analytics",
-      href: "/account/creator-analytics",
-      icon: ChartBarIcon,
     },
   ];
 
