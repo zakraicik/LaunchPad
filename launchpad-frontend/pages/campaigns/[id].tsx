@@ -766,7 +766,7 @@ export default function CampaignDetail() {
                     value={contributionAmount}
                     onChange={(e) => setContributionAmount(e.target.value)}
                     placeholder="Enter amount"
-                    className="w-full px-4 py-2.5 bg-white border-2 border-gray-200 rounded-lg text-base font-medium focus:outline-none focus:ring-2 focus:ring-gray-100 focus:border-gray-400 transition-all"
+                    className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-lg text-base font-medium focus:outline-none focus:ring-2 focus:ring-gray-100 focus:border-gray-400 transition-all"
                     disabled={isContributing || !isAuthorized}
                   />
                   <div className="absolute inset-y-0 right-0 flex items-center pr-4 pointer-events-none">

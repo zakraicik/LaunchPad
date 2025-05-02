@@ -35,6 +35,7 @@ export default function Navbar() {
     { name: "Home", href: "/" },
     { name: "Discover", href: "/campaigns?category=all" },
     { name: "FAQ", href: "/faq" },
+    { name: "Platform Settings", href: "/platform-settings" },
   ];
 
   const adminNavigation = [
