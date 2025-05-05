@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Contract, BrowserProvider } from "ethers";
 import { useWalletClient } from "wagmi";
 import { useHydration } from "../../pages/_app";
-import CampaignABI from "../../../artifacts/contracts/Campaign.sol/Campaign.json";
+import { CAMPAIGN_ABI } from "../../config/abis/campaign";
 import toast from "react-hot-toast";
 
 export const useSetAdminOverride = () => {
@@ -36,7 +36,7 @@ export const useSetAdminOverride = () => {
       // Create campaign contract instance
       const campaignContract = new Contract(
         campaignAddress,
-        CampaignABI.abi,
+        CAMPAIGN_ABI,
         signer
       );
 

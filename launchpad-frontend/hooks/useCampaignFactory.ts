@@ -2,7 +2,7 @@ import { useCallback, useState, useEffect } from "react";
 import { ethers } from "ethers";
 import { db } from "../utils/firebase";
 import { doc, getDoc, setDoc } from "firebase/firestore";
-import CampaignContractFactory from "../../artifacts/contracts/CampaignContractFactory.sol/CampaignContractFactory.json";
+import { CAMPAIGN_CONTRACT_FACTORY_ABI } from "../config/abis/campaignContractFactory";
 import { getContractAddress } from "../config/addresses";
 import { useWalletClient, useAccount } from "wagmi";
 import { getAuth } from "firebase/auth";
@@ -113,7 +113,7 @@ export function useCampaignFactory() {
         // Create contract instance
         const factory = new ethers.Contract(
           factoryAddress,
-          CampaignContractFactory.abi,
+          CAMPAIGN_CONTRACT_FACTORY_ABI,
           signer
         );
 

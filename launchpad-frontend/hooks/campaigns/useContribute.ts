@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Contract, BrowserProvider } from "ethers";
 import { useWalletClient } from "wagmi";
-import CampaignABI from "../../../artifacts/contracts/Campaign.sol/Campaign.json";
+import { CAMPAIGN_ABI } from "../../config/abis/campaign";
 import { erc20Abi } from "viem";
 import toast from "react-hot-toast";
 
@@ -25,7 +25,7 @@ export const useContribute = () => {
       // Create campaign contract instance
       const campaignContract = new Contract(
         campaignAddress,
-        CampaignABI.abi,
+        CAMPAIGN_ABI,
         signer
       );
 

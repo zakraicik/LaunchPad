@@ -1,7 +1,7 @@
 import { Contract, BrowserProvider } from "ethers";
 import { useWalletClient } from "wagmi";
 import { useHydration } from "../../pages/_app";
-import CampaignABI from "../../../artifacts/contracts/Campaign.sol/Campaign.json";
+import { CAMPAIGN_ABI } from "../../config/abis/campaign";
 import { useQuery } from "@tanstack/react-query";
 import { doc, getDoc } from "firebase/firestore";
 import { db } from "../../utils/firebase";
@@ -36,7 +36,7 @@ export const useAdminOverrideStatus = (campaignAddress?: string) => {
         const provider = new BrowserProvider(walletClient.transport);
         const campaignContract = new Contract(
           campaignAddress,
-          CampaignABI.abi,
+          CAMPAIGN_ABI,
           provider
         );
 
