@@ -2,6 +2,7 @@ import { Disclosure, Transition } from "@headlessui/react";
 import { ChevronDownIcon } from "@heroicons/react/24/outline";
 import { useHydration } from "../pages/_app";
 import { useState } from "react";
+import { ContractAddress } from "../components/ContractAddress";
 
 const faqs = [
   {
@@ -118,39 +119,27 @@ const faqs = [
         <ul className="list-disc pl-6 mt-2">
           <li>
             Platform Admin:{" "}
-            <span className="font-mono">
-              0x435488929685FA6A2Bd8Ab645Ad1df4355dB9D24
-            </span>
+            <ContractAddress address="0x435488929685FA6A2Bd8Ab645Ad1df4355dB9D24" />
           </li>
           <li>
             Token Registry:{" "}
-            <span className="font-mono">
-              0xb1CF2E7fa0FfF4434BA8fee25639Ae5f61e555E3
-            </span>
+            <ContractAddress address="0xb1CF2E7fa0FfF4434BA8fee25639Ae5f61e555E3" />
           </li>
           <li>
             Fee Manager:{" "}
-            <span className="font-mono">
-              0xca21e776f0707aE4D9835b4e4F5a4F23599d37Ef
-            </span>
+            <ContractAddress address="0xca21e776f0707aE4D9835b4e4F5a4F23599d37Ef" />
           </li>
           <li>
             Campaign Factory:{" "}
-            <span className="font-mono">
-              0x1757Bd6c4746A995FddB39c38E2B0019E725f3b1
-            </span>
+            <ContractAddress address="0x1757Bd6c4746A995FddB39c38E2B0019E725f3b1" />
           </li>
           <li>
             Defi Integration Manager:{" "}
-            <span className="font-mono">
-              0x0F3159eE738f8cc6a3E256d285e36a5999593d9e
-            </span>
+            <ContractAddress address="0x0F3159eE738f8cc6a3E256d285e36a5999593d9e" />
           </li>
           <li>
             Campaign Event Collector:{" "}
-            <span className="font-mono">
-              0xD28e9356b9A9AC2b15c34169DbB82CcCF47702d4
-            </span>
+            <ContractAddress address="0xD28e9356b9A9AC2b15c34169DbB82CcCF47702d4" />
           </li>
         </ul>
       </>
