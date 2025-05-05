@@ -5,7 +5,6 @@ import { useTokenRegistry } from "../../hooks/tokenRegistry";
 import { useAccount } from "wagmi";
 import toast from "react-hot-toast";
 import {
-  PlusIcon,
   ArrowLeftIcon,
   ArrowRightIcon,
   PencilSquareIcon,
@@ -21,11 +20,8 @@ import {
   BuildingOfficeIcon,
 } from "@heroicons/react/24/outline";
 import { useHydration } from "../../pages/_app";
-import { format, addDays } from "date-fns";
+import { addDays } from "date-fns";
 import Button from "@mui/material/Button";
-import ButtonGroup from "@mui/material/ButtonGroup";
-import CheckIcon from "@mui/icons-material/Check";
-import Box from "@mui/material/Box";
 import Tooltip from "@mui/material/Tooltip";
 import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
 import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";

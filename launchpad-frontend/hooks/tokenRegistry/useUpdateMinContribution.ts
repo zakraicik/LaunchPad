@@ -3,7 +3,6 @@ import { getContractAddress } from "@/config/addresses";
 import TokenRegistry from "../../../artifacts/contracts/TokenRegistry.sol/TokenRegistry.json";
 import { useState } from "react";
 import { ethers } from "ethers";
-import { type Abi } from "viem";
 import { useHydration } from "@/pages/_app";
 
 export function useUpdateMinContribution() {

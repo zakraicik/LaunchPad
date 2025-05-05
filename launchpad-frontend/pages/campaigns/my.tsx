@@ -2,7 +2,6 @@ import { useEffect, useState, useCallback, useMemo } from "react";
 import { useAccount, useChainId } from "wagmi";
 import { formatUnits } from "ethers";
 import { useTokens } from "../../hooks/useTokens";
-import Link from "next/link";
 import { PlusIcon, RocketLaunchIcon } from "@heroicons/react/24/outline";
 import { useRouter } from "next/router";
 import CreateCampaignModal from "../../components/campaigns/CreateCampaignModal";
@@ -11,7 +10,6 @@ import {
   useCampaigns,
   Campaign as BaseCampaign,
 } from "../../hooks/useCampaigns";
-import { Timestamp } from "firebase/firestore";
 import { SUPPORTED_NETWORKS } from "../../config/addresses";
 import { useHydration } from "@/pages/_app";
 import { useBulkCampaignAuthorization } from "../../hooks/campaigns/useBulkCampaignAuthorization";

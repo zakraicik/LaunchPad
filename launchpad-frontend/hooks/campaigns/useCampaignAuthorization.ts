@@ -1,4 +1,3 @@
-import { useState, useEffect } from "react";
 import { doc, getDoc } from "firebase/firestore";
 import { db } from "../../utils/firebase";
 import { useHydration } from "../../pages/_app";

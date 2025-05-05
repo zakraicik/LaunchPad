@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { Contract, BrowserProvider } from "ethers";
 import { useWalletClient } from "wagmi";
 import { useHydration } from "../../pages/_app";

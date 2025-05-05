@@ -1,20 +1,20 @@
-import { ConnectButton } from '@rainbow-me/rainbowkit'
+import { ConnectButton } from "@rainbow-me/rainbowkit";
 
-export const CustomConnectButton = () => {
+const CustomConnectButton = () => {
   return (
     <ConnectButton
-      label='Sign In'
+      label="Sign In"
       accountStatus={{
-        smallScreen: 'avatar',
-        largeScreen: 'full'
+        smallScreen: "avatar",
+        largeScreen: "full",
       }}
       chainStatus={{
-        smallScreen: 'icon',
-        largeScreen: 'full'
+        smallScreen: "icon",
+        largeScreen: "full",
       }}
       showBalance={false}
     />
-  )
-}
+  );
+};
 
-export default CustomConnectButton
+export default CustomConnectButton;

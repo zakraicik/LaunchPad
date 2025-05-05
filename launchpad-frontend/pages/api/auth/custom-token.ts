@@ -1,7 +1,7 @@
 import { NextApiRequest, NextApiResponse } from "next";
 import { getAuth } from "firebase-admin/auth";
 import * as admin from "firebase-admin";
-import { initializeApp, getApps, cert } from "firebase-admin/app";
+import { initializeApp, getApps } from "firebase-admin/app";
 
 // Initialize Firebase Admin if it hasn't been initialized
 if (!getApps().length) {

@@ -2,7 +2,6 @@ import { useState, useMemo } from "react";
 import { useAccount } from "wagmi";
 import { formatUnits } from "ethers";
 import { useTokens } from "../../hooks/useTokens";
-import { formatNumber } from "../../utils/format";
 import { formatDistanceToNow } from "date-fns";
 import { WalletIcon, RocketLaunchIcon } from "@heroicons/react/24/outline";
 import Link from "next/link";

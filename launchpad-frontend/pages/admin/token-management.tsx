@@ -2,8 +2,6 @@ import {
   PlusIcon,
   PencilIcon,
   TrashIcon,
-  CheckCircleIcon,
-  XCircleIcon,
   ClipboardIcon,
   ClipboardDocumentCheckIcon,
 } from "@heroicons/react/24/outline";

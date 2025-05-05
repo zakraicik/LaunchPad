@@ -1,8 +1,7 @@
 import { useState } from "react";
-import { Contract, BrowserProvider, Interface } from "ethers";
+import { Contract, BrowserProvider } from "ethers";
 import { useWalletClient } from "wagmi";
 import CampaignEventCollectorABI from "../../../artifacts/contracts/CampaignEventCollector.sol/CampaignEventCollector.json";
-import { erc20Abi } from "viem";
 import toast from "react-hot-toast";
 import { useHydration } from "../../pages/_app";
 

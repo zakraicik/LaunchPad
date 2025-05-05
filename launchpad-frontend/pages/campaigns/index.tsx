@@ -2,7 +2,6 @@ import { useState, useEffect } from "react";
 import {
   MagnifyingGlassIcon,
   FunnelIcon,
-  RocketLaunchIcon,
   PlusIcon,
 } from "@heroicons/react/24/outline";
 import CampaignCard from "../../components/campaigns/CampaignCard";

@@ -1,36 +1,10 @@
 import {
-  BanknotesIcon,
   ShieldCheckIcon,
-  ChartBarIcon,
   ArrowPathIcon,
-  LockClosedIcon,
-  ScaleIcon,
   CurrencyDollarIcon,
   BuildingLibraryIcon,
   SparklesIcon,
 } from "@heroicons/react/24/outline";
-import { Line } from "react-chartjs-2";
-import {
-  Chart as ChartJS,
-  CategoryScale,
-  LinearScale,
-  PointElement,
-  LineElement,
-  Title,
-  Tooltip,
-  Legend,
-} from "chart.js";
-
-// Register ChartJS components
-ChartJS.register(
-  CategoryScale,
-  LinearScale,
-  PointElement,
-  LineElement,
-  Title,
-  Tooltip,
-  Legend
-);
 
 const features = [
   {
@@ -66,92 +40,6 @@ const features = [
 ];
 
 export default function About() {
-  // Chart data and options
-  const chartData = {
-    labels: [
-      "0",
-      "30",
-      "60",
-      "90",
-      "120",
-      "150",
-      "180",
-      "210",
-      "240",
-      "270",
-      "300",
-      "330",
-      "360",
-    ],
-    datasets: [
-      {
-        label: "Platform Fees",
-        data: [
-          10.0, 10.02, 10.04, 10.06, 10.08, 10.1, 10.12, 10.14, 10.17, 10.19,
-          10.21, 10.23, 10.25,
-        ],
-        borderColor: "rgb(59, 130, 246)", // Tailwind blue-600
-        backgroundColor: "rgba(59, 130, 246, 0.1)",
-        tension: 0.4,
-        borderWidth: 2,
-      },
-      {
-        label: "Net Fees - Creator",
-        data: [10.0, 7.96, 5.92, 3.88, 1.83, 0, 0, 0, 0, 0, 0, 0, 0],
-        borderColor: "rgb(239, 68, 68)", // Tailwind red-600
-        backgroundColor: "rgba(239, 68, 68, 0.1)",
-        tension: 0.4,
-        borderWidth: 2,
-      },
-    ],
-  };
-
-  const chartOptions = {
-    responsive: true,
-    maintainAspectRatio: false,
-    scales: {
-      y: {
-        beginAtZero: true,
-        max: 12, // Set max to show a bit of space above the highest value
-        title: {
-          display: true,
-          text: "Fees ($)",
-          font: {
-            size: 14,
-          },
-        },
-        ticks: {
-          callback: (value: any) => `$${value.toFixed(2)}`,
-        },
-      },
-      x: {
-        title: {
-          display: true,
-          text: "Campaign Duration (Days)",
-          font: {
-            size: 14,
-          },
-        },
-      },
-    },
-    plugins: {
-      legend: {
-        position: "top" as const,
-        labels: {
-          font: {
-            size: 12,
-          },
-        },
-      },
-      tooltip: {
-        callbacks: {
-          label: (context: any) =>
-            `${context.dataset.label}: $${context.parsed.y.toFixed(2)}`,
-        },
-      },
-    },
-  };
-
   return (
     <div className="min-h-screen pt-32 pb-20">
       <div className="container mx-auto px-4">

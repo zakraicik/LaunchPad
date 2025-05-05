@@ -1,6 +1,3 @@
-import { Fragment, useState, useEffect, useRef } from "react";
-
-// Update animation classes
 const pulseAnimation = `
 @keyframes pulse-blue {
   0% {

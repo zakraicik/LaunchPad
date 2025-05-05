@@ -1,4 +1,4 @@
-import { doc, onSnapshot, collection, query, where } from "firebase/firestore";
+import { doc, onSnapshot } from "firebase/firestore";
 import { db } from "@/utils/firebase";
 import { useChainId } from "wagmi";
 import { SUPPORTED_NETWORKS } from "@/config/addresses";

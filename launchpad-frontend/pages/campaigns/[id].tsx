@@ -1,16 +1,6 @@
 import { useRouter } from "next/router";
 import { useState, useEffect } from "react";
-import {
-  ShareIcon,
-  ArrowLeftIcon,
-  RocketLaunchIcon,
-  BanknotesIcon,
-  FlagIcon,
-  ShieldCheckIcon,
-  KeyIcon,
-  StopIcon,
-  TrashIcon,
-} from "@heroicons/react/24/outline";
+import { ArrowLeftIcon, RocketLaunchIcon } from "@heroicons/react/24/outline";
 import Contributors from "../../components/campaigns/Contributors";
 import CampaignDetails from "../../components/campaigns/CampaignDetails";
 import { formatNumber } from "../../utils/format";
@@ -40,7 +30,6 @@ import { useIsContributor } from "@/hooks/campaigns/useIsContributor";
 import { useGetATokenAddress } from "@/hooks/defiManager/useGetATokenAddress";
 import { ERC20_ABI } from "../../config/abis/erc20";
 import useRefundStatuses from "@/hooks/campaigns/useRefundStatuses";
-import Link from "next/link";
 import { useHydration } from "@/pages/_app";
 import { useIsAdmin } from "../../utils/admin";
 import { useDeauthorizeCampaign } from "../../hooks/campaigns/useDeauthorizeCampaign";
