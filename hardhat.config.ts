@@ -2,6 +2,7 @@
 import { HardhatUserConfig } from 'hardhat/config'
 import '@nomicfoundation/hardhat-toolbox'
 import 'hardhat-gas-reporter'
+import "@nomicfoundation/hardhat-verify";
 
 import * as dotenv from 'dotenv'
 
@@ -26,7 +27,7 @@ const config: HardhatUserConfig = {
     hardhat: {
       forking: {
         url: `https://base-mainnet.g.alchemy.com/v2/${ALCHEMY_API_KEY}`,
-        blockNumber: 27890280 // Use a recent block number
+        blockNumber: 29502862 // Use a recent block number
       },
       chains: {
         8453: {
@@ -41,7 +42,18 @@ const config: HardhatUserConfig = {
       url: `https://base-sepolia.g.alchemy.com/v2/${ALCHEMY_API_KEY}`,
       chainId: 84532,
       accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : []
+    },
+    baseMainnet: {
+      url: `https://base-mainnet.g.alchemy.com/v2/${ALCHEMY_API_KEY}`,
+      chainId: 8453,
+      accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : []
     }
+  },
+  etherscan: {
+    apiKey: process.env.ETHERSCAN_API_KEY
+  },
+  sourcify: {
+    enabled: true
   },
   gasReporter: {
     enabled: true,

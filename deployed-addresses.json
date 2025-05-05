@@ -1,8 +1,18 @@
 {
-  "PlatformAdmin": "0xB79BD073759FF71396C747362957255475F91bA7",
-  "TokenRegistry": "0x38DDF2Ad02D9d5c8bd237173AAE5c438222B4E22",
-  "FeeManager": "0x340E7228BB77E99F4159c831159Bf914f8726c75",
-  "DefiIntegrationManager": "0x56b236dF8f47CC0Cf258C477d387Ec8bCfE5C170",
-  "CampaignEventCollector": "0xF88292bF6D41da61eBF7dA6a8756cE82fC651C53",
-  "CampaignContractFactory": "0x3861f352EF5bf6a188Cb654dE2893eC768a0E670"
+  "baseSepolia": {
+    "PlatformAdmin": "0xDF41aa9f24165a057CD1bFda93Ca0A7F3ACC7f69",
+    "TokenRegistry": "0x83bEF8918f2c00080dD7aB984B7d22CaF28a5826",
+    "FeeManager": "0x597FD4eBb94f2CeA05260025a5fabcc63F69ED69",
+    "DefiIntegrationManager": "0xC857a4B4f1df79efe286d76A68B6c9742B3083Cb",
+    "CampaignEventCollector": "0x160322c719deBf43d92d34B0A05C72E4F4be28aa",
+    "CampaignContractFactory": "0xeC5828af1995430f6a9c870ba34d8c567bF41C7F"
+  },
+  "baseMainnet": {
+    "PlatformAdmin": "0x435488929685FA6A2Bd8Ab645Ad1df4355dB9D24",
+    "TokenRegistry": "0xb1CF2E7fa0FfF4434BA8fee25639Ae5f61e555E3",
+    "FeeManager": "0xca21e776f0707aE4D9835b4e4F5a4F23599d37Ef",
+    "DefiIntegrationManager": "0x0F3159eE738f8cc6a3E256d285e36a5999593d9e",
+    "CampaignEventCollector": "0xD28e9356b9A9AC2b15c34169DbB82CcCF47702d4",
+    "CampaignContractFactory": "0x1757Bd6c4746A995FddB39c38E2B0019E725f3b1"
+  }
 }

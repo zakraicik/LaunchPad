@@ -1,97 +1,176 @@
-import Image from 'next/image'
-import Link from 'next/link'
-import { formatNumber } from '../../utils/format'
-import CampaignTimer from './CampaignTimer'
-
-interface Campaign {
-  id: number
-  title: string
-  description: string
-  image: string
-  category: string
-  target: number
-  raised: number
-  startTime: number
-  endTime: number
-  duration: number
-  backers: number
-  avgYield: number
-}
+import { Campaign } from "../../hooks/useCampaigns";
+import { formatUnits } from "ethers";
+import { useTokens } from "../../hooks/useTokens";
+import { formatTimeLeft } from "../../utils/format";
+import { Timestamp } from "firebase/firestore";
 
 interface CampaignCardProps {
-  campaign: Campaign
+  campaign: Campaign & {
+    canClaimFunds?: boolean;
+    statusText: string;
+    statusColor: string;
+  };
+  onClick: () => void;
+  containerClassName?: string;
 }
 
-export default function CampaignCard ({ campaign }: CampaignCardProps) {
-  const progress = (campaign.raised / campaign.target) * 100
+export default function CampaignCard({
+  campaign,
+  onClick,
+  containerClassName,
+}: CampaignCardProps) {
+  const { getTokenByAddress } = useTokens();
+  const token = getTokenByAddress(campaign.token);
+
+  const formatAmount = (amount: string | undefined) => {
+    if (!amount || !token) return "0";
+    try {
+      const formatted = formatUnits(amount, token.decimals);
+      return Math.floor(parseFloat(formatted)).toLocaleString();
+    } catch (error) {
+      console.error("Error formatting amount:", error);
+      return "0";
+    }
+  };
+
+  const truncateDescription = (description: string) => {
+    return description.length > 100
+      ? `${description.substring(0, 100)}...`
+      : description;
+  };
+
+  const progress =
+    campaign.totalContributions && campaign.goalAmountSmallestUnits
+      ? (Number(
+          formatUnits(campaign.totalContributions, token?.decimals || 18)
+        ) /
+          Number(
+            formatUnits(campaign.goalAmountSmallestUnits, token?.decimals || 18)
+          )) *
+        100
+      : 0;
+
+  const isShortOfGoal = progress < 100;
+
+  const calculateTimeRemaining = (): { timeLeft: string; isEnded: boolean } => {
+    if (!campaign.createdAt || !campaign.duration)
+      return { timeLeft: "0", isEnded: true };
+
+    try {
+      // Handle Firebase Timestamp
+      const createdAtDate =
+        typeof campaign.createdAt === "object" && "toDate" in campaign.createdAt
+          ? (campaign.createdAt as Timestamp).toDate()
+          : new Date(campaign.createdAt);
+
+      const endDate = new Date(
+        createdAtDate.getTime() + campaign.duration * 24 * 60 * 60 * 1000
+      );
+
+      const now = new Date();
+      const isEnded = now > endDate;
+
+      if (isEnded) {
+        return { timeLeft: "Ended", isEnded: true };
+      }
+
+      const secondsRemaining = Math.floor(
+        (endDate.getTime() - now.getTime()) / 1000
+      );
+      return { timeLeft: formatTimeLeft(secondsRemaining), isEnded: false };
+    } catch (error) {
+      console.error("Error calculating time remaining:", error);
+      return { timeLeft: "0", isEnded: true };
+    }
+  };
+
+  const { timeLeft, isEnded } = calculateTimeRemaining();
 
   return (
-    <Link href={`/campaigns/${campaign.id}`}>
-      <div className='bg-white rounded-lg shadow-sm hover:shadow-md transition-shadow duration-200'>
-        {/* Campaign Image */}
-        <div className='relative h-48 w-full rounded-t-lg overflow-hidden'>
-          <Image
-            src={campaign.image}
-            alt={campaign.title}
-            fill
-            className='object-cover'
-          />
-          <div className='absolute top-4 right-4 bg-white/90 px-3 py-1 rounded-full'>
-            <span className='text-sm font-medium text-gray-900'>
+    <div
+      onClick={onClick}
+      className={`relative z-10 bg-white/10 backdrop-blur-md rounded-lg cursor-pointer transition-all duration-200 shadow-[0_0_10px_rgba(191,219,254,0.2)] hover:shadow-[0_0_15px_rgba(191,219,254,0.3)] hover:scale-[1.02] border border-gray-100 h-[280px] ${containerClassName}`}
+    >
+      <div className="p-5 flex flex-col h-full">
+        <div className="flex justify-between items-start mb-2">
+          <h3 className="text-lg font-semibold bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent line-clamp-1 flex-1 mr-3">
+            {campaign.title}
+          </h3>
+          <div className="flex items-center gap-1.5 flex-shrink-0">
+            <div className="bg-gradient-to-r from-blue-500 to-blue-600 text-white px-2 py-0.5 rounded-full text-xs font-medium whitespace-nowrap">
               {campaign.category}
-            </span>
+            </div>
+            {token && (
+              <div className="bg-gradient-to-r from-gray-100 to-gray-200 text-gray-700 px-2 py-0.5 rounded-full text-xs font-medium whitespace-nowrap">
+                {token.symbol}
+              </div>
+            )}
           </div>
         </div>
 
-        <div className='p-6'>
-          {/* Campaign Title and Description */}
-          <h3 className='text-xl font-semibold text-gray-900 mb-2'>
-            {campaign.title}
-          </h3>
-          <p className='text-gray-600 text-sm mb-4 line-clamp-2'>
-            {campaign.description}
-          </p>
+        <p className="text-gray-600 text-sm mb-2 line-clamp-2 flex-shrink-0">
+          {campaign.description}
+        </p>
 
-          {/* Campaign Timer */}
-          <div className='mb-4'>
-            <CampaignTimer
-              startTime={campaign.startTime}
-              endTime={campaign.endTime}
-              duration={campaign.duration}
-            />
-          </div>
-
-          {/* Progress Bar */}
-          <div className='mb-4'>
-            <div className='flex justify-between text-sm mb-1'>
-              <span className='font-medium text-gray-900'>
-                {formatNumber(campaign.raised)} USDC
-              </span>
-              <span className='text-gray-600'>
-                {progress.toFixed(1)}% of {formatNumber(campaign.target)} USDC
+        <div className="space-y-2.5 mt-auto">
+          <div>
+            <div className="flex justify-between text-sm mb-1">
+              <span className="text-gray-600">Progress</span>
+              <span className="font-medium bg-gradient-to-r from-blue-500 to-blue-600 bg-clip-text text-transparent">
+                {progress.toFixed(1)}%
               </span>
             </div>
-            <div className='h-2 bg-gray-200 rounded-full overflow-hidden'>
+            <div className="w-full bg-gradient-to-r from-gray-100 to-gray-200 rounded-full h-1.5 overflow-hidden">
               <div
-                className='h-full bg-blue-500 rounded-full'
-                style={{ width: `${Math.min(progress, 100)}%` }}
+                className="bg-gradient-to-r from-blue-500 to-blue-600 h-1.5 rounded-full transition-all duration-500"
+                style={{ width: `${progress}%` }}
               />
             </div>
           </div>
 
-          {/* Campaign Metrics */}
-          <div className='grid grid-cols-2 gap-4 text-sm'>
+          <div className="grid grid-cols-2 gap-2 text-sm">
             <div>
-              <span className='text-gray-600'>Backers</span>
-              <p className='font-medium text-gray-900'>{campaign.backers}</p>
+              <span className="text-gray-600 block">Raised</span>
+              <p className="font-medium bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent truncate">
+                {formatAmount(campaign.totalContributions)} {token?.symbol}
+              </p>
             </div>
             <div>
-              <span className='text-gray-600'>Avg. Yield</span>
-              <p className='font-medium text-gray-900'>{campaign.avgYield}%</p>
+              <span className="text-gray-600 block">Target</span>
+              <p className="font-medium bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent truncate">
+                {formatAmount(campaign.goalAmountSmallestUnits)} {token?.symbol}
+              </p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2 text-sm">
+            <div>
+              <span className="text-gray-600 block">Backers</span>
+              <p className="font-medium bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent">
+                {campaign.contributors || 0}
+              </p>
+            </div>
+            <div>
+              {progress >= 100 ? (
+                <div className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                  Successful
+                </div>
+              ) : isEnded ? (
+                <div className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                  Goal Not Reached
+                </div>
+              ) : (
+                <>
+                  <span className="text-gray-600 block">Time Left</span>
+                  <p className="font-medium bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent">
+                    {timeLeft}
+                  </p>
+                </>
+              )}
             </div>
           </div>
         </div>
       </div>
-    </Link>
-  )
+    </div>
+  );
 }

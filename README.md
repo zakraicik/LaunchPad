@@ -11,13 +11,13 @@ This platform enables individuals to create fundraising campaigns for their proj
 ## Key Features
 
 - **Create time-bound fundraising campaigns** with specific fundraising goals
-- **Zero platform fees on raised funds** - creators receive 100% of their target amount
+- **Low platform fees on raised funds** - fees offset by deposits to AAVE protocol
 - **Automatic DeFi integration** to generate yield on contributed funds
 - **Multiple token support** with configurable minimum contribution amounts
 - **Yield sharing model** that benefits both platform and campaign creators
 - **Role-based access control** with platform admin privileges
 - **Refund functionality** for unsuccessful campaigns
-- **Event-driven state tracking** for reliable off-chain indexing and status monitoring
+- **Event-driven state tracking** for reliable off-chain indexing and status monitoring powered by Alchemy
 - **Comprehensive campaign lifecycle management** with explicit status transitions
 - **Centralized event collection** for better tracking and analytics
 

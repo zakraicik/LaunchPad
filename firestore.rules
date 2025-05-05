@@ -1,9 +1,95 @@
 rules_version = '2';
-
 service cloud.firestore {
   match /databases/{database}/documents {
+    // Users collection rules
+    match /users/{userId} {
+      // Allow reading user documents
+      allow read: if true;
+      
+      // Only allow creation if the document matches the wallet address
+      allow create: if 
+        // Document ID must match the address field (case insensitive)
+        userId.lower() == request.resource.data.address.lower() &&
+        // Validate document structure
+        request.resource.data.keys().hasAll(['address', 'createdAt']) &&
+        request.resource.data.keys().hasOnly(['address', 'createdAt']) &&
+        request.resource.data.address is string;
+      
+      // Only allow updates by the authenticated user
+      allow update: if 
+        request.auth != null && 
+        request.auth.uid.lower() == userId.lower() &&
+        request.resource.data.keys().hasAll(['address', 'createdAt']) &&
+        request.resource.data.keys().hasOnly(['address', 'createdAt']) &&
+        request.resource.data.address is string;
+      
+      allow delete: if false;
+    }
+
+    // Campaigns collection rules
+    match /campaigns/{campaignId} {
+      // Anyone can read campaign data
+      allow read: if true;
+      
+      // Only authenticated users can create campaigns
+      // The owner field must match the authenticated user's UID
+      allow create: if 
+        request.auth != null && 
+        request.resource.data.frontEndAuthID == request.auth.uid;
+      
+      // Only the campaign owner can update their campaign
+      allow update: if 
+        request.auth != null && (
+          (resource.data.keys().hasAny(['frontEndAuthID']) && resource.data.frontEndAuthID.lower() == request.auth.uid) || 
+          (resource.data.keys().hasAny(['creator']) && resource.data.creator.lower() == request.auth.uid)
+        );
+      
+      // No one can delete campaigns
+      allow delete: if false;
+    }
+    
+    // Tokens collection rules
+    match /tokens/{tokenId} {
+      // Allow reading token documents
+      allow read: if true;
+      
+      // Only allow writes if the user is a platform admin
+      allow write: if 
+        request.auth != null && 
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.isActive == true;
+    }
+    
+    // Platform Admin Collection rules 
+    match /admins/{adminId} {
+      allow read: if true;
+
+      allow write: if 
+        request.auth != null && 
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.isActive == true;
+    }
+
+    // Fee Manaager Collection rules 
+    match /feeConfig/{docId} {
+      allow read: if true;
+    }
+
+    match /contributionEvents/{docId} {
+      allow read: if true;
+    }
+
+    match /refundEvents/{docId} {
+      allow read: if true;
+    }
+
+    match /authorizedCampaigns/{docId} {
+      allow read: if true;
+    }
+
+    // Default rule - deny all other access
     match /{document=**} {
-      allow read, write: if false;
+      allow read: if false;
     }
   }
 }

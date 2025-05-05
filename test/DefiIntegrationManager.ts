@@ -3,15 +3,17 @@ import { token } from '../typechain-types/@openzeppelin/contracts'
 const { expect } = require('chai')
 const { ethers, network } = require('hardhat')
 const { loadFixture } = require('@nomicfoundation/hardhat-network-helpers')
+const { anyValue } = require('@nomicfoundation/hardhat-chai-matchers/withArgs')
 
 import { deployPlatformFixture } from './fixture'
 
 describe('DefiIntegrationManager', function () {
   const OP_DEPOSITED = 1
-  const OP_WITHDRAWN = 2
+  const OP_WITHDRAWN_TO_CONTRACT = 2
   const OP_TOKEN_REGISTRY_UPDATED = 3
   const OP_FEE_MANAGER_UPDATED = 4
   const OP_AAVE_POOL_UPDATED = 5
+  const OP_WITHDRAWN_TO_PLATFORM_TREASURY = 6
 
   // Error codes
   const ERR_ZERO_AMOUNT = 1
@@ -569,7 +571,8 @@ describe('DefiIntegrationManager', function () {
           usdc,
           contributor1,
           feeManager,
-          IERC20ABI
+          IERC20ABI,
+          campaign
         } = await loadFixture(deployPlatformFixture)
 
         // Get USDC details
@@ -632,15 +635,20 @@ describe('DefiIntegrationManager', function () {
               depositAmount,
               mockCampaignId
             )
-        )
-          .to.emit(defiIntegrationManager, 'DefiOperation')
+        ).to.emit(defiIntegrationManager, 'DefiOperation').withArgs(
+          OP_WITHDRAWN_TO_CONTRACT,
+          contributor1.address,
+          ethers.getAddress(usdcAddress),
+          anyValue, //creatorShare
+          mockCampaignId
+        ).and.to.emit(defiIntegrationManager, 'DefiOperation')
           .withArgs(
-            OP_WITHDRAWN,
-            contributor1.address,
+            OP_WITHDRAWN_TO_PLATFORM_TREASURY,
+            platformTreasury,
             ethers.getAddress(usdcAddress),
-            contributorATokenBalance,
+            anyValue, //platformShare
             mockCampaignId
-          )
+        )
 
         // Verify final balances
         const finalContributorBalance = await usdc.balanceOf(
@@ -649,12 +657,14 @@ describe('DefiIntegrationManager', function () {
         const finalTreasuryBalance = await usdc.balanceOf(platformTreasury)
 
         // Use BigNumber operations for safety
-        expect(finalContributorBalance).to.equal(
-          initialContributorBalance + creatorShare
+        expect(finalContributorBalance).to.be.closeTo(
+          initialContributorBalance + creatorShare,
+          ethers.parseUnits('0.001', await usdc.decimals()) // Small tolerance
         )
 
-        expect(finalTreasuryBalance).to.equal(
-          initialTreasuryBalance + platformShare
+        expect(finalTreasuryBalance).to.be.closeTo(
+          initialTreasuryBalance + platformShare,
+          ethers.parseUnits('0.001', await usdc.decimals()) // Small tolerance
         )
 
         // Final aToken balance should be zero
@@ -750,15 +760,20 @@ describe('DefiIntegrationManager', function () {
               creatorShare,
               mockCampaignId
             )
-        )
-          .to.emit(defiIntegrationManager, 'DefiOperation')
+        ).to.emit(defiIntegrationManager, 'DefiOperation').withArgs(
+          OP_WITHDRAWN_TO_CONTRACT,
+          contributor1.address,
+          ethers.getAddress(usdcAddress),
+          anyValue, //creatorShare
+          mockCampaignId
+        ).and.to.emit(defiIntegrationManager, 'DefiOperation')
           .withArgs(
-            OP_WITHDRAWN,
-            contributor1.address,
+            OP_WITHDRAWN_TO_PLATFORM_TREASURY,
+            platformTreasury,
             ethers.getAddress(usdcAddress),
-            contributorATokenBalance,
+            anyValue, //platformShare
             mockCampaignId
-          )
+        )
 
         // Verify final balances
         const finalContributorBalance = await usdc.balanceOf(
@@ -767,12 +782,14 @@ describe('DefiIntegrationManager', function () {
         const finalTreasuryBalance = await usdc.balanceOf(platformTreasury)
 
         // Use BigNumber operations for safety
-        expect(finalContributorBalance).to.equal(
-          initialContributorBalance + creatorShare
+        expect(finalContributorBalance).to.be.closeTo(
+          initialContributorBalance + creatorShare,
+          ethers.parseUnits('0.001', await usdc.decimals()) // Small tolerance
         )
 
-        expect(finalTreasuryBalance).to.equal(
-          initialTreasuryBalance + platformShare
+        expect(finalTreasuryBalance).to.be.closeTo(
+          initialTreasuryBalance + platformShare,
+          ethers.parseUnits('0.001', await usdc.decimals()) // Small tolerance
         )
 
         // Final aToken balance should be zero

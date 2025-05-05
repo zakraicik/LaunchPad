@@ -1,265 +1,271 @@
-import { useState } from 'react'
-import { MagnifyingGlassIcon, FunnelIcon } from '@heroicons/react/24/outline'
-import CampaignCard from '../../components/campaigns/CampaignCard'
-import CampaignFilters from '../../components/campaigns/CampaignFilters'
+import { useState, useEffect } from "react";
+import {
+  MagnifyingGlassIcon,
+  FunnelIcon,
+  RocketLaunchIcon,
+  PlusIcon,
+} from "@heroicons/react/24/outline";
+import CampaignCard from "../../components/campaigns/CampaignCard";
+import CampaignFilters from "../../components/campaigns/CampaignFilters";
+import CreateCampaignModal from "../../components/campaigns/CreateCampaignModal";
+import { useCampaigns } from "../../hooks/useCampaigns";
+import { useRouter } from "next/router";
+import { useChainId, useAccount } from "wagmi";
+import { useHydration } from "@/pages/_app";
+import { useBulkCampaignAuthorization } from "../../hooks/campaigns/useBulkCampaignAuthorization";
+import SpeedDialSimple from "../../components/SpeedDialSimple";
 
-interface Campaign {
-  id: number
-  title: string
-  description: string
-  image: string
-  category: string
-  target: number
-  raised: number
-  startTime: number
-  endTime: number
-  duration: number
-  backers: number
-  avgYield: number
-}
+export default function CampaignsDiscovery() {
+  const { isHydrated } = useHydration();
+  const router = useRouter();
+  const chainId = useChainId();
+  const { isConnected } = useAccount();
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedCategory, setSelectedCategory] = useState("all");
+  const [sortBy, setSortBy] = useState("newest");
+  const [showFilters, setShowFilters] = useState(false);
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const { campaigns, isLoading, error, refresh } = useCampaigns();
 
-// Helper function to generate timestamps
-const getTimestamps = (durationInDays: number, isStarted: boolean = true) => {
-  const now = Math.floor(Date.now() / 1000)
-  const day = 24 * 60 * 60 // seconds in a day
+  // Get campaign addresses for bulk authorization check
+  const campaignAddresses = campaigns
+    .map((campaign) => campaign.campaignAddress)
+    .filter(Boolean) as string[];
 
-  if (isStarted) {
-    const startTime = now - 2 * day // Started 2 days ago
-    return {
-      startTime,
-      endTime: startTime + durationInDays * day,
-      duration: durationInDays
+  // Use the bulk authorization hook
+  const { authorizationMap, isLoading: isLoadingAuthorization } =
+    useBulkCampaignAuthorization(campaignAddresses);
+
+  // Handle category from URL parameter
+  useEffect(() => {
+    if (!isHydrated) return;
+
+    if (router.isReady) {
+      const { category } = router.query;
+      if (category && typeof category === "string") {
+        setSelectedCategory(
+          category.toLowerCase() === "all" ? "all" : category
+        );
+      } else {
+        setSelectedCategory("all");
+      }
     }
-  } else {
-    const startTime = now + day // Starts in 1 day
-    return {
-      startTime,
-      endTime: startTime + durationInDays * day,
-      duration: durationInDays
+  }, [router.isReady, router.query, isHydrated]);
+
+  // Refresh campaigns when chain ID changes
+  useEffect(() => {
+    if (isHydrated) {
+      refresh();
     }
-  }
-}
-
-// Helper function to calculate days left
-const getDaysLeft = (endTime: number): number => {
-  const now = Math.floor(Date.now() / 1000)
-  const secondsLeft = endTime - now
-  return Math.max(0, Math.floor(secondsLeft / (24 * 60 * 60)))
-}
-
-// Dummy data - replace with real data later
-export const dummyCampaigns: Campaign[] = [
-  {
-    id: 1,
-    title: 'Clean Energy Initiative',
-    description: 'Supporting renewable energy projects with yield generation',
-    image: '/placeholder.svg',
-    category: 'Environment',
-    target: 100000,
-    raised: 75000,
-    ...getTimestamps(30), // 30-day campaign
-    backers: 156,
-    avgYield: 8.5
-  },
-  {
-    id: 2,
-    title: 'Education for All',
-    description: 'Providing educational resources through sustainable funding',
-    image: '/placeholder.svg',
-    category: 'Education',
-    target: 50000,
-    raised: 35000,
-    ...getTimestamps(45, false), // 45-day campaign, not started yet
-    backers: 89,
-    avgYield: 7.8
-  },
-  {
-    id: 3,
-    title: 'Ocean Cleanup Project',
-    description: 'Leveraging yield farming to fund ocean cleanup initiatives',
-    image: '/placeholder.svg',
-    category: 'Environment',
-    target: 75000,
-    raised: 45000,
-    ...getTimestamps(60), // 60-day campaign
-    backers: 112,
-    avgYield: 8.2
-  },
-  {
-    id: 4,
-    title: 'Medical Research Fund',
-    description: 'Accelerating breakthrough medical research through DeFi',
-    image: '/placeholder.svg',
-    category: 'Healthcare',
-    target: 200000,
-    raised: 120000,
-    ...getTimestamps(90), // 90-day campaign
-    backers: 234,
-    avgYield: 9.1
-  },
-  {
-    id: 5,
-    title: 'AI for Good',
-    description: 'Developing ethical AI solutions for social impact',
-    image: '/placeholder.svg',
-    category: 'Technology',
-    target: 150000,
-    raised: 85000,
-    ...getTimestamps(45), // 45-day campaign
-    backers: 167,
-    avgYield: 8.7
-  },
-  {
-    id: 6,
-    title: 'Sustainable Housing',
-    description: 'Building eco-friendly affordable housing communities',
-    image: '/placeholder.svg',
-    category: 'Infrastructure',
-    target: 300000,
-    raised: 195000,
-    ...getTimestamps(120), // 120-day campaign
-    backers: 312,
-    avgYield: 7.9
-  },
-  {
-    id: 7,
-    title: 'Quantum Computing Research',
-    description: 'Advancing quantum computing technology for public benefit',
-    image: '/placeholder.svg',
-    category: 'Science & Research',
-    target: 250000,
-    raised: 125000,
-    ...getTimestamps(75), // 75-day campaign
-    backers: 178,
-    avgYield: 8.9
-  },
-  {
-    id: 8,
-    title: 'Urban Farming Initiative',
-    description: 'Creating sustainable urban farming solutions',
-    image: '/placeholder.svg',
-    category: 'Environment',
-    target: 80000,
-    raised: 52000,
-    ...getTimestamps(30), // 30-day campaign
-    backers: 145,
-    avgYield: 8.3
-  },
-  {
-    id: 9,
-    title: 'Digital Literacy Program',
-    description: 'Bringing technology education to underserved communities',
-    image: '/placeholder.svg',
-    category: 'Education',
-    target: 60000,
-    raised: 42000,
-    ...getTimestamps(45, false), // 45-day campaign, not started yet
-    backers: 98,
-    avgYield: 7.6
-  }
-]
-
-export default function CampaignsDiscovery () {
-  const [searchQuery, setSearchQuery] = useState('')
-  const [selectedCategory, setSelectedCategory] = useState('all')
-  const [sortBy, setSortBy] = useState('newest')
-  const [showFilters, setShowFilters] = useState(false)
+  }, [chainId, isHydrated, refresh]);
 
   const handleCategoryChange = (category: string) => {
-    setSelectedCategory(category)
-  }
+    if (!isHydrated) return;
 
-  // Filter campaigns based on search query and category
-  const filteredCampaigns = dummyCampaigns.filter(campaign => {
+    const newCategory = category.toLowerCase() === "all" ? "all" : category;
+    setSelectedCategory(newCategory);
+    router.push(
+      {
+        pathname: router.pathname,
+        query: { ...router.query, category: newCategory },
+      },
+      undefined,
+      { shallow: true }
+    );
+  };
+
+  // Filter campaigns based on search query, category, and authorization status
+  const filteredCampaigns = campaigns.filter((campaign) => {
+    if (!isHydrated) return false;
+
+    if (!campaign.createdAt || !campaign.duration) return false;
+
+    const campaignAddress = campaign.campaignAddress;
+
+    // If we're still loading authorizations, only show campaigns without addresses
+    // This ensures we don't show potentially unauthorized campaigns during loading
+    if (isLoadingAuthorization) {
+      return !campaignAddress;
+    }
+
+    // Check if campaign is authorized
+    const isAuthorized =
+      !campaignAddress || authorizationMap[campaignAddress] === true;
+    if (!isAuthorized) return false;
+
+    const createdAtDate = campaign.createdAt.seconds * 1000;
+    const endDate = createdAtDate + campaign.duration * 24 * 60 * 60 * 1000;
+    const now = Date.now();
+    const isActive = now < endDate;
+
+    const isSuccessful =
+      campaign.totalContributions &&
+      campaign.goalAmountSmallestUnits &&
+      BigInt(campaign.totalContributions) >=
+        BigInt(campaign.goalAmountSmallestUnits);
+
     const matchesSearch =
       campaign.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      campaign.description.toLowerCase().includes(searchQuery.toLowerCase())
+      campaign.description.toLowerCase().includes(searchQuery.toLowerCase());
 
     const matchesCategory =
-      selectedCategory === 'all' || campaign.category === selectedCategory
+      selectedCategory === "all" || campaign.category === selectedCategory;
 
-    return matchesSearch && matchesCategory
-  })
+    return isActive && !isSuccessful && matchesSearch && matchesCategory;
+  });
 
   // Sort campaigns based on selected sort option
   const sortedCampaigns = [...filteredCampaigns].sort((a, b) => {
+    if (!isHydrated) return 0;
+
     switch (sortBy) {
-      case 'newest':
-        return b.startTime - a.startTime
-      case 'endingSoon':
-        return getDaysLeft(a.endTime) - getDaysLeft(b.endTime)
-      case 'mostFunded':
-        return b.raised - a.raised
-      case 'mostBackers':
-        return b.backers - a.backers
+      case "newest":
+        return Number(b.createdAt) - Number(a.createdAt);
+      case "endingSoon":
+        return Number(a.createdAt) - Number(b.createdAt);
+      case "mostFunded":
+        const bContrib = b.totalContributions
+          ? BigInt(b.totalContributions)
+          : BigInt(0);
+        const aContrib = a.totalContributions
+          ? BigInt(a.totalContributions)
+          : BigInt(0);
+        return bContrib > aContrib ? 1 : bContrib < aContrib ? -1 : 0;
+      case "mostBackers":
+        return (b.contributors || 0) - (a.contributors || 0);
       default:
-        return 0
+        return 0;
     }
-  })
+  });
+
+  const handleCampaignClick = (campaignId: string) => {
+    if (!isHydrated) return;
+    router.push(`/campaigns/${campaignId}`);
+  };
+
+  if (!isHydrated) {
+    return (
+      <div className="min-h-screen pt-32 pb-20">
+        <div className="container mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center">Loading...</div>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className='min-h-screen bg-gray-50 py-8'>
-      <div className='container mx-auto px-4'>
-        {/* Header */}
-        <div className='mb-8'>
-          <h1 className='text-3xl font-bold mb-2'>Discover Campaigns</h1>
-          <p className='text-gray-600'>
-            Find and support campaigns that align with your values
+    <div className="min-h-screen pt-32 pb-20">
+      <div className="container mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="flex flex-col mb-8 relative z-30">
+          <h1 className="text-3xl font-bold text-gray-900">
+            Discover Campaigns
+          </h1>
+          <p className="mt-2 text-sm text-gray-500">
+            Explore and support campaigns
           </p>
         </div>
 
         {/* Search and Filter Bar */}
-        <div className='bg-white rounded-lg shadow-sm p-4 mb-6'>
-          <div className='flex flex-col md:flex-row gap-4'>
-            {/* Search Input */}
-            <div className='flex-1 relative'>
-              <MagnifyingGlassIcon className='absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400' />
+        <div className="flex flex-col md:flex-row gap-4 mb-6 relative z-30">
+          {/* Search Input */}
+          <div className="flex-1 relative">
+            <div className="relative">
+              <MagnifyingGlassIcon className="absolute left-4 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-600 z-10" />
               <input
-                type='text'
-                placeholder='Search campaigns...'
-                className='w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500'
+                type="text"
+                id="search"
+                placeholder="Search campaigns..."
+                className="w-full pl-12 pr-4 py-2.5 bg-white/80 backdrop-blur-md border border-gray-200 rounded-lg text-base font-medium focus:outline-none focus:border-blue-300 focus:ring-2 focus:ring-blue-100 shadow-sm transition-all"
                 value={searchQuery}
-                onChange={e => setSearchQuery(e.target.value)}
+                onChange={(e) => setSearchQuery(e.target.value)}
               />
             </div>
+          </div>
 
-            {/* Filter Toggle Button */}
+          {/* Filter Toggle Button */}
+          <div className="flex items-end">
             <button
               onClick={() => setShowFilters(!showFilters)}
-              className='flex items-center justify-center px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50'
+              className="px-4 py-2.5 bg-white/80 backdrop-blur-md border border-gray-200 rounded-lg hover:border-gray-300 transition-all text-base font-medium shadow-sm hover:shadow-md focus:outline-none focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
             >
-              <FunnelIcon className='h-5 w-5 mr-2' />
+              <FunnelIcon className="h-5 w-5 mr-2 inline-block" />
               Filters
             </button>
           </div>
+        </div>
 
-          {/* Filters Panel */}
-          {showFilters && (
+        {/* Filters Panel */}
+        {showFilters && (
+          <div className="mt-4 bg-white/80 backdrop-blur-md rounded-lg p-6 mb-6 border border-gray-200 shadow-sm relative z-20">
             <CampaignFilters
               selectedCategory={selectedCategory}
               setSelectedCategory={handleCategoryChange}
               sortBy={sortBy}
               setSortBy={setSortBy}
             />
-          )}
-        </div>
+          </div>
+        )}
 
         {/* Campaign Grid */}
-        <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6'>
-          {sortedCampaigns.map(campaign => (
-            <CampaignCard key={campaign.id} campaign={campaign} />
-          ))}
-        </div>
-
-        {/* No Results Message */}
-        {sortedCampaigns.length === 0 && (
-          <div className='text-center py-12'>
-            <p className='text-gray-600'>
-              No campaigns found matching your criteria.
+        {isLoading || isLoadingAuthorization ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {[...Array(6)].map((_, i) => (
+              <div
+                key={i}
+                className="bg-white/10 backdrop-blur-md rounded-lg shadow-[0_0_10px_rgba(191,219,254,0.2)] p-6 "
+              >
+                <div className="h-4 bg-gray-200 rounded w-3/4 mb-4"></div>
+                <div className="h-20 bg-gray-200 rounded mb-4"></div>
+                <div className="space-y-3">
+                  <div className="h-3 bg-gray-200 rounded"></div>
+                  <div className="h-3 bg-gray-200 rounded w-5/6"></div>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : sortedCampaigns.length > 0 ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {sortedCampaigns.map((campaign) => (
+              <CampaignCard
+                key={campaign.id}
+                campaign={campaign}
+                onClick={() => handleCampaignClick(campaign.id)}
+              />
+            ))}
+          </div>
+        ) : (
+          <div className="text-center py-12">
+            <h3 className="text-xl font-semibold mb-4">No campaigns found</h3>
+            <p className="text-gray-600 mb-6">
+              Be the first to create a campaign!
             </p>
+          </div>
+        )}
+
+        {/* Create Campaign Modal */}
+        {isHydrated && (
+          <CreateCampaignModal
+            isOpen={isCreateModalOpen}
+            onClose={() => setIsCreateModalOpen(false)}
+            onSuccess={refresh}
+          />
+        )}
+
+        {/* SpeedDial */}
+        {isHydrated && (
+          <div className="fixed bottom-8 right-8 z-[100]">
+            <SpeedDialSimple
+              mainAction={{
+                icon: <PlusIcon className="h-8 w-8" />,
+                label: "Create Campaign",
+                onClick: () => setIsCreateModalOpen(true),
+                disabled: !isConnected,
+                disabledTooltip: "Connect wallet to create campaign",
+              }}
+            />
           </div>
         )}
       </div>
     </div>
-  )
+  );
 }

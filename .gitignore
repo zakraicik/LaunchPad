@@ -46,6 +46,7 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
+
 # Optional build directories
 dist/
 build/
@@ -56,3 +57,5 @@ gas-report.txt
 # Deployment info
 deployments/hardhat/
 deployments/localhost/
+
+serviceAccount.json

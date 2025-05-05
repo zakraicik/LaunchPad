@@ -37,21 +37,21 @@ const db = admin.firestore();
  * @property {string} campaignId - Campaign identifier
  */
 interface DefiOperationEventData {
-  eventType: string
-  rawEventId: string
-  createdAt: Date
-  blockNumber: number | null
-  blockTimestamp: Date | null
-  transactionHash: string | null
-  contractAddress: string | null
+  eventType: string;
+  rawEventId: string;
+  createdAt: Date;
+  blockNumber: number | null;
+  blockTimestamp: Date | null;
+  transactionHash: string | null;
+  contractAddress: string | null;
   operation: {
-    code: number
-    name: string
-  }
-  sender: string
-  token: string
-  amount: string
-  campaignId: string
+    code: number;
+    name: string;
+  };
+  sender: string;
+  token: string;
+  amount: string;
+  campaignId: string;
 }
 
 /**
@@ -71,19 +71,19 @@ interface DefiOperationEventData {
  * @property {string} newAddress - New address
  */
 interface ConfigUpdateEventData {
-  eventType: string
-  rawEventId: string
-  createdAt: Date
-  blockNumber: number | null
-  blockTimestamp: Date | null
-  transactionHash: string | null
-  contractAddress: string | null
+  eventType: string;
+  rawEventId: string;
+  createdAt: Date;
+  blockNumber: number | null;
+  blockTimestamp: Date | null;
+  transactionHash: string | null;
+  contractAddress: string | null;
   operation: {
-    code: number
-    name: string
-  }
-  oldAddress: string
-  newAddress: string
+    code: number;
+    name: string;
+  };
+  oldAddress: string;
+  newAddress: string;
 }
 
 /**
@@ -97,16 +97,22 @@ interface ConfigUpdateEventData {
  * @property {string} withdrawAmount - Amount of tokens withdrawn
  * @property {Date} lastUpdated - Last update timestamp
  * @property {string} lastOperation - Last operation performed
+ * @property {boolean} treasuryFeesPaid - Whether treasury fees have been paid
+ * @property {string} treasuryFeeAmount - Amount of treasury fees paid
+ * @property {number} networkId - Network ID of the chain where campaign yield is tracked
  */
 interface CampaignYieldData {
-  campaignId: string
-  token: string
-  deposited: boolean
-  depositAmount: string
-  withdrawn: boolean
-  withdrawAmount: string
-  lastUpdated: Date
-  lastOperation: string
+  campaignId: string;
+  token: string;
+  deposited: boolean;
+  depositAmount: string;
+  withdrawn: boolean;
+  withdrawAmount: string;
+  lastUpdated: Date;
+  lastOperation: string;
+  treasuryFeesPaid: boolean;
+  treasuryFeeAmount: string;
+  networkId: number;
 }
 
 /**
@@ -117,13 +123,46 @@ interface CampaignYieldData {
  * @property {string} feeManagerAddress - Address of Fee Manager contract
  * @property {Date} lastUpdated - Last update timestamp
  * @property {string} lastOperation - Last operation performed
+ * @property {number} networkId - Network ID of the chain where defi config is deployed
  */
 interface DefiConfigData {
-  aavePoolAddress: string
-  tokenRegistryAddress: string
-  feeManagerAddress: string
-  lastUpdated: Date
-  lastOperation: string
+  aavePoolAddress: string;
+  tokenRegistryAddress: string;
+  feeManagerAddress: string;
+  lastUpdated: Date;
+  lastOperation: string;
+  networkId: number;
+}
+
+/**
+ * Interface for withdrawal event data
+ * @interface WithdrawalEventData
+ * @property {string} eventType - Type of event ("Withdrawal")
+ * @property {string} rawEventId - ID of the raw event document
+ * @property {Date} createdAt - When the event was processed
+ * @property {number|null} blockNumber - Block number where event occurred
+ * @property {Date|null} blockTimestamp - Block timestamp
+ * @property {string|null} transactionHash - Transaction hash
+ * @property {string|null} contractAddress - Contract address
+ * @property {string} campaignId - Campaign identifier
+ * @property {string} token - Token address
+ * @property {string} amount - Amount of tokens withdrawn
+ * @property {string} recipient - Address that received the withdrawal
+ * @property {string} withdrawalType - Type of withdrawal ("TREASURY" or "CREATOR")
+ */
+interface WithdrawalEventData {
+  eventType: string;
+  rawEventId: string;
+  createdAt: Date;
+  blockNumber: number | null;
+  blockTimestamp: Date | null;
+  transactionHash: string | null;
+  contractAddress: string | null;
+  campaignId: string;
+  token: string;
+  amount: string;
+  recipient: string;
+  withdrawalType: string;
 }
 
 // Event signatures
@@ -142,10 +181,11 @@ const CONFIG_UPDATED_SIGNATURE = ethers.keccak256(
  */
 const OPERATION_TYPES: Record<number, string> = {
   1: "DEPOSITED",
-  2: "WITHDRAWN",
+  2: "WITHDRAWN_TO_CONTRACT",
   3: "TOKEN_REGISTRY_UPDATED",
   4: "FEE_MANAGER_UPDATED",
   5: "AAVE_POOL_UPDATED",
+  6: "WITHDRAWN_TO_PLATFORM_TREASURY",
 };
 
 /**
@@ -245,6 +285,28 @@ async function processDefiOperation(log: EnhancedEventLog, rawEventId: string) {
       return;
     }
 
+    // Get the raw event data to access network information
+    const rawEventDoc = await db.collection("rawEvents").doc(rawEventId).get();
+    const rawEvent = rawEventDoc.data();
+    if (!rawEvent?.data?.event?.network) {
+      logger.error("Missing network information in raw event");
+      return;
+    }
+
+    // Get network ID based on network name
+    const networkName = rawEvent.data.event.network;
+    const networkId =
+      networkName === "BASE_MAINNET" ?
+        8453 :
+        networkName === "BASE_SEPOLIA" ?
+          84532 :
+          null;
+
+    if (!networkId) {
+      logger.error(`Unsupported network: ${networkName}`);
+      return;
+    }
+
     // Extract the indexed parameters from topics
     // sender is in the second topic (index 1)
     // token is in the third topic (index 2)
@@ -320,6 +382,8 @@ async function processDefiOperation(log: EnhancedEventLog, rawEventId: string) {
       normalizedToken,
       campaignId,
       amount.toString(),
+      networkId,
+      log,
     );
   } catch (error) {
     logger.error(`Error processing DefiOperation: ${error}`);
@@ -340,15 +404,37 @@ async function processConfigUpdated(log: EnhancedEventLog, rawEventId: string) {
       return;
     }
 
+    // Get the raw event data to access network information
+    const rawEventDoc = await db.collection("rawEvents").doc(rawEventId).get();
+    const rawEvent = rawEventDoc.data();
+    if (!rawEvent?.data?.event?.network) {
+      logger.error("Missing network information in raw event");
+      return;
+    }
+
+    // Get network ID based on network name
+    const networkName = rawEvent.data.event.network;
+    const networkId =
+      networkName === "BASE_MAINNET" ?
+        8453 :
+        networkName === "BASE_SEPOLIA" ?
+          84532 :
+          null;
+
+    if (!networkId) {
+      logger.error(`Unsupported network: ${networkName}`);
+      return;
+    }
+
     // Extract data from the non-indexed parameters
     // The data field contains all parameters
     // since none are indexed in ConfigUpdated
     const decodedData = ethers.AbiCoder.defaultAbiCoder().decode(
-      ["uint8", "address", "address"], // opType, oldAddress, newAddress
+      ["uint8", "address", "address"], // configType, oldAddress, newAddress
       log.data,
     );
 
-    const opType = Number(decodedData[0]);
+    const configType = Number(decodedData[0]);
     const oldAddress = decodedData[1];
     const newAddress = decodedData[2];
 
@@ -368,8 +454,8 @@ async function processConfigUpdated(log: EnhancedEventLog, rawEventId: string) {
       transactionHash: log.transaction?.hash || null,
       contractAddress: log.account?.address || null,
       operation: {
-        code: opType,
-        name: OPERATION_TYPES[opType] || "UNKNOWN",
+        code: configType,
+        name: OPERATION_TYPES[configType] || "UNKNOWN",
       },
       oldAddress: normalizedOldAddress,
       newAddress: normalizedNewAddress,
@@ -386,9 +472,10 @@ async function processConfigUpdated(log: EnhancedEventLog, rawEventId: string) {
 
     // Update defi configuration
     await updateDefiConfiguration(
-      opType,
+      configType,
       normalizedOldAddress,
       normalizedNewAddress,
+      networkId,
     );
   } catch (error) {
     logger.error(`Error processing ConfigUpdated: ${error}`);
@@ -405,6 +492,8 @@ async function processConfigUpdated(log: EnhancedEventLog, rawEventId: string) {
  * @param {string} token - Address of the token
  * @param {string} campaignId - ID of the campaign
  * @param {string} amount - Amount of tokens
+ * @param {number} networkId - Network ID of the chain where campaign yield is tracked
+ * @param {EnhancedEventLog} log - The original event log containing blockchain metadata
  */
 async function updateCampaignYieldData(
   opType: number,
@@ -412,10 +501,12 @@ async function updateCampaignYieldData(
   token: string,
   campaignId: string,
   amount: string,
+  networkId: number,
+  log: EnhancedEventLog,
 ) {
   try {
-    // Create a composite ID for the campaign yield record
-    const yieldId = `${campaignId}_${token}`;
+    // Use campaignId as the yield ID since one campaign can only have one token
+    const yieldId = campaignId;
 
     // Reference to the campaign yield document
     const yieldRef = db.collection("campaignYield").doc(yieldId);
@@ -436,7 +527,13 @@ async function updateCampaignYieldData(
         withdrawAmount: "0",
         lastUpdated: new Date(),
         lastOperation: "",
+        treasuryFeesPaid: false,
+        treasuryFeeAmount: "0",
+        networkId,
       };
+
+    // Declare withdrawal events outside switch
+    let withdrawalEvent: WithdrawalEventData | null = null;
 
     // Handle different operation types
     switch (opType) {
@@ -447,27 +544,89 @@ async function updateCampaignYieldData(
         depositAmount: amount,
         lastUpdated: new Date(),
         lastOperation: "DEPOSITED",
+        networkId,
       };
 
       await yieldRef.set(yieldData, {merge: true});
       logger.info(`Campaign yield record updated for deposit: ${yieldId}`);
       break;
 
-    case 2: // WITHDRAWN
+    case 2: // WITHDRAWN_TO_CONTRACT
       yieldData = {
         ...yieldData,
         withdrawn: true,
         withdrawAmount: amount,
         lastUpdated: new Date(),
-        lastOperation: "WITHDRAWN",
+        lastOperation: "WITHDRAWN_TO_CONTRACT",
+        networkId,
       };
 
       await yieldRef.set(yieldData, {merge: true});
-      logger.info(`Campaign yield record updated for withdrawal: ${yieldId}`);
+      logger.info(
+        `Campaign yield record updated for withdrawal to contract: ${yieldId}`,
+      );
+
+      // Create withdrawal event
+      withdrawalEvent = {
+        eventType: "Withdrawal",
+        rawEventId: yieldId,
+        createdAt: new Date(),
+        blockNumber: log.block?.number || null,
+        blockTimestamp: log.block?.timestamp ?
+          new Date(log.block.timestamp * 1000) :
+          null,
+        transactionHash: log.transaction?.hash || null,
+        contractAddress: log.account?.address || null,
+        campaignId,
+        token,
+        amount,
+        recipient: sender,
+        withdrawalType: "CREATOR",
+      };
+      break;
+
+    case 6: // WITHDRAWN_TO_PLATFORM_TREASURY
+      yieldData = {
+        ...yieldData,
+        treasuryFeesPaid: true,
+        treasuryFeeAmount: amount,
+        lastUpdated: new Date(),
+        lastOperation: "WITHDRAWN_TO_PLATFORM_TREASURY",
+        networkId,
+      };
+
+      await yieldRef.set(yieldData, {merge: true});
+      logger.info(
+        `Campaign yield record updated for treasury fees: ${yieldId}`,
+      );
+
+      // Create treasury withdrawal event
+      withdrawalEvent = {
+        eventType: "Withdrawal",
+        rawEventId: yieldId,
+        createdAt: new Date(),
+        blockNumber: log.block?.number || null,
+        blockTimestamp: log.block?.timestamp ?
+          new Date(log.block.timestamp * 1000) :
+          null,
+        transactionHash: log.transaction?.hash || null,
+        contractAddress: log.account?.address || null,
+        campaignId,
+        token,
+        amount,
+        recipient: sender,
+        withdrawalType: "TREASURY",
+      };
       break;
 
     default:
       logger.warn(`Unknown operation type for campaign yield: ${opType}`);
+    }
+
+    // Store withdrawal event if one was created
+    if (withdrawalEvent) {
+      await db.collection("withdrawalEvents").add(withdrawalEvent);
+      logger.info(`Withdrawal event stored for campaign ${yieldId}`);
     }
   } catch (error) {
     logger.error(`Error updating campaign yield data: ${error}`);
@@ -478,20 +637,21 @@ async function updateCampaignYieldData(
  * Updates the DeFi configuration in the defiConfig collection
  * @async
  * @function updateDefiConfiguration
- * @param {number} opType - The operation type code
+ * @param {number} configType - The operation type code
  * @param {string} oldAddress - The previous address
  * @param {string} newAddress - The new address
+ * @param {number} networkId - Network ID of the chain where defi config is deployed
  */
 async function updateDefiConfiguration(
-  opType: number,
+  configType: number,
   oldAddress: string,
   newAddress: string,
+  networkId: number,
 ) {
   try {
     // Reference to the defi configuration document
-    // We use a fixed ID for the defi
-    // config since there's only one global config
-    const configRef = db.collection("defiConfig").doc("current");
+    // We use network ID for the config document ID since there's one config per network
+    const configRef = db.collection("defiConfig").doc(`${networkId}`);
 
     // Get current defi configuration
     const configDoc = await configRef.get();
@@ -506,10 +666,11 @@ async function updateDefiConfiguration(
         feeManagerAddress: "",
         lastUpdated: new Date(),
         lastOperation: "",
+        networkId,
       };
 
     // Update based on the operation code
-    switch (opType) {
+    switch (configType) {
     case 3: // OP_TOKEN_REGISTRY_UPDATED
       configData.tokenRegistryAddress = newAddress;
       configData.lastOperation = "TOKEN_REGISTRY_UPDATED";
@@ -526,12 +687,13 @@ async function updateDefiConfiguration(
       break;
 
     default:
-      logger.warn(`Unknown operation type: ${opType}`);
+      logger.warn(`Unknown operation type: ${configType}`);
       configData.lastOperation = "UNKNOWN_CONFIG_UPDATED";
       return;
     }
 
     configData.lastUpdated = new Date();
+    configData.networkId = networkId;
 
     await configRef.set(configData, {merge: true});
     logger.info(`DeFi configuration updated: ${configData.lastOperation}`);

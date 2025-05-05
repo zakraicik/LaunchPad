@@ -1011,7 +1011,7 @@ describe('Campaign', function () {
           )
       })
 
-      it('Should allow platformAdmin to claim funds after grace period when campaign is successful before campaign end date', async function () {
+      it('Should allow platformAdmin to claim funds when campaign is successful before campaign end date', async function () {
         const {
           defiIntegrationManager,
           campaign,
@@ -1737,117 +1737,6 @@ describe('Campaign', function () {
         expect(ownerBalanceAfterClaim).to.be.equal(ownerBalanceBeforeClaim)
 
         await expect(campaign.connect(creator1).claimFunds())
-          .to.be.revertedWithCustomError(campaign, 'CampaignError')
-          .withArgs(
-            ERR_FUNDS_CLAIMED,
-            ethers.ZeroAddress,
-            0,
-            await campaign.campaignId()
-          )
-      })
-
-      it('Should allow platformAdmin to claim funds after grace period when campaign is successful before campaign end date', async function () {
-        const {
-          defiIntegrationManager,
-          campaign,
-          contributor1,
-          contributor2,
-          usdc,
-          IERC20ABI,
-          feeManager,
-          platformTreasury,
-          deployer,
-          campaignEventCollector
-        } = await loadFixture(deployPlatformFixture)
-
-        const usdcAddress = await usdc.getAddress()
-        const usdcDecimals = await usdc.decimals()
-
-        const aTokenAddress = await defiIntegrationManager.getATokenAddress(
-          usdcAddress
-        )
-
-        const aToken = await ethers.getContractAt(IERC20ABI, aTokenAddress)
-
-        const contributionAmount1 = ethers.parseUnits('400', usdcDecimals)
-        const contributionAmount2 = ethers.parseUnits('650', usdcDecimals)
-
-        await usdc
-          .connect(contributor1)
-          .approve(await campaign.getAddress(), contributionAmount1)
-
-        await campaign.connect(contributor1).contribute(contributionAmount1)
-
-        await ethers.provider.send('evm_increaseTime', [
-          (CAMPAIGN_DURATION - 5) * 24 * 60 * 60
-        ])
-
-        await ethers.provider.send('evm_mine')
-
-        await usdc
-          .connect(contributor2)
-          .approve(await campaign.getAddress(), contributionAmount2)
-
-        await campaign.connect(contributor2).contribute(contributionAmount2)
-
-        expect(await campaign.isCampaignActive()).to.be.true //Not past campaign end date
-        expect(await campaign.isCampaignSuccessful()).to.be.true
-
-        const aTokenBalanceBeforeClaim = await aToken.balanceOf(
-          await campaign.getAddress()
-        )
-
-        const platformTreasuryBalanceBeforeClaim = await usdc.balanceOf(
-          platformTreasury.address
-        )
-
-        const creatorBalanceBeforeClaim = await usdc.balanceOf(
-          await campaign.owner()
-        )
-
-        expect(aTokenBalanceBeforeClaim).to.be.greaterThan(0)
-
-        expect(await campaign.hasClaimedFunds()).to.be.false
-
-        await expect(campaign.connect(deployer).claimFundsAdmin())
-          .to.emit(campaignEventCollector, 'FundsClaimed')
-          .withArgs(
-            await deployer.getAddress(),
-            anyUint,
-            await campaign.campaignId(),
-            await campaign.getAddress()
-          )
-
-        expect(await campaign.hasClaimedFunds()).to.be.true
-
-        const { creatorShare, platformShare } =
-          await feeManager.calculateFeeShares(aTokenBalanceBeforeClaim)
-
-        const aTokenBalanceAftereClaim = await aToken.balanceOf(
-          await campaign.getAddress()
-        )
-
-        expect(aTokenBalanceAftereClaim).to.be.closeTo(0, 1)
-
-        const platformTreasuryBalanceAfterClaim = await usdc.balanceOf(
-          await platformTreasury.address
-        )
-
-        const creatorBalanceAfterClaim = await usdc.balanceOf(
-          await campaign.owner()
-        )
-
-        expect(platformTreasuryBalanceAfterClaim).to.be.closeTo(
-          platformTreasuryBalanceBeforeClaim + platformShare,
-          1
-        )
-
-        expect(creatorBalanceAfterClaim).to.be.closeTo(
-          creatorBalanceBeforeClaim + creatorShare,
-          1
-        )
-
-        await expect(campaign.connect(deployer).claimFundsAdmin())
           .to.be.revertedWithCustomError(campaign, 'CampaignError')
           .withArgs(
             ERR_FUNDS_CLAIMED,

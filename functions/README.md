@@ -1,89 +1,69 @@
-# DeFi Crowdfunding Platform Events Table
+# Firebase Collections Updated by Operation Codes
 
-| Contract                    | Event Name                      | Operation Code               | Triggered ✅                 | Example file                    |
-| --------------------------- | ------------------------------- | ---------------------------- | ---------------------------- | ------------------------------- |
-| **Campaign**                | _No direct events_              | N/A                          |                              |                                 |
-| **CampaignContractFactory** | FactoryOperation                | OP_CAMPAIGN_CREATED (1)      | ✅                           | deploy-campaign.ts              |
-| **CampaignEventCollector**  | CampaignEventCollectorOperation | OP_FACTORY_AUTHORIZED (1)    | ✅                           | authorize-campaign-factory.ts   |
-| **CampaignEventCollector**  | CampaignEventCollectorOperation | OP_FACTORY_DEAUTHORIZED (2)  | ✅                           | deauthorize-campaign-factory.ts |
-| **CampaignEventCollector**  | CampaignEventCollectorOperation | OP_CAMPAIGN_AUTHORIZED (3)   | ✅                           | deploy-campaign.ts              |
-| **CampaignEventCollector**  | CampaignEventCollectorOperation | OP_CAMPAIGN_DEAUTHORIZED (4) | ✅                           | deauthorize-campaign.ts         |
-| **CampaignEventCollector**  | Contribution                    | N/A                          | No AAVE reserves on test net |
-| **CampaignEventCollector**  | RefundIssued                    | N/A                          | No AAVE reserves on test net |
-| **CampaignEventCollector**  | FundsClaimed                    | N/A                          | No AAVE reserves on test net |
-| **CampaignEventCollector**  | CampaignStatusChanged           | N/A                          | ✅                           | deploy-campaign.ts              |
-| **CampaignEventCollector**  | AdminOverrideSet                | N/A                          | ✅                           | enable-admin-override.ts        |
-| **CampaignEventCollector**  | FundsOperation                  | OP_DEPOSIT (1)               | No AAVE reserves on test net |
-| **CampaignEventCollector**  | FundsOperation                  | OP_CLAIM_FUNDS (2)           | No AAVE reserves on test net |
-| **DefiIntegrationManager**  | DefiOperation                   | OP_DEPOSITED (1)             | No AAVE reserves on test net |
-| **DefiIntegrationManager**  | DefiOperation                   | OP_WITHDRAWN (2)             | No AAVE reserves on test net |
+## CampaignContractFactory Events
 
-| **DefiIntegrationManager** | ConfigUpdated | OP_CONFIG_UPDATED (3) | ✅ | set-aave-pool.ts |
-| **FeeManager** | FeeManagerOperation | OP_TREASURY_UPDATED (1) | ✅ | update-treasury.ts |
-| **FeeManager** | FeeManagerOperation | OP_SHARE_UPDATED (2) | ✅ | update-fee-share.ts |
-| **PlatformAdmin** | PlatformAdminOperation | OP_ADMIN_ADDED (1) | ✅ | add-platform-admin.ts |
-| **PlatformAdmin** | PlatformAdminOperation | OP_ADMIN_REMOVED (2) | ✅ | remove-platform-admin.ts |
-| **TokenRegistry** | TokenRegistryOperation | OP_TOKEN_ADDED (1) | ✅ | add-token.ts |
-| **TokenRegistry** | TokenRegistryOperation | OP_TOKEN_REMOVED (2) | ✅ | remove-token.ts |
-| **TokenRegistry** | TokenRegistryOperation | OP_TOKEN_SUPPORT_DISABLED (3) | ✅ | disable-token-support.ts |
-| **TokenRegistry** | TokenRegistryOperation | OP_TOKEN_SUPPORT_ENABLED (4) | ✅ | enable-token-support.ts |
-| **TokenRegistry** | TokenRegistryOperation | OP_MIN_CONTRIBUTION_UPDATED (5) | ✅ | change-minimum-contribution.ts |
+| Operation Code            | Operation Name            | Firebase Collections Updated              | Frontend Integration |
+| ------------------------- | ------------------------- | ----------------------------------------- | -------------------- |
+| `OP_CAMPAIGN_CREATED (1)` | Campaign contract created | `rawEvents`, `factoryEvents`, `campaigns` | ✅                   |
 
-## Operation Type Codes
+## CampaignEventCollector Operations
 
-### CampaignContractFactory
+| Operation Code                 | Operation Name                           | Firebase Collections Updated                                   | Frontend Integration |
+| ------------------------------ | ---------------------------------------- | -------------------------------------------------------------- | -------------------- |
+| `OP_FACTORY_AUTHORIZED (1)`    | Factory authorized to register campaigns | `rawEvents`, `eventCollectorOperations`, `authorizedFactories` | ✅                   |
+| `OP_FACTORY_DEAUTHORIZED (2)`  | Factory authorization revoked            | `rawEvents`, `eventCollectorOperations`, `authorizedFactories` | ✅                   |
+| `OP_CAMPAIGN_AUTHORIZED (3)`   | Campaign authorized to emit events       | `rawEvents`, `eventCollectorOperations`, `authorizedCampaigns` | ✅                   |
+| `OP_CAMPAIGN_DEAUTHORIZED (4)` | Campaign authorization revoked           | `rawEvents`, `eventCollectorOperations`, `authorizedCampaigns` | ✅                   |
 
-- `OP_CAMPAIGN_CREATED = 1`: Campaign contract created
+## Campaign Events (via CampaignEventCollector)
 
-### CampaignEventCollector
+| Event Type              | Firebase Collections Updated                                                | Frontend Integration |
+| ----------------------- | --------------------------------------------------------------------------- | -------------------- |
+| `Contribution`          | `rawEvents`, `contributionEvents`, `campaigns` (updates totalContributions) | ✅                   |
+| `RefundIssued`          | `rawEvents`, `refundEvents`, `campaigns` (updates totalRefunds)             | ✅                   |
+| `FundsClaimed`          | `rawEvents`, `claimEvents`, `campaigns` (updates totalClaims)               | ✅                   |
+| `CampaignStatusChanged` | `rawEvents`, `campaignStatusEvents`, `campaigns` (updates status)           | ✅                   |
+| `AdminOverrideSet`      | `rawEvents`, `adminOverrideEvents`, `campaigns` (updates adminOverride)     | ✅                   |
+| `FundsOperation`        | `rawEvents`, `fundsOperationEvents`, `campaigns` (updates tokenBalances)    | ✅                   |
 
-- `OP_FACTORY_AUTHORIZED = 1`: Factory authorized to register campaigns
-- `OP_FACTORY_DEAUTHORIZED = 2`: Factory authorization revoked
-- `OP_CAMPAIGN_AUTHORIZED = 3`: Campaign authorized to emit events
-- `OP_CAMPAIGN_DEAUTHORIZED = 4`: Campaign authorization revoked
+## Campaign Funds Operations (via CampaignEventCollector)
 
-### Campaign (via CampaignEventCollector)
+| Operation Code       | Operation Name  | Firebase Collections Updated                                               | Frontend Integration |
+| -------------------- | --------------- | -------------------------------------------------------------------------- | -------------------- |
+| `OP_DEPOSIT (1)`     | Funds deposited | `rawEvents`, `fundsOperationEvents`, `campaigns` (increases tokenBalances) | ✅                   |
+| `OP_CLAIM_FUNDS (2)` | Funds claimed   | `rawEvents`, `fundsOperationEvents`, `campaigns` (decreases tokenBalances) | ✅                   |
 
-- `OP_DEPOSIT = 1`: Funds deposited
-- `OP_CLAIM_FUNDS = 2`: Funds claimed
+## DefiIntegrationManager Operations
 
-### DefiIntegrationManager
+| Operation Code                          | Operation Name                                   | Firebase Collections Updated                                   | Frontend Integration |
+| --------------------------------------- | ------------------------------------------------ | -------------------------------------------------------------- | -------------------- |
+| `OP_DEPOSITED (1)`                      | Tokens deposited to yield protocol               | `rawEvents`, `defiEvents`, `campaignYield`                     | ✅                   |
+| `OP_WITHDRAWN_TO_CONTRACT (2)`          | Tokens withdrawn from yield protocol to contract | `rawEvents`, `defiEvents`, `campaignYield`, `withdrawalEvents` | ✅                   |
+| `OP_TOKEN_REGISTRY_UPDATED (3)`         | Token registry updated                           | `rawEvents`, `defiConfigEvents`, `defiConfig`                  | ✅                   |
+| `OP_FEE_MANAGER_UPDATED (4)`            | Fee manager updated                              | `rawEvents`, `defiConfigEvents`, `defiConfig`                  | ✅                   |
+| `OP_AAVE_POOL_UPDATED (5)`              | Aave pool updated                                | `rawEvents`, `defiConfigEvents`, `defiConfig`                  | ✅                   |
+| `OP_WITHDRAWN_TO_PLATFORM_TREASURY (6)` | Tokens withdrawn to platform treasury            | `rawEvents`, `defiEvents`, `campaignYield`, `withdrawalEvents` | ✅                   |
 
-- `OP_DEPOSITED = 1`: Tokens deposited to yield protocol
-- `OP_WITHDRAWN = 2`: Tokens withdrawn from yield protocol
-- `OP_TOKEN_REGISTRY_UPDATED = 3`: Token registry updated
-- `OP_FEE_MANAGER_UPDATED = 4`: Fee manager updated
-- `OP_AAVE_POOL_UPDATED = 5`: Aave pool updated
+## FeeManager Operations
 
-### FeeManager
+| Operation Code            | Operation Name                        | Firebase Collections Updated          | Frontend Integration |
+| ------------------------- | ------------------------------------- | ------------------------------------- | -------------------- |
+| `OP_TREASURY_UPDATED (1)` | Platform treasury address updated     | `rawEvents`, `feeEvents`, `feeConfig` | ✅                   |
+| `OP_SHARE_UPDATED (2)`    | Platform fee share percentage updated | `rawEvents`, `feeEvents`, `feeConfig` | ✅                   |
 
-- `OP_TREASURY_UPDATED = 1`: Platform treasury address updated
-- `OP_SHARE_UPDATED = 2`: Platform fee share percentage updated
+## PlatformAdmin Operations
 
-### PlatformAdmin
+| Operation Code         | Operation Name         | Firebase Collections Updated         | Frontend Integration |
+| ---------------------- | ---------------------- | ------------------------------------ | -------------------- |
+| `OP_ADMIN_ADDED (1)`   | Platform admin added   | `rawEvents`, `adminEvents`, `admins` | ✅                   |
+| `OP_ADMIN_REMOVED (2)` | Platform admin removed | `rawEvents`, `adminEvents`, `admins` | ✅                   |
 
-- `OP_ADMIN_ADDED = 1`: Platform admin added
-- `OP_ADMIN_REMOVED = 2`: Platform admin removed
+## TokenRegistry Operations
 
-### TokenRegistry
-
-- `OP_TOKEN_ADDED = 1`: Token added to registry
-- `OP_TOKEN_REMOVED = 2`: Token removed from registry
-- `OP_TOKEN_SUPPORT_DISABLED = 3`: Token support disabled
-- `OP_TOKEN_SUPPORT_ENABLED = 4`: Token support enabled
-- `OP_MIN_CONTRIBUTION_UPDATED = 5`: Minimum contribution amount updated
-
-## Status and Reason Codes
-
-### Campaign
-
-- `STATUS_ACTIVE = 1`: Campaign is active
-- `STATUS_COMPLETE = 2`: Campaign is complete
-- `REASON_GOAL_REACHED = 1`: Status changed because goal was reached
-- `REASON_DEADLINE_PASSED = 2`: Status changed because deadline passed
-
-### CampaignContractFactory
-
-- `STATUS_CREATED = 0`: Campaign initially created
-- `STATUS_ACTIVE = 1`: Campaign active
-- `REASON_CAMPAIGN_CREATED = 0`: Status changed because campaign was created
+| Operation Code                    | Operation Name                      | Firebase Collections Updated         | Frontend Integration |
+| --------------------------------- | ----------------------------------- | ------------------------------------ | -------------------- |
+| `OP_TOKEN_ADDED (1)`              | Token added to registry             | `rawEvents`, `tokenEvents`, `tokens` | ✅                   |
+| `OP_TOKEN_REMOVED (2)`            | Token removed from registry         | `rawEvents`, `tokenEvents`, `tokens` | ✅                   |
+| `OP_TOKEN_SUPPORT_DISABLED (3)`   | Token support disabled              | `rawEvents`, `tokenEvents`, `tokens` | ✅                   |
+| `OP_TOKEN_SUPPORT_ENABLED (4)`    | Token support enabled               | `rawEvents`, `tokenEvents`, `tokens` | ✅                   |
+| `OP_MIN_CONTRIBUTION_UPDATED (5)` | Minimum contribution amount updated | `rawEvents`, `tokenEvents`, `tokens` | ✅                   |
