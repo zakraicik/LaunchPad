@@ -144,4 +144,64 @@ export const CAMPAIGN_CONTRACT_FACTORY_ABI = [
     stateMutability: "view",
     type: "function",
   },
+  {
+    inputs: [
+      {
+        internalType: "address",
+        name: "_campaignToken",
+        type: "address",
+      },
+      {
+        internalType: "uint256",
+        name: "_campaignGoalAmount",
+        type: "uint256",
+      },
+      {
+        internalType: "uint32",
+        name: "_campaignDuration",
+        type: "uint32",
+      },
+    ],
+    name: "deploy",
+    outputs: [
+      {
+        internalType: "address",
+        name: "",
+        type: "address",
+      },
+    ],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+  {
+    anonymous: false,
+    inputs: [
+      {
+        indexed: false,
+        internalType: "uint8",
+        name: "opType",
+        type: "uint8",
+      },
+      {
+        indexed: true,
+        internalType: "address",
+        name: "campaignAddress",
+        type: "address",
+      },
+      {
+        indexed: true,
+        internalType: "address",
+        name: "creator",
+        type: "address",
+      },
+      {
+        indexed: false,
+        internalType: "bytes32",
+        name: "campaignId",
+        type: "bytes32",
+      },
+    ],
+    name: "FactoryOperation",
+    type: "event",
+  },
 ] as const;
