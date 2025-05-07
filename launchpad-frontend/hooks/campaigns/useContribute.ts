@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Contract, BrowserProvider } from "ethers";
 import { useWalletClient } from "wagmi";
-import { CAMPAIGN_ABI } from "../../config/abis/campaign";
+import { CAMPAIGN_ABI } from "../../public/abis/campaign";
 import { erc20Abi } from "viem";
 import toast from "react-hot-toast";
 

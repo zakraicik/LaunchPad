@@ -28,7 +28,7 @@ import {
 } from "@/hooks/campaigns";
 import { useIsContributor } from "@/hooks/campaigns/useIsContributor";
 import { useGetATokenAddress } from "@/hooks/defiManager/useGetATokenAddress";
-import { ERC20_ABI } from "../../config/abis/erc20";
+import { ERC20_ABI } from "../../public/abis/erc20";
 import useRefundStatuses from "@/hooks/campaigns/useRefundStatuses";
 import { useHydration } from "@/pages/_app";
 import { useIsAdmin } from "../../utils/admin";

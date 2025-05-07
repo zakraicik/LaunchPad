@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { PlusIcon, TrashIcon, XMarkIcon } from "@heroicons/react/24/outline";
+import { PlusIcon, TrashIcon } from "@heroicons/react/24/outline";
 import { usePlatformAdmin } from "@/hooks/platformAdmin/usePlatformAdmin";
 import { useAddPlatformAdmin } from "@/hooks/platformAdmin/useAddPlatformAdmin";
 import { useRemovePlatformAdmin } from "@/hooks/platformAdmin/useRemovePlatformAdmin";

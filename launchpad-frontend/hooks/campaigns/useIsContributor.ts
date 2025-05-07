@@ -2,7 +2,7 @@ import { useMemo } from "react";
 import { Contract, BrowserProvider } from "ethers";
 import { useWalletClient } from "wagmi";
 import { useQueries } from "@tanstack/react-query";
-import { CAMPAIGN_ABI } from "../../config/abis/campaign";
+import { CAMPAIGN_ABI } from "../../public/abis/campaign";
 import toast from "react-hot-toast";
 import { useHydration } from "../../pages/_app";
 
@@ -18,7 +18,6 @@ export const useIsContributor = (
   const { isHydrated } = useHydration();
   const { data: walletClient } = useWalletClient();
 
-  // Memoize the queries configuration
   const queries = useMemo(
     () =>
       campaigns.map((campaign) => ({

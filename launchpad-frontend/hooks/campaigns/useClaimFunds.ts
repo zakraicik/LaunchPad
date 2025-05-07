@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Contract, BrowserProvider, ethers } from "ethers";
 import { useWalletClient } from "wagmi";
-import { CAMPAIGN_ABI } from "../../config/abis/campaign";
+import { CAMPAIGN_ABI } from "../../public/abis/campaign";
 import toast from "react-hot-toast";
 
 // Campaign error codes from the contract

@@ -1,7 +1,7 @@
 import { Contract, BrowserProvider } from "ethers";
 import { useWalletClient } from "wagmi";
 import { useQuery } from "@tanstack/react-query";
-import { CAMPAIGN_ABI } from "../../config/abis/campaign";
+import { CAMPAIGN_ABI } from "../../public/abis/campaign";
 import { useHydration } from "../../pages/_app";
 
 export const useHasClaimedFunds = (campaignAddress?: string) => {

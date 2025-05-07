@@ -18,12 +18,12 @@ import { db } from "../../utils/firebase";
 import { useAccount, useWriteContract, useChainId } from "wagmi";
 import { useIsAdmin } from "../../utils/admin";
 import toast from "react-hot-toast";
-import { formatUnits, parseUnits } from "ethers";
+import { formatUnits } from "ethers";
 import { useRouter } from "next/router";
 import { useHydration } from "@/pages/_app";
 import { formatDistanceToNow, isValid } from "date-fns";
 import { Timestamp } from "firebase/firestore";
-import { XMarkIcon, ArrowPathIcon } from "@heroicons/react/24/outline";
+import { XMarkIcon } from "@heroicons/react/24/outline";
 import SpeedDialSimple from "../../components/SpeedDialSimple";
 
 interface TokenInfo {

@@ -1,6 +1,6 @@
 import { useWalletClient, useChainId } from "wagmi";
 import { getContractAddress } from "@/config/addresses";
-import { PLATFORM_ADMIN_ABI } from "../../config/abis/platformAdmin";
+import { PLATFORM_ADMIN_ABI } from "../../public/abis/platformAdmin";
 import { ethers } from "ethers";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useHydration } from "@/pages/_app";

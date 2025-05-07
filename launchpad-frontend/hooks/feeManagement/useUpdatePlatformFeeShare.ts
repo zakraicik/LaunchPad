@@ -1,6 +1,6 @@
 import { useWalletClient, useChainId } from "wagmi";
 import { getContractAddress } from "@/config/addresses";
-import { FEE_MANAGER_ABI } from "../../config/abis/feeManager";
+import { FEE_MANAGER_ABI } from "../../public/abis/feeManager";
 import { useState } from "react";
 import { ethers } from "ethers";
 import { useHydration } from "@/pages/_app";
