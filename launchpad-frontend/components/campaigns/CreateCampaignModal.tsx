@@ -186,11 +186,9 @@ export default function CreateCampaignModal({
 
   const handleInputChange = (field: string, value: string) => {
     if (field === "endDate") {
-      const today = new Date();
-      const selectedDate = new Date(value);
-      const diffTime =
-        selectedDate.setHours(0, 0, 0, 0) - today.setHours(0, 0, 0, 0);
-      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      const today = dayjs().startOf("day");
+      const selectedDate = dayjs(value).startOf("day");
+      const diffDays = selectedDate.diff(today, "day");
       setFormData((prev) => ({
         ...prev,
         endDate: value,
@@ -260,10 +258,10 @@ export default function CreateCampaignModal({
         setError(null);
         return false;
       }
-      const today = new Date();
-      const selectedDate = new Date(endDate);
-      const maxDate = addDays(today, 365);
-      if (selectedDate <= today) {
+      const today = dayjs().startOf("day");
+      const selectedDate = dayjs(endDate).startOf("day");
+      const maxDate = today.add(365, "day");
+      if (!selectedDate.isValid() || !selectedDate.isAfter(today)) {
         errorMsg = "End date must be after today.";
         setFieldErrors((prev) => ({
           ...prev,
@@ -273,7 +271,7 @@ export default function CreateCampaignModal({
         setError(null);
         return false;
       }
-      if (selectedDate > maxDate) {
+      if (selectedDate.isAfter(maxDate)) {
         errorMsg = "End date must be within 1 year from today.";
         setFieldErrors((prev) => ({
           ...prev,
@@ -424,6 +422,8 @@ export default function CreateCampaignModal({
         );
       case "duration":
         const durationErrorMsg = fieldErrors.duration;
+        console.log("formData.endDate:", formData.endDate);
+        console.log("isCurrentStepValid:", isCurrentStepValid());
         return (
           <div>
             <div className="text-sm text-gray-500 mb-4">
@@ -436,9 +436,14 @@ export default function CreateCampaignModal({
                 value={formData.endDate ? dayjs(formData.endDate) : null}
                 minDate={dayjs()}
                 maxDate={dayjs().add(365, "day")}
+                format="YYYY-MM-DD"
                 onChange={(date) => {
                   if (date) {
-                    handleInputChange("endDate", date.format("YYYY-MM-DD"));
+                    const formatted =
+                      typeof date === "string"
+                        ? date
+                        : date.format("YYYY-MM-DD");
+                    handleInputChange("endDate", formatted);
                   } else {
                     handleInputChange("endDate", "");
                   }
@@ -449,6 +454,7 @@ export default function CreateCampaignModal({
                     error: !!durationErrorMsg,
                     helperText: durationErrorMsg || "",
                     sx: { mt: 0 },
+                    placeholder: "YYYY-MM-DD",
                   },
                 }}
               />
@@ -621,10 +627,15 @@ export default function CreateCampaignModal({
     // Special handling for duration (date picker)
     if (currentField === "duration") {
       if (!formData.endDate) return false;
-      const today = new Date();
-      const selectedDate = new Date(formData.endDate);
-      const maxDate = addDays(today, 365);
-      if (selectedDate <= today || selectedDate > maxDate) return false;
+      const today = dayjs().startOf("day");
+      const selectedDate = dayjs(formData.endDate).startOf("day");
+      const maxDate = today.add(365, "day");
+      if (
+        !selectedDate.isValid() ||
+        !selectedDate.isAfter(today) ||
+        selectedDate.isAfter(maxDate)
+      )
+        return false;
       return true;
     }
     // For githubUrl, check pattern

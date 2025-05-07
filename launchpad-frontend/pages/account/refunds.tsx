@@ -185,13 +185,15 @@ export default function RefundsPage() {
                         <div className="relative flex items-start space-x-3">
                           <div className="min-w-0 flex-1">
                             <div className="text-sm">
-                              <div className="flex items-center justify-between mb-1">
-                                <div className="flex items-center gap-2 flex-1">
+                              <div className="grid grid-cols-[1fr_auto] gap-x-2 items-start">
+                                <div className="min-w-0">
                                   <Link
                                     href={`/campaigns/${event.campaignId}`}
                                     className="font-medium text-gray-900 hover:text-blue-600 transition-colors flex items-center gap-1"
                                   >
-                                    {campaign?.title || "Unknown Campaign"}
+                                    <span className="truncate max-w-xs md:max-w-md">
+                                      {campaign?.title || "Unknown Campaign"}
+                                    </span>
                                     <svg
                                       className="w-4 h-4"
                                       fill="none"
@@ -206,25 +208,32 @@ export default function RefundsPage() {
                                       />
                                     </svg>
                                   </Link>
-                                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
+                                  <div className="text-sm text-gray-500 mt-0.5 flex flex-col gap-0.5">
+                                    <span>
+                                      Refunded{" "}
+                                      {formatAmount(
+                                        event.amount,
+                                        campaign?.token || ""
+                                      )}{" "}
+                                      {token?.symbol || "tokens"}
+                                    </span>
+                                    <span>
+                                      {formatDistanceToNow(
+                                        event.blockTimestamp,
+                                        { addSuffix: true }
+                                      )}
+                                    </span>
+                                  </div>
+                                </div>
+                                <div className="flex flex-col items-end gap-1 min-w-[120px]">
+                                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800 min-w-[80px] justify-center overflow-hidden text-ellipsis">
                                     Refund Received
                                   </span>
-                                </div>
-                                <div className="text-sm text-gray-500">
-                                  Block #{event.blockNumber}
+                                  <span className="text-xs text-gray-500 md:text-sm">
+                                    Block #{event.blockNumber}
+                                  </span>
                                 </div>
                               </div>
-                              <p className="mt-0.5 text-sm text-gray-500">
-                                Refunded{" "}
-                                {formatAmount(
-                                  event.amount,
-                                  campaign?.token || ""
-                                )}{" "}
-                                {token?.symbol || "tokens"} •{" "}
-                                {formatDistanceToNow(event.blockTimestamp, {
-                                  addSuffix: true,
-                                })}
-                              </p>
                               <div className="mt-2 text-sm text-gray-500">
                                 <a
                                   href={`https://basescan.org/tx/${event.transactionHash}`}

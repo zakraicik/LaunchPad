@@ -649,75 +649,100 @@ export default function TokenManagement() {
       {isAddModalOpen && (
         <div className="fixed inset-0 z-50">
           <div
-            className="fixed inset-0 bg-white/30 backdrop-blur-md"
+            className="fixed inset-0 bg-white/20 backdrop-blur-md shadow-[0_0_10px_rgba(191,219,254,0.2)]"
             aria-hidden="true"
           />
           <div className="fixed inset-0 flex items-center justify-center p-4">
-            <div className="mx-auto max-w-2xl w-full bg-white/90 backdrop-blur-md rounded-xl shadow-xl border border-gray-100 flex flex-col p-6">
-              <div className="flex justify-between items-center mb-4">
-                <h2 className="text-xl font-semibold">Add New Token</h2>
-                <button
-                  onClick={() => setIsAddModalOpen(false)}
-                  className="text-gray-500 hover:text-gray-700"
-                >
-                  <XMarkIcon className="h-6 w-6" />
-                </button>
+            <div className="mx-auto max-w-2xl w-full bg-white/90 backdrop-blur-md rounded-xl shadow-[0_0_10px_rgba(191,219,254,0.2)] flex flex-col border border-gray-200">
+              <div className="h-1 w-full bg-white/20 rounded-t-xl">
+                <div className="h-1 bg-gradient-to-r from-blue-400 to-blue-500 rounded-t-xl" />
               </div>
-              <form onSubmit={handleAddToken} className="space-y-4">
-                <div>
-                  <label
-                    htmlFor="tokenAddress"
-                    className="block text-sm font-medium text-gray-700 mb-1"
-                  >
-                    Token Address
-                  </label>
-                  <input
-                    type="text"
-                    id="tokenAddress"
-                    value={newTokenAddress}
-                    onChange={(e) => setNewTokenAddress(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="0x..."
-                    required
-                  />
-                </div>
-                <div>
-                  <label
-                    htmlFor="minContribution"
-                    className="block text-sm font-medium text-gray-700 mb-1"
-                  >
-                    Minimum Contribution
-                  </label>
-                  <input
-                    type="text"
-                    id="minContribution"
-                    value={minContribution}
-                    onChange={(e) => setMinContribution(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="0.1"
-                    required
-                  />
-                </div>
-                {addError && (
-                  <div className="text-red-600 text-sm">{addError}</div>
-                )}
-                <div className="flex justify-end gap-3">
+              <div className="p-6">
+                <div className="flex justify-between items-center mb-6">
+                  <h3 className="flex items-center text-lg font-semibold bg-gradient-to-r from-blue-700 to-blue-400 bg-clip-text text-transparent">
+                    <PlusIcon className="w-6 h-6 mr-2 text-blue-400" />
+                    <span>Add New Token</span>
+                  </h3>
                   <button
-                    type="button"
                     onClick={() => setIsAddModalOpen(false)}
-                    className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-md"
+                    className="text-gray-500 hover:text-gray-700"
                   >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={isAdding}
-                    className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
-                  >
-                    {isAdding ? "Adding..." : "Add Token"}
+                    <XMarkIcon className="h-6 w-6" />
                   </button>
                 </div>
-              </form>
+                <form onSubmit={handleAddToken} className="space-y-6">
+                  <div>
+                    <div className="text-sm text-gray-500 mb-4">
+                      Enter the token address and minimum contribution amount.
+                      Make sure the token is supported on the current network.
+                    </div>
+                    <div className="space-y-4">
+                      <div>
+                        <label
+                          htmlFor="tokenAddress"
+                          className="block text-sm font-medium text-gray-700 mb-1"
+                        >
+                          Token Address
+                        </label>
+                        <input
+                          type="text"
+                          id="tokenAddress"
+                          value={newTokenAddress}
+                          onChange={(e) => setNewTokenAddress(e.target.value)}
+                          className="w-full pl-4 pr-4 py-2.5 bg-white border rounded-md text-base font-medium text-gray-700 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-300 transition-all"
+                          placeholder="0x..."
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label
+                          htmlFor="minContribution"
+                          className="block text-sm font-medium text-gray-700 mb-1"
+                        >
+                          Minimum Contribution
+                        </label>
+                        <input
+                          type="text"
+                          id="minContribution"
+                          value={minContribution}
+                          onChange={(e) => setMinContribution(e.target.value)}
+                          className="w-full pl-4 pr-4 py-2.5 bg-white border rounded-md text-base font-medium text-gray-700 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-300 transition-all"
+                          placeholder="0.1"
+                          required
+                        />
+                      </div>
+                    </div>
+                  </div>
+                  {addError && (
+                    <div className="bg-red-50 text-red-600 p-3 rounded-md text-sm border border-red-100">
+                      {addError}
+                    </div>
+                  )}
+                  <div className="flex justify-end space-x-3 pt-4 border-t">
+                    <button
+                      type="button"
+                      onClick={() => setIsAddModalOpen(false)}
+                      className="px-4 py-2 text-sm font-medium text-gray-700 bg-white/60 backdrop-blur-md hover:bg-white/80 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-100 border border-gray-200 rounded-md transition-colors duration-200"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={isAdding}
+                      className="relative overflow-hidden inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-primary-500 hover:bg-primary-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-300 border border-transparent rounded-md disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200 group"
+                    >
+                      {!isAdding && (
+                        <>
+                          <div className="absolute inset-0 bg-gradient-to-r from-primary-400/0 via-primary-400/60 to-primary-400/0 animate-shimmer pointer-events-none" />
+                          <div className="absolute inset-0 bg-gradient-to-r from-primary-400/0 via-primary-400/40 to-primary-400/0 animate-shimmer [animation-delay:1s] pointer-events-none" />
+                          <div className="absolute inset-0 bg-gradient-to-r from-primary-400/0 via-primary-400/30 to-primary-400/0 animate-shimmer [animation-delay:2s] pointer-events-none" />
+                        </>
+                      )}
+                      {isAdding ? "Adding..." : "Add Token"}
+                    </button>
+                  </div>
+                </form>
+              </div>
             </div>
           </div>
         </div>
@@ -766,47 +791,81 @@ export default function TokenManagement() {
       {isMinAmountModalOpen && (
         <div className="fixed inset-0 z-50">
           <div
-            className="fixed inset-0 bg-white/30 backdrop-blur-md"
+            className="fixed inset-0 bg-white/20 backdrop-blur-md shadow-[0_0_10px_rgba(191,219,254,0.2)]"
             aria-hidden="true"
           />
           <div className="fixed inset-0 flex items-center justify-center p-4">
-            <div className="mx-auto max-w-2xl w-full bg-white/90 backdrop-blur-md rounded-xl shadow-xl border border-gray-100 flex flex-col p-6">
-              <h2 className="text-lg font-medium mb-4">
-                Edit Minimum Contribution
-              </h2>
-              <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Minimum Contribution (in{" "}
-                  {selectedTokenForMinAmount?.symbol || "tokens"})
-                </label>
-                <input
-                  type="number"
-                  value={newMinAmount}
-                  onChange={(e) => setNewMinAmount(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                  placeholder="Enter minimum contribution amount"
-                  min="0"
-                  step="0.000000000000000001"
-                />
+            <div className="mx-auto max-w-2xl w-full bg-white/90 backdrop-blur-md rounded-xl shadow-[0_0_10px_rgba(191,219,254,0.2)] flex flex-col border border-gray-200">
+              <div className="h-1 w-full bg-white/20 rounded-t-xl">
+                <div className="h-1 bg-gradient-to-r from-blue-400 to-blue-500 rounded-t-xl" />
               </div>
-              <div className="flex justify-end gap-2">
-                <button
-                  onClick={() => {
-                    setIsMinAmountModalOpen(false);
-                    setSelectedTokenForMinAmount(null);
-                    setNewMinAmount("");
-                  }}
-                  className="px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 rounded-md"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleUpdateMinAmount}
-                  disabled={isUpdating || !newMinAmount}
-                  className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md disabled:opacity-50"
-                >
-                  {isUpdating ? "Updating..." : "Update"}
-                </button>
+              <div className="p-6">
+                <div className="flex justify-between items-center mb-6">
+                  <h3 className="flex items-center text-lg font-semibold bg-gradient-to-r from-blue-700 to-blue-400 bg-clip-text text-transparent">
+                    <PencilIcon className="w-6 h-6 mr-2 text-blue-400" />
+                    <span>Edit Minimum Contribution</span>
+                  </h3>
+                  <button
+                    onClick={() => {
+                      setIsMinAmountModalOpen(false);
+                      setSelectedTokenForMinAmount(null);
+                      setNewMinAmount("");
+                    }}
+                    className="text-gray-500 hover:text-gray-700"
+                  >
+                    <XMarkIcon className="h-6 w-6" />
+                  </button>
+                </div>
+                <div className="space-y-6">
+                  <div>
+                    <div className="text-sm text-gray-500 mb-4">
+                      Update the minimum contribution amount for{" "}
+                      {selectedTokenForMinAmount?.symbol || "this token"}. This
+                      will affect all future contributions.
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Minimum Contribution (in{" "}
+                        {selectedTokenForMinAmount?.symbol || "tokens"})
+                      </label>
+                      <input
+                        type="number"
+                        value={newMinAmount}
+                        onChange={(e) => setNewMinAmount(e.target.value)}
+                        className="w-full pl-4 pr-4 py-2.5 bg-white border rounded-md text-base font-medium text-gray-700 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-300 transition-all"
+                        placeholder="Enter minimum contribution amount"
+                        min="0"
+                        step="0.000000000000000001"
+                      />
+                    </div>
+                  </div>
+                  <div className="flex justify-end space-x-3 pt-4 border-t">
+                    <button
+                      onClick={() => {
+                        setIsMinAmountModalOpen(false);
+                        setSelectedTokenForMinAmount(null);
+                        setNewMinAmount("");
+                      }}
+                      className="px-4 py-2 text-sm font-medium text-gray-700 bg-white/60 backdrop-blur-md hover:bg-white/80 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-100 border border-gray-200 rounded-md transition-colors duration-200"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={handleUpdateMinAmount}
+                      disabled={isUpdating || !newMinAmount}
+                      className="relative overflow-hidden inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-primary-500 hover:bg-primary-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-300 border border-transparent rounded-md disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200 group"
+                    >
+                      {!isUpdating && (
+                        <>
+                          <div className="absolute inset-0 bg-gradient-to-r from-primary-400/0 via-primary-400/60 to-primary-400/0 animate-shimmer pointer-events-none" />
+                          <div className="absolute inset-0 bg-gradient-to-r from-primary-400/0 via-primary-400/40 to-primary-400/0 animate-shimmer [animation-delay:1s] pointer-events-none" />
+                          <div className="absolute inset-0 bg-gradient-to-r from-primary-400/0 via-primary-400/30 to-primary-400/0 animate-shimmer [animation-delay:2s] pointer-events-none" />
+                        </>
+                      )}
+                      {isUpdating ? "Updating..." : "Update"}
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
           </div>

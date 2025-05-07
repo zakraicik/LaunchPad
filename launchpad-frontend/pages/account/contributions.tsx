@@ -184,33 +184,6 @@ export default function UserContributions() {
     }
   };
 
-  const getAvailableStatuses = () => {
-    const statuses = new Set(["All"]);
-
-    // Check if there are any refund eligible (not refunded) contributions
-    const hasRefundEligible = contributionEvents.some((event) => {
-      const campaignStatus = campaignStatuses[event.campaignId];
-      const hasRefund = refundStatuses[event.campaignId];
-      return campaignStatus === "Refund Eligible" && !hasRefund;
-    });
-    if (hasRefundEligible) statuses.add("Refund Eligible");
-
-    // Check if there are any refund received contributions
-    const hasRefundReceived = contributionEvents.some((event) => {
-      const campaignStatus = campaignStatuses[event.campaignId];
-      const hasRefund = refundStatuses[event.campaignId];
-      return campaignStatus === "Refund Eligible" && hasRefund;
-    });
-    if (hasRefundReceived) statuses.add("Refund Received");
-
-    // Check for other statuses (e.g., Successful, In Progress)
-    Object.values(campaignStatuses).forEach((status) => {
-      if (status && status !== "Refund Eligible") statuses.add(status);
-    });
-
-    return Array.from(statuses);
-  };
-
   const filterContributions = (events: ContributionEvent[]) => {
     if (statusFilter === "All") return events;
 
@@ -332,13 +305,15 @@ export default function UserContributions() {
                         <div className="relative flex items-start space-x-3">
                           <div className="min-w-0 flex-1">
                             <div className="text-sm">
-                              <div className="flex items-center justify-between mb-1">
-                                <div className="flex items-center gap-2 flex-1">
+                              <div className="grid grid-cols-[1fr_auto] gap-x-2 items-start">
+                                <div className="min-w-0">
                                   <Link
                                     href={`/campaigns/${event.campaignId}`}
                                     className="font-medium text-gray-900 hover:text-blue-600 transition-colors flex items-center gap-1"
                                   >
-                                    {campaign?.title || "Unknown Campaign"}
+                                    <span className="truncate max-w-xs md:max-w-md">
+                                      {campaign?.title || "Unknown Campaign"}
+                                    </span>
                                     <svg
                                       className="w-4 h-4"
                                       fill="none"
@@ -353,40 +328,45 @@ export default function UserContributions() {
                                       />
                                     </svg>
                                   </Link>
-                                  <div className="flex items-center gap-2">
-                                    <span
-                                      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(
-                                        campaignStatuses[event.campaignId] ===
-                                          "Refund Eligible" &&
-                                          refundStatuses[event.campaignId]
-                                          ? "Refund Received"
-                                          : campaignStatuses[event.campaignId]
-                                      )}`}
-                                    >
-                                      {campaignStatuses[event.campaignId] ===
-                                        "Refund Eligible" &&
-                                      refundStatuses[event.campaignId]
-                                        ? "Refund Received"
-                                        : campaignStatuses[event.campaignId] ||
-                                          "Unknown"}
+                                  <div className="text-sm text-gray-500 mt-0.5 flex flex-col gap-0.5">
+                                    <span>
+                                      Contributed{" "}
+                                      {formatAmount(
+                                        event.amount,
+                                        campaign?.token || ""
+                                      )}{" "}
+                                      {token?.symbol || "tokens"}
+                                    </span>
+                                    <span>
+                                      {formatDistanceToNow(
+                                        event.blockTimestamp,
+                                        { addSuffix: true }
+                                      )}
                                     </span>
                                   </div>
                                 </div>
-                                <div className="text-sm text-gray-500">
-                                  Block #{event.blockNumber}
+                                <div className="flex flex-col items-end gap-1 min-w-[120px]">
+                                  <span
+                                    className={`inline-flex items-center px-2.5 py-0.5 md:px-3 md:py-1 rounded-full text-xs md:text-sm font-medium whitespace-nowrap min-w-[80px] justify-center overflow-hidden text-ellipsis ${getStatusColor(
+                                      campaignStatuses[event.campaignId] ===
+                                        "Refund Eligible" &&
+                                        refundStatuses[event.campaignId]
+                                        ? "Refund Received"
+                                        : campaignStatuses[event.campaignId]
+                                    )}`}
+                                  >
+                                    {campaignStatuses[event.campaignId] ===
+                                      "Refund Eligible" &&
+                                    refundStatuses[event.campaignId]
+                                      ? "Refund Received"
+                                      : campaignStatuses[event.campaignId] ||
+                                        "Unknown"}
+                                  </span>
+                                  <span className="text-xs text-gray-500 md:text-sm">
+                                    Block #{event.blockNumber}
+                                  </span>
                                 </div>
                               </div>
-                              <p className="mt-0.5 text-sm text-gray-500">
-                                Contributed{" "}
-                                {formatAmount(
-                                  event.amount,
-                                  campaign?.token || ""
-                                )}{" "}
-                                {token?.symbol || "tokens"} •{" "}
-                                {formatDistanceToNow(event.blockTimestamp, {
-                                  addSuffix: true,
-                                })}
-                              </p>
                               <div className="mt-2 text-sm text-gray-500">
                                 <a
                                   href={`https://basescan.org/tx/${event.transactionHash}`}

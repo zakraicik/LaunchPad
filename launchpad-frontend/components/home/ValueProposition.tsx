@@ -89,7 +89,9 @@ export default function ValueProposition() {
                 <h3 className="text-lg font-semibold mb-1 text-gray-900 mt-3">
                   {value.title}
                 </h3>
-                <p className="text-sm text-gray-600">{value.description}</p>
+                <p className="text-sm text-gray-600 hidden md:block">
+                  {value.description}
+                </p>
               </div>
             </div>
           ))}

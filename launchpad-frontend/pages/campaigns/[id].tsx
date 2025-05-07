@@ -723,11 +723,11 @@ export default function CampaignDetail() {
         {isOpen && (
           <div
             id="contribution-section"
-            className="fixed inset-0 bg-white/50 backdrop-blur-sm flex items-center justify-center z-50"
+            className="fixed inset-0 bg-white/20 backdrop-blur-md flex items-center justify-center z-50"
             onClick={() => setIsOpen(false)}
           >
             <div
-              className="bg-white backdrop-blur-xl rounded-lg p-6 max-w-md w-full mx-4 shadow-[0_0_10px_rgba(191,219,254,0.2)] border border-gray-100"
+              className="bg-white/90 backdrop-blur-md rounded-xl p-6 max-w-md w-full mx-4 shadow-[0_0_10px_rgba(191,219,254,0.2)] border border-gray-200"
               onClick={(e) => e.stopPropagation()}
             >
               <div className="text-center mb-6">
@@ -755,40 +755,47 @@ export default function CampaignDetail() {
                     value={contributionAmount}
                     onChange={(e) => setContributionAmount(e.target.value)}
                     placeholder="Enter amount"
-                    className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-lg text-base font-medium focus:outline-none focus:ring-2 focus:ring-gray-100 focus:border-gray-400 transition-all"
+                    className="w-full pl-4 pr-16 py-2.5 bg-white border rounded-md text-base font-medium text-gray-700 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-300 transition-all border-gray-200"
                     disabled={isContributing || !isAuthorized}
                   />
-                  <div className="absolute inset-y-0 right-0 flex items-center pr-4 pointer-events-none">
-                    <span className="text-gray-900 font-medium">
-                      {token?.symbol}
-                    </span>
-                  </div>
+                  <span className="absolute right-4 top-1/2 -translate-y-1/2 text-base font-semibold text-blue-600 pointer-events-none">
+                    {token?.symbol}
+                  </span>
                 </div>
               </div>
 
-              <button
-                onClick={handleContribute}
-                disabled={
-                  !isConnected ||
-                  isContributing ||
-                  !contributionAmount ||
-                  !campaign?.campaignAddress ||
-                  !isAuthorized
-                }
-                className="w-full bg-blue-600 text-white py-2.5 px-6 rounded-full text-base font-medium hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-              >
-                {isContributing ? (
-                  <>
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                    <span>Contributing...</span>
-                  </>
-                ) : (
-                  <>
-                    <RocketLaunchIcon className="h-4 w-4" />
-                    <span>Contribute</span>
-                  </>
-                )}
-              </button>
+              <div className="flex justify-between space-x-3 pt-2 border-t bg-white/10 rounded-b-xl backdrop-blur-md">
+                <button
+                  type="button"
+                  onClick={() => setIsOpen(false)}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-white/60 backdrop-blur-md hover:bg-white/80 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-100 border border-gray-200 rounded-md transition-colors duration-200"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleContribute}
+                  disabled={
+                    !isConnected ||
+                    isContributing ||
+                    !contributionAmount ||
+                    !campaign?.campaignAddress ||
+                    !isAuthorized
+                  }
+                  className="relative overflow-hidden inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-primary-500 hover:bg-primary-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-300 border border-transparent rounded-md disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200 group"
+                >
+                  {isContributing ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                      <span>Contributing...</span>
+                    </>
+                  ) : (
+                    <>
+                      <RocketLaunchIcon className="h-4 w-4 mr-2" />
+                      <span>Contribute</span>
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
           </div>
         )}

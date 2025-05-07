@@ -212,58 +212,82 @@ export default function PlatformAdmins() {
       {isModalOpen && (
         <div className="fixed inset-0 z-50">
           <div
-            className="fixed inset-0 bg-white/30 backdrop-blur-md"
+            className="fixed inset-0 bg-white/20 backdrop-blur-md shadow-[0_0_10px_rgba(191,219,254,0.2)]"
             aria-hidden="true"
           />
           <div className="fixed inset-0 flex items-center justify-center p-4">
-            <div className="mx-auto max-w-2xl w-full bg-white/70 backdrop-blur-sm rounded-lg shadow-lg border border-gray-100 flex flex-col p-6">
-              <div className="flex justify-between items-center mb-4">
-                <h2 className="text-xl font-semibold">Add New Admin</h2>
+            <div className="mx-auto max-w-2xl w-full bg-white/90 backdrop-blur-md rounded-xl shadow-[0_0_10px_rgba(191,219,254,0.2)] flex flex-col max-h-[90vh] border border-gray-200">
+              <div className="h-1 w-full bg-white/20 rounded-t-xl">
+                <div
+                  className="h-1 bg-gradient-to-r from-blue-400 to-blue-500 transition-all rounded-t-xl"
+                  style={{ width: "100%" }}
+                />
+              </div>
+              <div className="flex-1 overflow-y-auto p-6 space-y-6">
+                <div className="mb-6">
+                  <div className="flex items-center justify-between mb-2">
+                    <h3 className="flex items-center text-lg font-semibold bg-gradient-to-r from-blue-700 to-blue-400 bg-clip-text text-transparent">
+                      <PlusIcon className="w-6 h-6 mr-2 text-blue-400" />
+                      <span className="bg-gradient-to-r from-blue-700 to-blue-400 bg-clip-text text-transparent">
+                        Add New Admin
+                      </span>
+                    </h3>
+                  </div>
+                  <div className="text-sm text-gray-500 mb-4">
+                    Add a new platform administrator. This person will have full
+                    access to manage platform settings and campaigns.
+                  </div>
+                  <form onSubmit={handleAddAdmin} className="space-y-4">
+                    <div>
+                      <label
+                        htmlFor="adminAddress"
+                        className="block text-sm font-medium text-gray-700 mb-1"
+                      >
+                        Admin Address
+                      </label>
+                      <input
+                        type="text"
+                        id="adminAddress"
+                        value={newAdminAddress}
+                        onChange={(e) => setNewAdminAddress(e.target.value)}
+                        className="w-full px-3 py-2.5 bg-white border border-gray-200 rounded-md text-base font-medium text-gray-700 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-300 transition-all"
+                        placeholder="0x..."
+                        required
+                      />
+                    </div>
+                    {addError && (
+                      <div className="bg-red-50 text-red-600 p-3 rounded-md text-sm border border-red-100">
+                        {addError}
+                      </div>
+                    )}
+                  </form>
+                </div>
+              </div>
+
+              <div className="flex justify-between space-x-3 p-6 border-t bg-white/10 rounded-b-xl backdrop-blur-md">
                 <button
+                  type="button"
                   onClick={() => setIsModalOpen(false)}
-                  className="text-gray-500 hover:text-gray-700"
+                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-white/60 backdrop-blur-md hover:bg-white/80 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-100 border border-gray-200 rounded-md transition-colors duration-200"
                 >
-                  <XMarkIcon className="h-6 w-6" />
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleAddAdmin}
+                  disabled={isAdding || !newAdminAddress.trim()}
+                  className="relative overflow-hidden inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-primary-500 hover:bg-primary-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-300 border border-transparent rounded-md disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200 group"
+                >
+                  {!isAdding && newAdminAddress.trim() && (
+                    <>
+                      <div className="absolute inset-0 bg-gradient-to-r from-primary-400/0 via-primary-400/60 to-primary-400/0 animate-shimmer pointer-events-none" />
+                      <div className="absolute inset-0 bg-gradient-to-r from-primary-400/0 via-primary-400/40 to-primary-400/0 animate-shimmer [animation-delay:1s] pointer-events-none" />
+                      <div className="absolute inset-0 bg-gradient-to-r from-primary-400/0 via-primary-400/30 to-primary-400/0 animate-shimmer [animation-delay:2s] pointer-events-none" />
+                    </>
+                  )}
+                  {isAdding ? "Adding..." : "Add Admin"}
                 </button>
               </div>
-              <form onSubmit={handleAddAdmin} className="space-y-4">
-                <div>
-                  <label
-                    htmlFor="adminAddress"
-                    className="block text-sm font-medium text-gray-700 mb-1"
-                  >
-                    Admin Address
-                  </label>
-                  <input
-                    type="text"
-                    id="adminAddress"
-                    value={newAdminAddress}
-                    onChange={(e) => setNewAdminAddress(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="0x..."
-                    required
-                  />
-                </div>
-                {addError && (
-                  <div className="text-red-600 text-sm">{addError}</div>
-                )}
-                <div className="flex justify-end gap-3">
-                  <button
-                    type="button"
-                    onClick={() => setIsModalOpen(false)}
-                    className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-md"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={isAdding}
-                    className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
-                  >
-                    {isAdding ? "Adding..." : "Add Admin"}
-                  </button>
-                </div>
-              </form>
             </div>
           </div>
         </div>

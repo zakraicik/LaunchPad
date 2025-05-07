@@ -11,6 +11,7 @@ import {
   BuildingOfficeIcon,
 } from "@heroicons/react/24/outline";
 import Link from "next/link";
+import { useState } from "react";
 
 const categories = [
   {
@@ -95,13 +96,14 @@ const categories = [
 ];
 
 export default function CampaignCategories() {
+  const [openTooltip, setOpenTooltip] = useState<string | null>(null);
   return (
     <section className="py-12 bg-white/10">
       <div className="container mx-auto px-4">
         <h2 className="text-3xl font-bold mb-8 text-center">
           Every Block in the Chain: Find Your Category
         </h2>
-        <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 sm:gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 sm:gap-4 overflow-visible">
           {categories.map((category) => (
             <Link
               key={category.name}
@@ -109,7 +111,7 @@ export default function CampaignCategories() {
               className="relative group cursor-pointer h-full"
             >
               <div
-                className={`p-4 rounded-lg bg-white/10 backdrop-blur-md shadow-[0_0_10px_rgba(191,219,254,0.2)] hover:shadow-[0_0_15px_rgba(191,219,254,0.3)] border border-gray-100 transition-all duration-300 hover:scale-105 h-full flex flex-col`}
+                className={`p-4 rounded-lg bg-white/10 backdrop-blur-md shadow-[0_0_10px_rgba(191,219,254,0.2)] hover:shadow-[0_0_15px_rgba(191,219,254,0.3)] border border-gray-100 transition-all duration-300 hover:scale-105 h-full flex flex-col overflow-visible`}
               >
                 <div className="flex flex-col items-center text-center flex-grow">
                   <category.icon
@@ -118,7 +120,8 @@ export default function CampaignCategories() {
                   <h3 className="text-base sm:text-lg font-semibold mb-1 text-gray-900">
                     {category.name}
                   </h3>
-                  <p className="text-xs sm:text-sm text-gray-600">
+                  {/* Desktop description */}
+                  <p className="text-xs sm:text-sm text-gray-600 hidden md:block">
                     {category.description}
                   </p>
                 </div>

@@ -50,7 +50,8 @@ export default function Home() {
                 href="/campaigns"
                 className="inline-flex items-center px-6 py-3 bg-transparent text-blue-600 border-2 border-blue-600 hover:bg-blue-50 rounded-lg font-medium transition-colors"
               >
-                Discover Campaigns
+                <span className="block md:hidden">Discover</span>
+                <span className="hidden md:block">Discover Campaigns</span>
               </Link>
               <button
                 onClick={() => setIsCreateModalOpen(true)}
@@ -61,7 +62,10 @@ export default function Home() {
                 <div className="absolute inset-0 bg-gradient-to-r from-purple-500/0 via-purple-500/40 to-purple-500/0 animate-shimmer [animation-delay:1s]" />
                 <div className="absolute inset-0 bg-gradient-to-r from-purple-500/0 via-purple-500/30 to-purple-500/0 animate-shimmer [animation-delay:2s]" />
                 <RocketLaunchIcon className="w-5 h-5 mr-2 relative z-10" />
-                <span className="relative z-10">Create Campaign</span>
+                <span className="relative z-10 block md:hidden">Create</span>
+                <span className="relative z-10 hidden md:block">
+                  Create Campaign
+                </span>
                 {!isConnected && (
                   <span className="absolute -top-10 left-1/2 -translate-x-1/2 bg-gray-800 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
                     Connect wallet to create campaign

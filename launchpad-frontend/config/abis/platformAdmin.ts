@@ -71,11 +71,11 @@ export const PLATFORM_ADMIN_ABI = [
     inputs: [
       {
         internalType: "address",
-        name: "admin",
+        name: "_admin",
         type: "address",
       },
     ],
-    name: "addAdmin",
+    name: "addPlatformAdmin",
     outputs: [],
     stateMutability: "nonpayable",
     type: "function",
@@ -84,11 +84,11 @@ export const PLATFORM_ADMIN_ABI = [
     inputs: [
       {
         internalType: "address",
-        name: "admin",
+        name: "_admin",
         type: "address",
       },
     ],
-    name: "removeAdmin",
+    name: "removePlatformAdmin",
     outputs: [],
     stateMutability: "nonpayable",
     type: "function",
