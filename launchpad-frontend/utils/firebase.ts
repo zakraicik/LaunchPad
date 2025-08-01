@@ -12,12 +12,13 @@ const firebaseConfig = {
   measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID,
 };
 
-// Initialize Firebase
 const app = initializeApp(firebaseConfig);
-const appCheck = initializeAppCheck(app, {
-  provider: new ReCaptchaV3Provider(
-    process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY!
-  ),
-  isTokenAutoRefreshEnabled: true,
-});
+if (typeof window !== "undefined") {
+  const appCheck = initializeAppCheck(app, {
+    provider: new ReCaptchaV3Provider(
+      process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY!
+    ),
+    isTokenAutoRefreshEnabled: true,
+  });
+}
 export const db = getFirestore(app);
